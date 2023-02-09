@@ -42,7 +42,7 @@ URL_NS_ALL = "0"
 
 
 @dataclass
-class NodeServerEditorRange:
+class EditorRange:
     """Node Server Editor Range definition."""
 
     uom: str = ""
@@ -54,11 +54,12 @@ class NodeServerEditorRange:
 
 
 @dataclass
-class NodeServerNodeEditor:
+class NodeEditor:
     """Node Server Editor definition."""
 
     editor_id: str = ""
-    range: NodeServerEditorRange = NodeServerEditorRange()
+    # Ranges are a dict with UoM as the key
+    ranges: dict[str, EditorRange] = field(default_factory=dict)
     nls: str = ""
     slot: str = ""
     values: dict[int, str] = field(default_factory=dict)
@@ -88,7 +89,7 @@ class NodeServerConnection:
 
 
 @dataclass
-class NodeServerNodeDef:
+class NodeDef:
     """Node Server Node Definition parsed from the ISY/IoX."""
 
     sts: InitVar[dict[str, list | dict]]
@@ -101,7 +102,7 @@ class NodeServerNodeDef:
     editors: Any = ""
     statuses: dict[str, str] = field(init=False, default_factory=dict)
     status_names: dict[str, str] = field(default_factory=dict)
-    status_editors: dict[str, NodeServerNodeEditor] = field(default_factory=dict)
+    status_editors: dict[str, NodeEditor] = field(default_factory=dict)
     sends: dict[str, Any] = field(init=False, default_factory=dict)
     accepts: dict[str, Any] = field(init=False, default_factory=dict)
 
@@ -140,8 +141,8 @@ class NodeServers:
     isy: ISY
     _connections: list[NodeServerConnection]
     slots: set[str] = set()
-    _node_server_node_definitions: dict[str, dict[str, NodeServerNodeDef]] = {}
-    _node_server_node_editors: dict[str, dict[str, NodeServerNodeEditor]] = {}
+    _node_server_node_definitions: dict[str, dict[str, NodeDef]] = {}
+    _node_server_node_editors: dict[str, dict[str, NodeEditor]] = {}
     _node_server_nls: dict = {}
     loaded: bool
     bg_tasks: set = set()
@@ -335,9 +336,9 @@ class NodeServers:
     def parse_node_server_defs(self, slot: str, node_def: dict) -> None:
         """Retrieve and parse the node server definitions."""
         try:
-            self._node_server_node_definitions[slot][
-                node_def[ATTR_ID]
-            ] = NodeServerNodeDef(**node_def)
+            self._node_server_node_definitions[slot][node_def[ATTR_ID]] = NodeDef(
+                **node_def
+            )
 
         except (ValueError, KeyError, NameError) as exc:
             _LOGGER.error("Could not parse node server connection: %s", exc)
@@ -346,11 +347,15 @@ class NodeServers:
     def parse_node_server_editor(self, slot: str, editor: dict) -> None:
         """Retrieve and parse the node server definitions."""
         editor_id = editor[ATTR_ID]
-        editor_range = NodeServerEditorRange(**editor[ATTR_RANGE])
+        if isinstance((ranges := editor[ATTR_RANGE]), dict):
+            ranges = [ranges]
+        editor_ranges = {}
+        for rng in ranges:
+            editor_ranges[rng["uom"]] = EditorRange(**rng)
 
-        self._node_server_node_editors[slot][editor_id] = NodeServerNodeEditor(
+        self._node_server_node_editors[slot][editor_id] = NodeEditor(
             editor_id=editor_id,
-            range=editor_range,
+            ranges=editor_ranges,
             slot=slot,
         )
 
@@ -366,11 +371,11 @@ class NodeServers:
                 return
 
             for editor in editors.values():
-                if editor.range.uom == UOM_INDEX and editor.range.nls:
+                if (index_range := editor.ranges.get(UOM_INDEX)) and index_range.nls:
                     editor.values = {
-                        int(k.replace(f"{editor.range.nls}-", "")): v
+                        int(k.replace(f"{index_range.nls}-", "")): v
                         for k, v in nls.items()
-                        if k.startswith(editor.range.nls)
+                        if k.startswith(index_range.nls)
                     }
 
             if not (node_defs := self._node_server_node_definitions.get(slot)):
@@ -401,7 +406,7 @@ class NodeServers:
         }
 
     @property
-    def profiles(self) -> dict[str, dict[str, NodeServerNodeDef]]:
+    def profiles(self) -> dict[str, dict[str, NodeDef]]:
         """Return the compiled node server profiles."""
         return self._node_server_node_definitions
 

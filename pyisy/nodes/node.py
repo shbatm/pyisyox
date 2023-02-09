@@ -50,7 +50,7 @@ from pyisy.helpers.models import (
 )
 from pyisy.helpers.xml import parse_xml
 from pyisy.logging import _LOGGER
-from pyisy.node_servers import NodeServerNodeDef, NodeServers
+from pyisy.node_servers import NodeDef, NodeServers
 from pyisy.nodes.nodebase import NodeBase, NodeBaseDetail
 
 if TYPE_CHECKING:
@@ -538,15 +538,15 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         )
         return await self.send_cmd(CMD_MANUAL_DIM_STOP)
 
-    def get_node_server_def(self) -> NodeServerNodeDef | None:
+    def get_node_def(self) -> NodeDef | None:
         """Retrieve the node server information for a node and control."""
         if not (self.protocol == Protocol.NODE_SERVER and self.node_def_id):
             return None
 
         servers: NodeServers = self.isy.node_servers
         if not servers.loaded or self.node_server not in servers.slots:
-            raise ValueError("Node server definitions not loaded")
+            raise ValueError("Node definitions not loaded")
         if not (profile := servers.profiles.get(self.node_server)) or profile is None:
-            _LOGGER.error("Node server profile not found")
+            _LOGGER.error("Node profile not found")
             return None
         return profile.get(self.node_def_id)
