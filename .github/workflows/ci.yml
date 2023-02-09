@@ -4,8 +4,8 @@ name: pre-commit
   pull_request:
   push:
     branches:
-      - v2.x.x
-      - v3.x.x
+      - main
+      - dev
 
 jobs:
   pre-commit:
