@@ -12,3 +12,4 @@ sphinx>=3.4.3
 recommonmark>=0.7.1
 mypy-extensions==0.4.3
 mypy==0.991
+types-python-dateutil

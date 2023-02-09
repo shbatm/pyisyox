@@ -1,10 +1,10 @@
 #!/bin/bash
 
-cd /workspaces/PyISY
+cd /workspaces/pyiox
 
 # Setup the example folder as copy of the example.
 mkdir -p example
-cp -r pyisy/__main__.py example/example_connection.py
+cp -r pyiox/__main__.py example/example_connection.py
 
 # Install the editable local package
 pip3 install -e .

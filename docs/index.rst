@@ -1,4 +1,4 @@
-PyISY
+PyIoX
 =====
 
 A Python Library for the ISY/IoX Controllers
@@ -15,7 +15,7 @@ ISY parameters can be monitored automatically as changes are reported from the d
 .. warning::
 
     THIS DOCUMENTATION IS STILL A WORK-IN-PROGRESS. Some of the details have not yet been updated
-    for Version 2 or Version 3 of the PyISY Module. If you would like to help, please contribute
+    for Version 2 or Version 3 of the PyIoX Module. If you would like to help, please contribute
     on GitHub.
 
 
@@ -24,12 +24,12 @@ Project Information
 
 .. note::
 
-    This documentation is specific to PyISY Version 4, which uses asynchronous
+    This documentation is specific to PyIoX Version 4, which uses asynchronous
     communications and the asyncio module. If you need threaded (synchronous) support
     please use Version 2.x.x.
 
-|  Docs: `ReadTheDocs <https://pyisy.readthedocs.io>`_
-|  Source: `GitHub <https://github.com/automicus/PyISY>`_
+|  Docs: `ReadTheDocs <https://pyiox.readthedocs.io>`_
+|  Source: `GitHub <https://github.com/automicus/PyIoX>`_
 
 
 Installation
@@ -39,15 +39,15 @@ The easiest way to install this package is using pip with the command:
 
 .. code-block:: bash
 
-    pip3 install pyisy
+    pip3 install pyiox
 
-See the :ref:`PyISY Tutorial<tutorial>` for guidance on how to use the module.
+See the :ref:`PyIoX Tutorial<tutorial>` for guidance on how to use the module.
 
 Requirements
 ~~~~~~~~~~~~
 
 This package requires three other packages, also available from pip. They are
-installed automatically when PyISY is installed using pip.
+installed automatically when PyIoX is installed using pip.
 
 * `requests <http://docs.python-requests.org/en/latest/>`_
 * `dateutil <https://dateutil.readthedocs.io/en/stable/>`_

@@ -1,10 +1,10 @@
-PyISY Events
+PyIoX Events
 ============
 
 General Information
 ~~~~~~~~~~~~~~~~~~~
 
-Several of the different classes in the module provide an :class:`~pyisy.helpers.events.EventEmitter` which allows you to subscribe to push updates about the class.
+Several of the different classes in the module provide an :class:`~pyiox.helpers.events.EventEmitter` which allows you to subscribe to push updates about the class.
 
 Available Emitters
 ~~~~~~~~~~~~~~~~~~

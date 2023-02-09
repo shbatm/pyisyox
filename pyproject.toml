@@ -3,10 +3,10 @@ requires = ["setuptools~=62.3", "wheel","setuptools_scm[toml]>=6.2",]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyisy-beta"
-description = "Python module to talk to ISY devices from UDI."
+name = "pyiox"
+description = "Python module for asynchronous communication with Universal Devices, Inc.'s ISY & IoX controllers."
 license     = {text = "Apache-2.0"}
-keywords = ["home", "automation", "isy", "isy994", "isy-994", "UDI", "polisy", "eisy"]
+keywords = ["home", "automation", "isy", "isy994", "isy-994", "UDI", "polisy", "eisy", "home-assistant"]
 authors = [
     {name = "Ryan Kraus", email = "automicus@gmail.com"},
     {name = "shbatm", email = "support@shbatm.com"}
@@ -34,8 +34,8 @@ dependencies = [
 ]
 
 [project.urls]
-"Source Code" = "https://github.com/automicus/PyISY"
-"Homepage" = "https://github.com/automicus/PyISY"
+"Source Code" = "https://github.com/shbatm/pyiox"
+"Homepage" = "https://github.com/shbatm/pyiox"
 
 [tool.setuptools_scm]
 
@@ -55,7 +55,7 @@ indent = "    "
 # will group `import x` and `from x import` of the same module.
 force_sort_within_sections = true
 default_section = "THIRDPARTY"
-known_first_party = ["pyisy","tests"]
+known_first_party = ["pyiox","tests"]
 forced_separate = ["tests"]
 combine_as_imports = true
 
@@ -223,10 +223,10 @@ keep-runtime-typing = true
 
 [tool.ruff.per-file-ignores]
 # Match Case syntax not yet supported by ruff
-"pyisy/events/router.py" = ["E999"]
+"pyiox/events/router.py" = ["E999"]
 
 # Allow for main entry & scripts to write to stdout
-"pyisy/__main__.py" = ["T201"]
+"pyiox/__main__.py" = ["T201"]
 
 [tool.ruff.mccabe]
 max-complexity = 25

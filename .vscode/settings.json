@@ -11,10 +11,13 @@
     "automodule",
     "BACKOFF",
     "dateutil",
+    "eisy",
     "nodedefs",
+    "Polisy",
     "qualname",
     "websession",
-    "xmltodict"
+    "xmltodict",
+    "Zigbee"
   ],
   "editor.formatOnSaveMode": "file",
   "editor.defaultFormatter": "ms-python.black-formatter",
