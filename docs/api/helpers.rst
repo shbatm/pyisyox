@@ -1,19 +1,19 @@
 Helpers
 =======================
 
-:func:`~pyiox.helpers.convert_isy_raw_value`
+:func:`~pyisyox.helpers.convert_isy_raw_value`
 ---------------------
-.. autofunction:: pyiox.helpers.convert_isy_raw_value
+.. autofunction:: pyisyox.helpers.convert_isy_raw_value
 
 Events
 ~~~~~~
 
 EventEmitter
 ------------
-.. autoclass:: pyiox.helpers.events.EventEmitter
+.. autoclass:: pyisyox.helpers.events.EventEmitter
     :members:
 
 EventListener
 -------------
-.. autoclass:: pyiox.helpers.events.EventListener
+.. autoclass:: pyisyox.helpers.events.EventListener
     :members:

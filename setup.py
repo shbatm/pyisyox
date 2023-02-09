@@ -8,10 +8,10 @@ HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
 
 setup(
-    name="pyiox",
+    name="pyisyox",
     version_format="{tag}",
     license="Apache License 2.0",
-    url="https://github.com/shbatm/pyiox",
+    url="https://github.com/shbatm/pyisyox",
     author="shbatm",
     author_email="support@shbatm.com",
     description="Python module for asynchronous communication with Universal Devices, Inc.'s ISY & IoX controllers.",

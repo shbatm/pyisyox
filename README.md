@@ -1,4 +1,4 @@
-## PyIoX
+## PyISYoX
 
 ### Python Library for the ISY / IoX Controllers
 
@@ -8,7 +8,7 @@ This Python library supports the legacy ISY994 hardware family, as well as curre
 
 This library allows for easy asynchronous interaction with ISY nodes, programs, variables, node servers, and the networking module, including methods to monitor and automatically update when ISY parameters are changed.
 
-The PyIoX library originated from [PyISY](https://github.com/automicus/PyISY), originally authored by Ryan Kraus ([@rmkraus]) and maintained by Greg Laabs ([@overloadut]). The PyIoX module has been rewritten by [@shbatm] using the original principles of PyISY, but redesigned based on the codebase of it's primary use case as a [Home Assistant](https://github.com/home-assistant/core) [Integration](https://www.home-assistant.io/integrations/isy994/).
+The PyISYoX library originated from [PyISY](https://github.com/automicus/PyISY), originally authored by Ryan Kraus ([@rmkraus]) and maintained by Greg Laabs ([@overloadut]). The PyISYoX module has been rewritten by [@shbatm] using the original principles of PyISY, but redesigned based on the codebase of it's primary use case as a [Home Assistant](https://github.com/home-assistant/core) [Integration](https://www.home-assistant.io/integrations/isy994/).
 
 **Disclaimer**: This project has no affiliation with [Universal Devices, Inc.](https://www.universal-devices.com/), it is maintained independently and is not officially supported in anyway by the OEM. Any issues with the module must be raised here, and will be resolved as quickly as possible given limited resources. Any issues with the controllers themselves should be directed to UDI.
 
@@ -21,13 +21,13 @@ The minimum required Python version is 3.10
 To test run the module, print a summary of your connected nodes, and log the events from the event websocket:
 
 ```shell
-pip install pyiox
-python3 -m pyiox http://polisy.local:8080 admin password
+pip install pyisyox
+python3 -m pyisyox http://polisy.local:8080 admin password
 ```
 
 See the [examples](examples/) folder for connection examples.
 
-Partial documentation is available at https://pyiox.readthedocs.io. This is being updated as time allows.
+Partial documentation is available at https://pyisyox.readthedocs.io. This is being updated as time allows.
 
 ### Contributing
 

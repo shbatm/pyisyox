@@ -17,13 +17,13 @@ As of v3.0.7, this module will document all changes within the GitHub release in
 #### Nodes
 
 - No longer support direct setting of `status` property, use `update_status`
-- `parse_xml_properties` moved from `pyiox.helpers` -> `pyiox.nodes.parser`
+- `parse_xml_properties` moved from `pyisyox.helpers` -> `pyisyox.nodes.parser`
 - Prec renamed to Precision
 - type renamed to type\_
 - removed dimmable property (use is_dimmable)
-- GetChildren removed from `pyiox.nodes`
-- Get_groups moved `pyiox.nodes.node` -> `pyiox.nodes`
-- Event receiver functions moved to `pyiox.nodes.node_events`
+- GetChildren removed from `pyisyox.nodes`
+- Get_groups moved `pyisyox.nodes.node` -> `pyisyox.nodes`
+- Event receiver functions moved to `pyisyox.nodes.node_events`
 - Get folder returns a named tuple `(name, address)`
 - FAMILY\_\* moved to strenum
 - PROTO\_\* moved to strenum
@@ -44,11 +44,11 @@ As of v3.0.7, this module will document all changes within the GitHub release in
 #### Helpers
 
 - Moved to folder, default imports still work except:
-- `EventEmitter`, `EventListener` moved to `pyiox.helpers.events`
-- `NodeChangedEvent` moved from `pyiox.nodes` -> `pyiox.helpers.events`
-- `NodeProperty`, `ZWaveProperties` moved to `pyiox.helpers.models`
-- `value_from_xml`,`attr_from_xml`,`attr_from_element`,`value_from_nested_xml` moved to `pyiox.helpers.xml`, but still importable from `pyiox.helpers`
-- `ntp_to_system_time` moved to `pyiox.clock`
+- `EventEmitter`, `EventListener` moved to `pyisyox.helpers.events`
+- `NodeChangedEvent` moved from `pyisyox.nodes` -> `pyisyox.helpers.events`
+- `NodeProperty`, `ZWaveProperties` moved to `pyisyox.helpers.models`
+- `value_from_xml`,`attr_from_xml`,`attr_from_element`,`value_from_nested_xml` moved to `pyisyox.helpers.xml`, but still importable from `pyisyox.helpers`
+- `ntp_to_system_time` moved to `pyisyox.clock`
   ZWaveProps `category` -> `cat` and return values as hex strings `0x0000`
 
 #### Networking

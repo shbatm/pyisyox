@@ -19,14 +19,14 @@ repos:
           - --remove-all-unused-imports
   - hooks:
       - args: [--safe, --quiet]
-        files: ^((pyiox|examples)/.+)?[^/]+\.py$
+        files: ^((pyisyox|examples)/.+)?[^/]+\.py$
         id: black
     repo: https://github.com/psf/black
     rev: 23.1.0
   - hooks:
       - args:
           [
-            "--ignore-words-list=pyiox,hass,isy,nid,dof,dfof,don,dfon,tim,automic,automicus,BATLVL,homeassistant,colorlog,nd",
+            "--ignore-words-list=pyisyox,hass,isy,nid,dof,dfof,don,dfon,tim,automic,automicus,BATLVL,homeassistant,colorlog,nd",
             '--skip="./.*,*.json"',
             --quiet-level=2,
           ]
@@ -43,7 +43,7 @@ repos:
           - flake8-comprehensions==3.10.1
           - flake8-noqa==1.3.0
           - mccabe==0.7.0
-        files: ^(pyiox)/.+\.py$
+        files: ^(pyisyox)/.+\.py$
         id: flake8
     repo: https://github.com/pycqa/flake8
     rev: 6.0.0
@@ -80,11 +80,11 @@ repos:
         entry: python3 -m pylint -j 0
         language: system
         types: [python]
-        files: ^pyiox/.+\.py$
+        files: ^pyisyox/.+\.py$
         args: ["-rn", "-sn"]
       - id: mypy
         name: mypy
         entry: mypy
         language: system
         types: [python]
-        files: ^pyiox\/.+.py$
+        files: ^pyisyox\/.+.py$

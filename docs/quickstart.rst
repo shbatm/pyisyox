@@ -1,9 +1,9 @@
 .. _tutorial:
 
-PyIoX Tutorial
+PyISYoX Tutorial
 ==============
 
-This is the basic user guide for the PyIoX Python module.
+This is the basic user guide for the PyISYoX Python module.
 This module was developed to communicate with the UDI ISY-994 home automation hub
 via the hub's REST interface and Websocket/SOAP event streams. It provides
 near real-time updates from the device and allows control of all devices that
@@ -19,7 +19,7 @@ or b) run a command on those items.
 
 .. note::
 
-    This documentation is specific to PyIoX Version 3.x.x, which uses asynchronous
+    This documentation is specific to PyISYoX Version 3.x.x, which uses asynchronous
     communications and the asyncio module. If you need threaded (synchronous) support
     please use Version 2.x.x.
 
@@ -31,7 +31,7 @@ This module can be installed via pip in any environment supporting Python 3.7 or
 
 .. code-block:: shell
 
-    pip3 install pyiox
+    pip3 install pyisyox
 
 
 Quick Start
@@ -45,13 +45,13 @@ After installation, you can test the connection with the following
 
 .. code-block:: shell
 
-    python3 -m pyiox http://your-isy-url:80 username password
+    python3 -m pyisyox http://your-isy-url:80 username password
 
 A good starting point for developing your own code is to copy the `__main__.py` file
 from the module's source code. This walks you through how to create the connections and
 some simple commands to get you started.
 
-You can download it from GitHub: `<https://github.com/automicus/PyIoX/blob/v3.x.x/pyiox/__main__.py>`_
+You can download it from GitHub: `<https://github.com/automicus/PyISYoX/blob/v3.x.x/pyisyox/__main__.py>`_
 
 
 Basic Usage
@@ -62,7 +62,7 @@ Testing Your Connection
 
 When connecting to the ISY, it will connect and download all available information and populate
 the local structures. Sometimes you just want to make sure the connection works before setting
-everything up. This can be done using the :class:`Connection<pyiox.connection.Connection>` Class.
+everything up. This can be done using the :class:`Connection<pyisyox.connection.Connection>` Class.
 
 .. code-block:: python
 
@@ -70,8 +70,8 @@ everything up. This can be done using the :class:`Connection<pyiox.connection.Co
     import logging
     from urlparse import urlparse
 
-    from pyiox import ISY
-    from pyiox.connection import ISYConnectionError, ISYInvalidAuthError, get_new_client_session
+    from pyisyox import ISY
+    from pyisyox.connection import ISYConnectionError, ISYInvalidAuthError, get_new_client_session
     _LOGGER = logging.getLogger(__name__)
 
     """Validate the user input allows us to connect."""
@@ -114,7 +114,7 @@ everything up. This can be done using the :class:`Connection<pyiox.connection.Co
         )
 
 Once you have a connection class and successfully tested the configuration, you can
-then use the :class:`Configuration<pyiox.configuration.Configuration>` Class to get
+then use the :class:`Configuration<pyisyox.configuration.Configuration>` Class to get
 some additional details about the ISY, including the firmware version, name, and
 installed options like Networking, Variables, or NodeServers.
 
@@ -132,7 +132,7 @@ Connecting to the Controller
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Connecting to the controller is simple and will create an instance of
-the :class:`ISY<pyiox.isy.ISY>` class. This instance is what we will use to interact with the
+the :class:`ISY<pyisyox.isy.ISY>` class. This instance is what we will use to interact with the
 controller. By default when connecting to the ISY, it will load all available modules;
 this means all of the Nodes, Scenes, Programs, and Variables. The
 networking module will only be loaded if it is available.
@@ -145,29 +145,29 @@ Looking at the main function here, you can see the general flow:
 
 1. Validate the settings
 2. Create (or provide) an `asyncio` WebSession.
-3. Create an instance of the :class:`ISY<pyiox.isy.ISY>` Class
-4. Initialize the connection with :meth:`isy.initialize<pyiox.isy.ISY.initialize>`.
-5. Connect to the :class:`WebSocketClient<pyiox.events.websocket.WebSocketClient>` for real-time event updates.
-6. Safely shutdown the connection when done with :meth:`isy.shutdown()<pyiox.isy.shutdown>`.
+3. Create an instance of the :class:`ISY<pyisyox.isy.ISY>` Class
+4. Initialize the connection with :meth:`isy.initialize<pyisyox.isy.ISY.initialize>`.
+5. Connect to the :class:`WebSocketClient<pyisyox.events.websocket.WebSocketClient>` for real-time event updates.
+6. Safely shutdown the connection when done with :meth:`isy.shutdown()<pyisyox.isy.shutdown>`.
 
-.. literalinclude:: ../pyiox/__main__.py
+.. literalinclude:: ../pyisyox/__main__.py
     :language: python
     :pyobject: main
 
 General Structure of the ISY Class
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The :class:`ISY<pyiox.isy.ISY>` Class holds the local "shadow" copy of the
+The :class:`ISY<pyisyox.isy.ISY>` Class holds the local "shadow" copy of the
 ISY's structure and status. You can access the different components just like Python a `dict`.
 Each category is a `dict`-like object that holds the structure, and then each
 element is populated within that structure.
 
-- Nodes & Groups (Scenes): :class:`isy.nodes<pyiox.nodes.Nodes>`
-- Programs & Program Folders: :class:`isy.programs<pyiox.programs.Programs>`
-- Variables: :class:`isy.variables<pyiox.variables.Variables>`
-- Network Resources: :class:`isy.networking<pyiox.networking.NetworkResources>`
-- Clock Info: :class:`isy.clock<pyiox.clock.Clock>`
-- Configuration Info: :class:`isy.configuration<pyiox.configuration.Configuration>`
+- Nodes & Groups (Scenes): :class:`isy.nodes<pyisyox.nodes.Nodes>`
+- Programs & Program Folders: :class:`isy.programs<pyisyox.programs.Programs>`
+- Variables: :class:`isy.variables<pyisyox.variables.Variables>`
+- Network Resources: :class:`isy.networking<pyisyox.networking.NetworkResources>`
+- Clock Info: :class:`isy.clock<pyisyox.clock.Clock>`
+- Configuration Info: :class:`isy.configuration<pyisyox.configuration.Configuration>`
 
 
 Controlling a Node on the Insteon Network
@@ -306,7 +306,7 @@ Subscribing to Updates
 .. warning::
 
     THIS DOCUMENTATION IS STILL A WORK-IN-PROGRESS. The details have not yet been updated
-    for Version 2 or Version 3 of the PyIoX Module. If you would like to help, please contribute
+    for Version 2 or Version 3 of the PyISYoX Module. If you would like to help, please contribute
     on GitHub.
 
 The ISY class will not be receiving updates by default. It is, however,
@@ -316,10 +316,10 @@ easy to enable, and it is done like so.
 
     isy.auto_update = True
 
-By default, PyIoX will detect when the controller is no longer
+By default, PyISYoX will detect when the controller is no longer
 responding and attempt a reconnect. Keep in mind though, it can take up
 to two minutes to detect a lost connection. This means if you restart
-your controller, in about two minutes PyIoX will detect that, reconnect,
+your controller, in about two minutes PyISYoX will detect that, reconnect,
 and update all the elements to their updated state. To turn off auto
 reconnects, the following parameter can be changed.
 

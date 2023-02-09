@@ -28,7 +28,7 @@ for mod_name in MOCK_MODULES:
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "pyiox"
+project = "pyisyox"
 copyright = "2023, shbatm"
 author = "shbatm"
 release = "1.0.0"
