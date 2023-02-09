@@ -1,5 +1,5 @@
 {
-  "name": "PyISY Devcontainer",
+  "name": "PyIoX Devcontainer",
   "build": {
     "context": "..",
     "dockerfile": "Dockerfile",

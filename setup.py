@@ -8,13 +8,13 @@ HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
 
 setup(
-    name="pyisy",
+    name="pyiox",
     version_format="{tag}",
     license="Apache License 2.0",
-    url="https://github.com/automicus/PyISY",
-    author="Ryan Kraus",
-    author_email="automicus@gmail.com",
-    description="Python module to talk to ISY994 from UDI.",
+    url="https://github.com/shbatm/pyiox",
+    author="shbatm",
+    author_email="support@shbatm.com",
+    description="Python module for asynchronous communication with Universal Devices, Inc.'s ISY & IoX controllers.",
     long_description=README,
     long_description_content_type="text/markdown",
     packages=find_packages(),
@@ -30,7 +30,16 @@ setup(
         "colorlog>=6.6.0",
         "xmltodict>=0.12.0",
     ],
-    keywords=["home automation", "isy", "isy994", "isy-994", "UDI"],
+    keywords=[
+        "home automation",
+        "isy",
+        "isy994",
+        "isy-994",
+        "UDI",
+        "home-assistant",
+        "polisy",
+        "eisy",
+    ],
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",

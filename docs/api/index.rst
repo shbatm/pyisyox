@@ -1,4 +1,4 @@
-PyISY Module API Reference
+PyIoX Module API Reference
 ==========================
 
 Contents

@@ -28,10 +28,10 @@ for mod_name in MOCK_MODULES:
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "PyISY"
-copyright = "2023, shbatm, rmkraus"
-author = "shbatm, rmkraus"
-release = "4.0.0"
+project = "pyiox"
+copyright = "2023, shbatm"
+author = "shbatm"
+release = "1.0.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

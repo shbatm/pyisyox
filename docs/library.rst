@@ -1,87 +1,87 @@
-PyISY Library Reference
+PyIoX Library Reference
 =======================
 
 ISY Class
 ---------
-.. autoclass:: pyisy.isy.ISY
+.. autoclass:: pyiox.isy.ISY
     :members:
 
 
 Nodes Entity Platform Class
 ---------------------------
-.. autoclass:: pyisy.nodes.Nodes
+.. autoclass:: pyiox.nodes.Nodes
     :members:
     :special-members:
 
 Node Base Entity Class
 ----------------------
-.. autoclass:: pyisy.nodes.nodebase.NodeBase
+.. autoclass:: pyiox.nodes.nodebase.NodeBase
     :members:
     :special-members:
 
 Node Entity Class
 -----------------
-.. autoclass:: pyisy.nodes.Node
+.. autoclass:: pyiox.nodes.Node
     :members:
     :special-members:
 
 Group Entity Class
 ------------------
-.. autoclass:: pyisy.nodes.Group
+.. autoclass:: pyiox.nodes.Group
     :members:
     :special-members:
 
 Program Manager Class
 ---------------------
-.. autoclass:: pyisy.programs.Programs
+.. autoclass:: pyiox.programs.Programs
     :members:
     :special-members:
 
 Folder Class
 ------------
-.. autoclass:: pyisy.programs.Folder
+.. autoclass:: pyiox.programs.Folder
     :members:
     :special-members:
 
 Program Class
 -------------
-.. autoclass:: pyisy.programs.Program
+.. autoclass:: pyiox.programs.Program
     :members:
     :special-members:
     :inherited-members:
 
 Variable Manager Class
 ----------------------
-.. autoclass:: pyisy.variables.Variables
+.. autoclass:: pyiox.variables.Variables
     :members:
     :special-members:
 
 Variable Class
 --------------
-.. autoclass:: pyisy.variables.Variable
+.. autoclass:: pyiox.variables.Variable
     :members:
     :special-members:
 
 Clock Class
 -----------
-.. autoclass:: pyisy.clock.Clock
+.. autoclass:: pyiox.clock.Clock
     :members:
     :special-members:
 
 NetworkResources Class
 ----------------------
-.. autoclass:: pyisy.networking.NetworkResources
+.. autoclass:: pyiox.networking.NetworkResources
     :members:
     :special-members:
 
 NetworkCommand Class
 --------------------
-.. autoclass:: pyisy.networking.NetworkCommand
+.. autoclass:: pyiox.networking.NetworkCommand
     :members:
     :special-members:
 
 Connection Class
 ----------------
-.. autoclass:: pyisy.connection.Connection
+.. autoclass:: pyiox.connection.Connection
     :members:
     :special-members:
