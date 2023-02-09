@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.0.241
+    rev: v0.0.244
     hooks:
       - id: ruff
         args:
@@ -11,7 +11,7 @@ repos:
       - id: pyupgrade
         args: [--py37-plus]
   - repo: https://github.com/PyCQA/autoflake
-    rev: v2.0.0
+    rev: v2.0.1
     hooks:
       - id: autoflake
         args:
@@ -22,7 +22,7 @@ repos:
         files: ^((pyiox|examples)/.+)?[^/]+\.py$
         id: black
     repo: https://github.com/psf/black
-    rev: 22.12.0
+    rev: 23.1.0
   - hooks:
       - args:
           [
