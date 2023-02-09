@@ -542,10 +542,10 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         """Retrieve the node server information for a node and control."""
         if not (self.protocol == Protocol.NODE_SERVER and self.node_def_id):
             return None
-
         servers: NodeServers = self.isy.node_servers
         if not servers.loaded or self.node_server not in servers.slots:
-            raise ValueError("Node definitions not loaded")
+            return None
+
         if not (profile := servers.profiles.get(self.node_server)) or profile is None:
             _LOGGER.error("Node profile not found")
             return None
