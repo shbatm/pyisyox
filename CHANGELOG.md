@@ -1,14 +1,8 @@
-## CHANGELOG
-
-### GitHub Release Versioning
-
-As of v3.0.7, this module will document all changes within the GitHub release information to avoid duplication.
-
-### [v3.2.0] Breaking Changes
+## CHANGELOG FROM PYISY 3.x to PYISYOX 1.x
 
 #### Minimum Python Version
 
-- Dropped support for <3.9
+- Dropped support for <3.10
 - Dropped support for ISY versions <4.3
 
 - `NodeBase` `._id` attribute renamed to `_address`, continue to use `address` property.
@@ -27,6 +21,7 @@ As of v3.0.7, this module will document all changes within the GitHub release in
 - Get folder returns a named tuple `(name, address)`
 - FAMILY\_\* moved to strenum
 - PROTO\_\* moved to strenum
+- Battery Level and Ramp Rate special handling removed.
 
 #### Programs
 

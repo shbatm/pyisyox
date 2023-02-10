@@ -74,7 +74,7 @@ class Group(NodeBase, Entity[GroupDetail, StatusT]):
         self._members_handlers = []
         link: str
         for link in self.detail.links:
-            if not (entity := self.platform.entities.get(link)):
+            if (entity := self.platform.entities.get(link)) is None:
                 # Node missing or not loaded
                 continue
             self._members_handlers.append(

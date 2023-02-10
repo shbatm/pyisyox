@@ -45,13 +45,13 @@ class ISYConnectionInfo:
     url: str
     username: InitVar[str]
     password: InitVar[str]
+    tls_version: float | None = None
+    websession: aiohttp.ClientSession | None = None
     rest_url: str = field(init=False)
     ws_url: str = field(init=False)
     auth: aiohttp.BasicAuth = field(init=False)
     parsed_url: ParseResult = field(init=False)
     use_https: bool = field(init=False)
-    websession: aiohttp.ClientSession | None = None
-    tls_version: float | None = None
 
     def __post_init__(self, username: str, password: str) -> None:
         """Post process the connection info."""

@@ -41,7 +41,10 @@ async def main(args: argparse.Namespace) -> None:
     t_0 = time.time()
 
     connection_info = ISYConnectionInfo(
-        args.url, args.username, args.password, tls_version=args.tls_version
+        url=args.url,
+        username=args.username,
+        password=args.password,
+        tls_version=args.tls_version,
     )
     # Connect to ISY controller.
     isy = ISY(connection_info, use_websocket=True, args=args)

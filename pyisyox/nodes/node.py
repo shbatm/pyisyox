@@ -98,7 +98,6 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
     _uom: str = ""
     _precision: int = 0
     _formatted: str = ""
-    _is_battery_node: bool = False
     state_set: bool = False
 
     detail: NodeDetail
@@ -119,26 +118,12 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         self.control_events = EventEmitter()
         if detail.property and PROP_STATUS in detail.property:
             self.state_set = True
-            self._is_battery_node = False
             self.update_state(NodeProperty(**detail.property))
 
     @property
     def formatted(self) -> str:
         """Return the formatted value with units, if provided."""
         return self._formatted
-
-    @property
-    def is_battery_node(self) -> bool:
-        """Confirm if this is a battery node or a normal node.
-
-        Battery nodes do not provide a 'ST' property, only 'BATLVL'.
-        """
-        return self._is_battery_node
-
-    @is_battery_node.setter
-    def is_battery_node(self, value: bool) -> None:
-        """Override automatic detection of battery node."""
-        self._is_battery_node = value
 
     @property
     def is_backlight_supported(self) -> bool:
@@ -242,9 +227,8 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         changed = []
         self._last_update = datetime.now()
 
-        if self._is_battery_node and state.control == PROP_STATUS:
+        if not self.state_set and state.control == PROP_STATUS:
             self.state_set = True
-            self._is_battery_node = False
 
         if state.value != self.status:
             changed.append("state")

@@ -9,9 +9,6 @@ from typing import TYPE_CHECKING, Any, cast
 from pyisyox.constants import (
     DEFAULT_DIR,
     EVENT_PROPS_IGNORED,
-    INSTEON_RAMP_RATES,
-    PROP_BATTERY_LEVEL,
-    PROP_RAMP_RATE,
     PROP_STATUS,
     TAG_ADDRESS,
     TAG_FAMILY,
@@ -21,7 +18,6 @@ from pyisyox.constants import (
     TAG_NODE,
     TAG_PROPERTIES,
     TAG_PROPERTY,
-    UOM_SECONDS,
     URL_NODES,
     URL_STATUS,
     NodeFamily,
@@ -231,14 +227,6 @@ class Nodes(EntityPlatform[NodesT]):
         result = NodeProperty(**prop)
         if result.control == PROP_STATUS:
             entity.update_state(result)
-        if result.control == PROP_BATTERY_LEVEL and not entity.state_set:
-            # Use BATLVL as state if no ST given.
-            entity.is_battery_node = True
-            entity.update_state(result)
-        elif result.control == PROP_RAMP_RATE and result.value:
-            result.value = INSTEON_RAMP_RATES.get(str(result.value), result.value)
-            result.uom = UOM_SECONDS
-
         if result.control not in EVENT_PROPS_IGNORED:
             entity.update_property(result)
             return
