@@ -11,5 +11,5 @@ pre-commit>=2.4.0
 sphinx>=3.4.3
 recommonmark>=0.7.1
 mypy-extensions==1.0.0
-mypy==1.0.0
+mypy==1.0.1
 types-python-dateutil
