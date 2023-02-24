@@ -411,6 +411,66 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
 
         return True
 
+    async def set_zwave_lock_code(self, user_num: int, code: int) -> bool:
+        """Set a Z-Wave Lock User Code via the ISY."""
+        if self.protocol != Protocol.ZWAVE:
+            raise TypeError("Cannot set parameters of non-Z-Wave device")
+
+        # /rest/zwave/node/<nodeAddress>/security/user/<user_num>/set/code/<code>
+        req_url = self.isy.conn.compile_url(
+            [
+                URL_ZMATTER_ZWAVE
+                if self.detail.family == NodeFamily.ZMATTER_ZWAVE
+                else URL_ZWAVE,
+                URL_NODE,
+                self.address,
+                "security",
+                "user",
+                str(user_num),
+                str(code),
+            ]
+        )
+        if not await self.isy.conn.request(req_url):
+            _LOGGER.warning(
+                "Could not set user code %s on %s.",
+                user_num,
+                self.address,
+            )
+            return False
+        _LOGGER.debug("Set user code %s sent to %s.", user_num, self.address)
+
+        return True
+
+    async def delete_zwave_lock_code(self, user_num: int) -> bool:
+        """Delete a Z-Wave Lock User Code via the ISY."""
+        if self.protocol != Protocol.ZWAVE:
+            raise TypeError("Cannot set parameters of non-Z-Wave device")
+
+        # /rest/zwave/node/<nodeAddress>/security/user/<user_num>/delete
+        req_url = self.isy.conn.compile_url(
+            [
+                URL_ZMATTER_ZWAVE
+                if self.detail.family == NodeFamily.ZMATTER_ZWAVE
+                else URL_ZWAVE,
+                URL_NODE,
+                self.address,
+                "security",
+                "user",
+                str(user_num),
+                "delete",
+            ]
+        )
+        if not await self.isy.conn.request(req_url):
+            _LOGGER.warning(
+                "Could not delete user code %s on %s.",
+                user_num,
+                self.address,
+            )
+            return False
+        _LOGGER.debug("Deleted user code %s sent to %s.", user_num, self.address)
+
+        return True
+
     def get_command_value(self, uom: str, cmd: str) -> str | None:
         """Check against the list of UOM States if this is a valid command."""
         if cmd not in UOM_TO_STATES[uom].values():
