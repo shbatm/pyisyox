@@ -427,6 +427,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
                 "security",
                 "user",
                 str(user_num),
+                "set/code",
                 str(code),
             ]
         )
