@@ -131,10 +131,8 @@ class Nodes(EntityPlatform[NodesT]):
                     and family[TAG_ADDRESS] == NodeFamily.NODESERVER
                 ):
                     feature["node_server"] = family.get("instance", "")
-                    feature["protocol"] = self.get_protocol_from_family(
-                        feature.get(TAG_FAMILY)
-                    )
-
+                feature["protocol"] = self.get_protocol_from_family(family) 
+            
             entity = Node(self, address, name, NodeDetail(**feature))
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:
