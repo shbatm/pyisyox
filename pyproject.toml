@@ -230,3 +230,8 @@ keep-runtime-typing = true
 
 [tool.ruff.mccabe]
 max-complexity = 25
+
+[tool.codespell]
+ignore-words-list = "pyisyox,hass,isy,nid,dof,dfof,don,dfon,tim,automic,automicus,batlvl,homeassistant,colorlog,nd,anull,enull"
+skip = "./.*,*.json,*.yaml,*.toml"
+quiet-level = 2

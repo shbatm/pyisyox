@@ -24,15 +24,10 @@ repos:
     repo: https://github.com/psf/black
     rev: 23.1.0
   - hooks:
-      - args:
-          [
-            "--ignore-words-list=pyisyox,hass,isy,nid,dof,dfof,don,dfon,tim,automic,automicus,BATLVL,homeassistant,colorlog,nd,aNULL,eNULL",
-            '--skip="./.*,*.yaml"',
-            --quiet-level=2,
-            "--",
-          ]
-        exclude_types: [json]
-        id: codespell
+      - id: codespell
+        additional_dependencies:
+          - tomli
+        args: [--toml, pyproject.toml]
     repo: https://github.com/codespell-project/codespell
     rev: v2.2.4
   - hooks:
