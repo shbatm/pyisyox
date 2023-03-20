@@ -174,6 +174,7 @@ class NodeFamily(StrEnum):
     NCD = "9"
     NODESERVER = "10"
     ZMATTER_ZWAVE = "12"
+    FOLDER = "13"
 
 
 PROP_BATTERY_LEVEL = "BATLVL"
