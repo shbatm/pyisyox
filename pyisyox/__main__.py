@@ -120,13 +120,13 @@ async def main(args: argparse.Namespace) -> None:
                 None,
                 write_to_file,
                 isy.nodes.get_tree(),
-                f"{DEFAULT_DIR}nodes-tree.json",
+                f"{DEFAULT_DIR}nodes-tree.yaml",
             )
             await isy.loop.run_in_executor(
                 None,
                 write_to_file,
                 isy.nodes.to_dict(),
-                f"{DEFAULT_DIR}nodes-loaded.json",
+                f"{DEFAULT_DIR}nodes-loaded.yaml",
             )
         isy.nodes.status_events.subscribe(node_status_handler, key="nodes")
         isy.nodes.platform_events.subscribe(node_changed_handler, key="nodes")
@@ -137,7 +137,7 @@ async def main(args: argparse.Namespace) -> None:
                 None,
                 write_to_file,
                 isy.programs.get_tree(),
-                f"{DEFAULT_DIR}programs.json",
+                f"{DEFAULT_DIR}programs.yaml",
             )
         isy.programs.status_events.subscribe(status_handler, key="programs")
         isy.programs.platform_events.subscribe(status_handler, key="programs")
@@ -148,7 +148,7 @@ async def main(args: argparse.Namespace) -> None:
                 None,
                 write_to_file,
                 isy.variables.to_dict(),
-                f"{DEFAULT_DIR}variables.json",
+                f"{DEFAULT_DIR}variables.yaml",
             )
         isy.variables.status_events.subscribe(status_handler, key="variables")
         isy.variables.platform_events.subscribe(status_handler, key="variables")
@@ -159,7 +159,7 @@ async def main(args: argparse.Namespace) -> None:
                 None,
                 write_to_file,
                 isy.networking.to_dict(),
-                f"{DEFAULT_DIR}networking.json",
+                f"{DEFAULT_DIR}networking.yaml",
             )
     if args.node_servers:
         _LOGGER.debug(isy.node_servers)
@@ -168,7 +168,7 @@ async def main(args: argparse.Namespace) -> None:
                 None,
                 write_to_file,
                 isy.node_servers.to_dict(),
-                f"{DEFAULT_DIR}node-servers.json",
+                f"{DEFAULT_DIR}node-servers.yaml",
             )
     if args.clock:
         _LOGGER.debug(repr(isy.clock))

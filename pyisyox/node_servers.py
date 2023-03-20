@@ -187,7 +187,7 @@ class NodeServers:
                 None,
                 write_to_file,
                 ns_conn_xml,
-                f"{DEFAULT_DIR}node-server-connections.json",
+                f"{DEFAULT_DIR}node-server-connections.yaml",
             )
 
         if not (connections := ns_conn_xml[ATTR_CONNECTIONS]):
@@ -226,7 +226,7 @@ class NodeServers:
                 None,
                 write_to_file,
                 ns_conn_xml,
-                f"{DEFAULT_DIR}node-server-profiles.json",
+                f"{DEFAULT_DIR}node-server-profiles.yaml",
             )
 
         if not (profiles := ns_conn_xml[ATTR_PROFILES]):
@@ -282,7 +282,7 @@ class NodeServers:
             xml_dict = parse_xml(file_content)
 
             if self.isy.args and self.isy.args.file:
-                filename = "-".join(path.split("/")[-2:]).replace(".xml", ".json")
+                filename = "-".join(path.split("/")[-2:]).replace(".xml", ".yaml")
                 await self.isy.loop.run_in_executor(
                     None,
                     write_to_file,
@@ -320,7 +320,7 @@ class NodeServers:
                 self._node_server_nls[slot] = nls_lookup
 
             if self.isy.args and self.isy.args.file:
-                filename = "-".join(path.split("/")[-2:]).replace(".txt", ".json")
+                filename = "-".join(path.split("/")[-2:]).replace(".txt", ".yaml")
                 await self.isy.loop.run_in_executor(
                     None,
                     write_to_file,

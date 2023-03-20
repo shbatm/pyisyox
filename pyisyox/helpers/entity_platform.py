@@ -114,7 +114,7 @@ class EntityPlatform(ABC, Generic[EntityT]):
                 None,
                 write_to_file,
                 xml_dict,
-                f"{DEFAULT_DIR}rest-{self.platform_name}.json",
+                f"{DEFAULT_DIR}rest-{self.platform_name}.yaml",
             )
 
         self.parse(xml_dict)
