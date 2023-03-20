@@ -95,13 +95,13 @@ class Nodes(EntityPlatform[NodesT]):
         if not (features := xml_dict["nodes"]):
             return
 
-        if folders := features[TAG_FOLDER]:
+        if folders := features.get(TAG_FOLDER):
             for folder in folders:
                 self.parse_folder_entity(folder)
-        if nodes := features[TAG_NODE]:
+        if nodes := features.get(TAG_NODE):
             for node in nodes:
                 self.parse_node_entity(node)
-        if groups := features[TAG_GROUP]:
+        if groups := features.get(TAG_GROUP):
             for group in groups:
                 self.parse_group_entity(group)
 
@@ -131,8 +131,8 @@ class Nodes(EntityPlatform[NodesT]):
                     and family[TAG_ADDRESS] == NodeFamily.NODESERVER
                 ):
                     feature["node_server"] = family.get("instance", "")
-                feature["protocol"] = self.get_protocol_from_family(family) 
-            
+                feature["protocol"] = self.get_protocol_from_family(family)
+
             entity = Node(self, address, name, NodeDetail(**feature))
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:
@@ -191,7 +191,7 @@ class Nodes(EntityPlatform[NodesT]):
                 None,
                 write_to_file,
                 xml_dict,
-                f"{DEFAULT_DIR}rest-status.json",
+                f"{DEFAULT_DIR}rest-status.yaml",
             )
 
         while not self.loaded:  # Loaded is set by self.update finishing

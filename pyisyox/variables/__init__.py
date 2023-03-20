@@ -106,7 +106,7 @@ class Variables(EntityPlatform[Variable]):
                 None,
                 write_to_file,
                 var_dict,
-                f"{DEFAULT_DIR}rest-{PLATFORM}-{var_type}.json",
+                f"{DEFAULT_DIR}rest-{PLATFORM}-{var_type}.yaml",
             )
 
         _LOGGER.log(

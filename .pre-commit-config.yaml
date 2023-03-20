@@ -27,7 +27,7 @@ repos:
       - args:
           [
             "--ignore-words-list=pyisyox,hass,isy,nid,dof,dfof,don,dfon,tim,automic,automicus,BATLVL,homeassistant,colorlog,nd",
-            '--skip="./.*,*.json"',
+            '--skip="./.*,*.yaml"',
             --quiet-level=2,
           ]
         exclude_types: [json]

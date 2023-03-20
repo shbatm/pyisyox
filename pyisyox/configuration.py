@@ -138,7 +138,7 @@ class Configuration:
                 None,
                 write_to_file,
                 asdict(self.config_data),
-                f"{DEFAULT_DIR}rest-{PLATFORM}.json",
+                f"{DEFAULT_DIR}rest-{PLATFORM}.yaml",
             )
 
         _LOGGER.info("Loaded configuration")
