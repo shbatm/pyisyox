@@ -5,7 +5,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from pyisyox.constants import TAG_ADDRESS, TAG_NAME, URL_CHANGE, URL_NODES, Protocol
+from pyisyox.constants import (
+    TAG_ADDRESS,
+    TAG_NAME,
+    URL_CHANGE,
+    URL_NODES,
+    NodeFamily,
+    Protocol,
+)
 from pyisyox.helpers.entity import Entity
 from pyisyox.helpers.models import EntityDetail, OptionalIntT
 from pyisyox.logging import _LOGGER
@@ -22,6 +29,7 @@ class NodeFolderDetail(EntityDetail):
     name: str = ""
     parent: dict[str, str] = field(default_factory=dict)
     flag: int = 0
+    family: NodeFamily | dict[str, str] | str = NodeFamily.FOLDER
 
 
 class NodeFolder(Entity[NodeFolderDetail, OptionalIntT]):
