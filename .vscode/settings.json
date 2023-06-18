@@ -6,7 +6,7 @@
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
   "files.trimTrailingWhitespace": true,
-  "python.linting.flake8Enabled": true,
+  "python.linting.flake8Enabled": false,
   "cSpell.words": [
     "automodule",
     "BACKOFF",

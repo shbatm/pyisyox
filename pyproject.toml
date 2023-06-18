@@ -218,9 +218,6 @@ ignore = [
 [tool.ruff.flake8-pytest-style]
 fixture-parentheses = false
 
-[tool.ruff.pyupgrade]
-keep-runtime-typing = true
-
 [tool.ruff.per-file-ignores]
 # Match Case syntax not yet supported by ruff
 "pyisyox/events/router.py" = ["E999"]
