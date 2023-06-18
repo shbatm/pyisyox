@@ -136,7 +136,7 @@ class Variables(EntityPlatform[Variable]):
             address = f"{feature[ATTR_TYPE]}.{feature[ATTR_ID]}"
             name = feature["name"]
             _LOGGER.log(LOG_VERBOSE, "Parsing %s: %s (%s)", PLATFORM, name, address)
-            detail = VariableDetail(**feature)
+            detail = VariableDetail.from_dict(feature)
             entity = Variable(self, address, name, detail)
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:

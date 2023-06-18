@@ -62,6 +62,9 @@ def post_processor(path: str, key: str, value: Any) -> tuple[str, Any]:
     elif key == ATTR_FLAG:
         with suppress(ValueError):
             value = int(cast(str, value))
+    elif key == "step":
+        with suppress(ValueError):
+            value = int(cast(str, value))
     # Convert known dates
     if (key.endswith("_time") or key == "ts") and value is not None:
         with suppress(ValueError):

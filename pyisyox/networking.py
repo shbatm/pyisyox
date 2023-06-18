@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import inspect
 from typing import TYPE_CHECKING, Any
 
 from pyisyox.constants import TAG_ID, TAG_NAME, URL_NETWORK, URL_RESOURCES, Protocol
@@ -20,6 +21,13 @@ PLATFORM = "networking"
 @dataclass
 class NetworkCommandDetail(EntityDetail):
     """Dataclass to hold entity detail info."""
+
+    @classmethod
+    def from_dict(cls: type[NetworkCommandDetail], props: dict) -> NetworkCommandDetail:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
 
     control_info: dict[str, str | bool] = field(default_factory=dict)
     id: str = ""
@@ -40,8 +48,8 @@ class NetworkResources(EntityPlatform):
 
     def parse(self, xml_dict: dict[str, Any]) -> None:
         """Parse the results from the ISY."""
-        if not (net_config := xml_dict["net_config"]) or not (
-            features := net_config["net_rule"]
+        if not (net_config := xml_dict.get("net_config")) or not (
+            features := net_config.get("net_rule")
         ):
             return
         for feature in features:
@@ -55,7 +63,7 @@ class NetworkResources(EntityPlatform):
             address = feature[TAG_ID]
             name = feature[TAG_NAME]
             _LOGGER.debug("Parsing %s: %s (%s)", PLATFORM, name, address)
-            detail = NetworkCommandDetail(**feature)
+            detail = NetworkCommandDetail.from_dict(feature)
             entity = NetworkCommand(self, address, name, detail)
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:

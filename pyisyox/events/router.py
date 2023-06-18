@@ -128,7 +128,7 @@ class EventRouter:
             return
         if event := xml_dict.get("event", {}):
             try:
-                self.route_message(EventData(**event))
+                self.route_message(EventData.from_dict(event))
             except (KeyError, ValueError, NameError):
                 _LOGGER.error("Could not validate event", exc_info=True)
 

@@ -113,7 +113,9 @@ class Nodes(EntityPlatform[NodesT]):
             address = feature[TAG_ADDRESS]
             name = feature[TAG_NAME]
             _LOGGER.log(LOG_VERBOSE, "Parsing %s: %s (%s)", PLATFORM, name, address)
-            entity = NodeFolder(self, address, name, NodeFolderDetail(**feature))
+            entity = NodeFolder(
+                self, address, name, NodeFolderDetail.from_dict(feature)
+            )
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:
             _LOGGER.exception("Error loading %s: %s", PLATFORM, exc)
@@ -133,7 +135,7 @@ class Nodes(EntityPlatform[NodesT]):
                     feature["node_server"] = family.get("instance", "")
                 feature["protocol"] = self.get_protocol_from_family(family)
 
-            entity = Node(self, address, name, NodeDetail(**feature))
+            entity = Node(self, address, name, NodeDetail.from_dict(feature))
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:
             _LOGGER.exception("Error loading %s: %s", PLATFORM, exc)
@@ -147,7 +149,7 @@ class Nodes(EntityPlatform[NodesT]):
             if (flag := feature["flag"]) & NodeFlag.ROOT:
                 _LOGGER.debug("Skipping root group flag=%s %s", flag, address)
                 return
-            entity = Group(self, address, name, GroupDetail(**feature))
+            entity = Group(self, address, name, GroupDetail.from_dict(feature))
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:
             _LOGGER.exception("Error loading %s: %s", PLATFORM, exc)
@@ -226,7 +228,7 @@ class Nodes(EntityPlatform[NodesT]):
 
     def parse_node_properties(self, prop: dict[str, Any], entity: Node) -> None:
         """Parse the node node property from the ISY."""
-        result = NodeProperty(**prop)
+        result = NodeProperty.from_dict(prop)
         if result.control == PROP_STATUS:
             entity.update_state(result)
         if result.control == PROP_BATTERY_LEVEL and not entity.state_set:

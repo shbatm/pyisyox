@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import InitVar, asdict, dataclass, field
+import inspect
 import json
 import re
 from typing import TYPE_CHECKING, Any
@@ -45,9 +46,17 @@ URL_NS_ALL = "0"
 class EditorRange:
     """Node Server Editor Range definition."""
 
+    @classmethod
+    def from_dict(cls, props: dict) -> EditorRange:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
+
     uom: str = ""
     min: str = ""
     max: str = ""
+    step: int = 0
     precision: int = 0
     subset: str = ""
     nls: str = ""
@@ -56,6 +65,13 @@ class EditorRange:
 @dataclass
 class NodeEditor:
     """Node Server Editor definition."""
+
+    @classmethod
+    def from_dict(cls, props: dict) -> NodeEditor:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
 
     editor_id: str = ""
     # Ranges are a dict with UoM as the key
@@ -68,6 +84,13 @@ class NodeEditor:
 @dataclass
 class NodeServerConnection:
     """Node Server Connection details."""
+
+    @classmethod
+    def from_dict(cls, props: dict) -> NodeServerConnection:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
 
     profile: str = ""
     type_: str = ""
@@ -92,8 +115,15 @@ class NodeServerConnection:
 class NodeDef:
     """Node Server Node Definition parsed from the ISY/IoX."""
 
+    @classmethod
+    def from_dict(cls, props: dict) -> NodeDef:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
+
     sts: InitVar[dict[str, list | dict]]
-    cmds: InitVar[dict[str, Any]]
+    cmds: InitVar[dict[str, Any]] | None
     id: str = ""
     node_type: str = ""
     name: str = ""
@@ -106,7 +136,9 @@ class NodeDef:
     sends: dict[str, Any] = field(init=False, default_factory=dict)
     accepts: dict[str, Any] = field(init=False, default_factory=dict)
 
-    def __post_init__(self, sts: dict[str, list | dict], cmds: dict[str, Any]) -> None:
+    def __post_init__(
+        self, sts: dict[str, list | dict], cmds: dict[str, Any] | None
+    ) -> None:
         """Post-process node server definition."""
         statuses = {}
         if sts:
@@ -116,13 +148,15 @@ class NodeDef:
                 statuses.update({st[ATTR_ID]: st[ATTR_EDITOR]})
         self.statuses = statuses
 
-        if cmds_sends := cmds[ATTR_SENDS]:
-            if isinstance((cmd_list := cmds_sends[ATTR_CMD]), dict):
+        if cmds is None:
+            return
+        if cmds_sends := cmds.get(ATTR_SENDS):
+            if isinstance((cmd_list := cmds_sends.get(ATTR_CMD)), dict):
                 cmd_list = [cmd_list]
             self.sends = {i[ATTR_ID]: i for i in cmd_list}
 
-        if cmds_accepts := cmds[ATTR_ACCEPTS]:
-            if isinstance((cmd_list := cmds_accepts[ATTR_CMD]), dict):
+        if cmds_accepts := cmds.get(ATTR_ACCEPTS):
+            if isinstance((cmd_list := cmds_accepts.get(ATTR_CMD)), dict):
                 cmd_list = [cmd_list]
             self.accepts = {i[ATTR_ID]: i for i in cmd_list}
 
@@ -204,7 +238,7 @@ class NodeServers:
     def parse_connection(self, conn: dict) -> None:
         """Parse the node server connection files from the ISY."""
         try:
-            self._connections.append(NodeServerConnection(**conn))
+            self._connections.append(NodeServerConnection.from_dict(conn))
         except (ValueError, KeyError, NameError) as exc:
             _LOGGER.error("Could not parse node server connection: %s", exc)
             return
@@ -336,12 +370,12 @@ class NodeServers:
     def parse_node_server_defs(self, slot: str, node_def: dict) -> None:
         """Retrieve and parse the node server definitions."""
         try:
-            self._node_server_node_definitions[slot][node_def[ATTR_ID]] = NodeDef(
-                **node_def
-            )
+            self._node_server_node_definitions[slot][
+                node_def[ATTR_ID]
+            ] = NodeDef.from_dict(node_def)
 
         except (ValueError, KeyError, NameError) as exc:
-            _LOGGER.error("Could not parse node server connection: %s", exc)
+            _LOGGER.error("Could not parse node server definition: %s", exc)
             return
 
     def parse_node_server_editor(self, slot: str, editor: dict) -> None:
@@ -351,7 +385,7 @@ class NodeServers:
             ranges = [ranges]
         editor_ranges = {}
         for rng in ranges:
-            editor_ranges[rng["uom"]] = EditorRange(**rng)
+            editor_ranges[rng["uom"]] = EditorRange.from_dict(rng)
 
         self._node_server_node_editors[slot][editor_id] = NodeEditor(
             editor_id=editor_id,
