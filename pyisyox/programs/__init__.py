@@ -76,9 +76,9 @@ class Programs(EntityPlatform[ProgramsT]):
             _LOGGER.log(LOG_VERBOSE, "Parsing %s: %s (%s)", PLATFORM, name, address)
 
             if feature[TAG_FOLDER]:
-                entity = Folder(self, address, name, FolderDetail(**feature))
+                entity = Folder(self, address, name, FolderDetail.from_dict(feature))
             else:
-                entity = Program(self, address, name, ProgramDetail(**feature))
+                entity = Program(self, address, name, ProgramDetail.from_dict(feature))
 
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:

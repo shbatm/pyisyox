@@ -87,7 +87,7 @@ class NodeDetail(NodeBaseDetail):
     def __post_init__(self) -> None:
         """Post-initialization of Node detail dataclass."""
         if self.devtype:
-            self.zwave_props = ZWaveProperties(**self.devtype)
+            self.zwave_props = ZWaveProperties.from_dict(self.devtype)
 
 
 class Node(NodeBase, Entity[NodeDetail, StatusT]):
@@ -120,7 +120,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         if detail.property and PROP_STATUS in detail.property:
             self.state_set = True
             self._is_battery_node = False
-            self.update_state(NodeProperty(**detail.property))
+            self.update_state(NodeProperty.from_dict(detail.property))
 
     @property
     def formatted(self) -> str:
@@ -332,7 +332,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
             _LOGGER.warning("Error fetching parameter from ISY")
             return None
 
-        result = ZWaveParameter(**config)
+        result = ZWaveParameter.from_dict(config)
 
         # Add/update the aux_properties to include the parameter.
         node_prop = NodeProperty(

@@ -125,7 +125,7 @@ class NodeBase(Entity[NodeBaseDetail, OptionalIntT]):
         if not (notes := notes_dict.get("node_properties")):
             return
 
-        self.notes = NodeNotes(**cast(dict, notes))
+        self.notes = NodeNotes.from_dict(cast(dict, notes))
 
     async def send_cmd(
         self,

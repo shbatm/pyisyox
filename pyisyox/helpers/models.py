@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import suppress
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime
+import inspect
 from typing import Any, Generic, TypeVar, cast
 
 from pyisyox.constants import DEFAULT_PRECISION, DEFAULT_UNIT_OF_MEASURE
@@ -19,6 +20,18 @@ EntityDetailT = TypeVar("EntityDetailT", bound="EntityDetail")
 @dataclass
 class EntityDetail:
     """Dataclass to hold entity detail info."""
+
+    @classmethod
+    def from_dict(cls: type[EntityDetailT], props: dict) -> EntityDetailT:
+        """Create a dataclass from a dictionary.
+
+        Class method is used instead of keyword unpacking (**props) to prevent
+        breaking changes by new parameters being added in the future to the
+        API XML model.
+        """
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
 
     parent: str | dict[str, str] | None = None
 
@@ -37,6 +50,13 @@ class EntityStatus(Generic[StatusT, EntityDetailT]):
 @dataclass
 class EventData:
     """Dataclass to represent the event data returned from the stream."""
+
+    @classmethod
+    def from_dict(cls: type[EventData], props: dict) -> EventData:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
 
     seqnum: str = ""
     sid: str = ""
@@ -61,6 +81,13 @@ class NodeChangedEvent:
 class NodeNotes:
     """Dataclass for holding node notes information."""
 
+    @classmethod
+    def from_dict(cls, props: dict) -> NodeNotes:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
+
     spoken: str = ""
     is_load: bool = False
     description: str = ""
@@ -70,6 +97,13 @@ class NodeNotes:
 @dataclass
 class NodeProperty:
     """Class to hold result of a control event or node aux property."""
+
+    @classmethod
+    def from_dict(cls: type[NodeProperty], props: dict) -> NodeProperty:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
 
     id: InitVar[str | None] = ""
     control: str = ""
@@ -96,6 +130,13 @@ class NodeProperty:
 class ZWaveParameter:
     """Class to hold Z-Wave Parameter from a Z-Wave Node."""
 
+    @classmethod
+    def from_dict(cls: type[ZWaveParameter], props: dict) -> ZWaveParameter:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
+
     param_num: int
     size: int
     value: int | str
@@ -111,6 +152,13 @@ class ZWaveParameter:
 @dataclass
 class ZWaveProperties:
     """Class to hold Z-Wave Product Details from a Z-Wave Node."""
+
+    @classmethod
+    def from_dict(cls: type[ZWaveProperties], props: dict) -> ZWaveProperties:
+        """Create a dataclass from a dictionary."""
+        return cls(
+            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
+        )
 
     category: str = "0"
     mfg: str = "0.0.0"
