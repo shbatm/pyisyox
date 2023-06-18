@@ -350,8 +350,13 @@ class NodeServers:
                 if not line.startswith("#") and line != ""
             ]
             if nls_list:
-                nls_lookup = dict(re.split(r"\s?=\s?", line) for line in nls_list)
-                self._node_server_nls[slot] = nls_lookup
+                try:
+                    nls_lookup = dict(re.split(r"\s+=\s+", line) for line in nls_list)
+                    self._node_server_nls[slot] = nls_lookup
+                except ValueError:
+                    _LOGGER.error(
+                        "Error parsing language file for node server slot %s, invalid format"
+                    )
 
             if self.isy.args and self.isy.args.file:
                 filename = "-".join(path.split("/")[-2:]).replace(".txt", ".yaml")
