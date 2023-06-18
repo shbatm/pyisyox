@@ -414,7 +414,7 @@ class NodeServers:
                     editor.values = {
                         int(k.replace(f"{index_range.nls}-", "")): v
                         for k, v in nls.items()
-                        if k.startswith(index_range.nls)
+                        if k.startswith(f"{index_range.nls}-")
                     }
 
             if not (node_defs := self._node_server_node_definitions.get(slot)):
