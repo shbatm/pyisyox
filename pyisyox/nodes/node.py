@@ -160,7 +160,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
             or (
                 self._protocol == Protocol.INSTEON
                 and self.type_
-                and any({self.type_.startswith(t) for t in INSTEON_TYPE_DIMMABLE})
+                and any(self.type_.startswith(t) for t in INSTEON_TYPE_DIMMABLE)
                 and self.address.endswith(INSTEON_SUBNODE_DIMMABLE)
             )
             or (
@@ -175,7 +175,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
     def is_lock(self) -> bool:
         """Determine if this device is a door lock type."""
         return (
-            self.type_ and any({self.type_.startswith(t) for t in INSTEON_TYPE_LOCK})
+            self.type_ and any(self.type_.startswith(t) for t in INSTEON_TYPE_LOCK)
         ) or (
             self.protocol == Protocol.ZWAVE
             and self.zwave_props is not None
@@ -187,7 +187,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         """Determine if this device is a thermostat/climate control device."""
         return (
             self.type_
-            and any({self.type_.startswith(t) for t in INSTEON_TYPE_THERMOSTAT})
+            and any(self.type_.startswith(t) for t in INSTEON_TYPE_THERMOSTAT)
         ) or (
             self._protocol == Protocol.ZWAVE
             and self.zwave_props is not None
