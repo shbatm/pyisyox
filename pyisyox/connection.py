@@ -129,6 +129,7 @@ class Connection:
     ) -> str | None:
         """Execute request to ISY REST interface."""
         _LOGGER.debug("Request: %s", url)
+        endpoint = url.split("rest", 1)[1]
         if delay:
             await asyncio.sleep(delay)
         try:
@@ -139,7 +140,6 @@ class Connection:
                 timeout=HTTP_TIMEOUT,
                 ssl=self.sslcontext,
             ) as res:
-                endpoint = url.split("rest", 1)[1]
                 if res.status == HTTP_OK:
                     _LOGGER.debug("Response received: %s", endpoint)
                     results = await res.text(encoding="utf-8", errors="ignore")
