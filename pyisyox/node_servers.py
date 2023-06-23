@@ -123,7 +123,7 @@ class NodeDef:
         )
 
     sts: InitVar[dict[str, list | dict]]
-    cmds: InitVar[dict[str, Any]] | None
+    cmds: InitVar[dict[str, Any]] | None = None
     id: str = ""
     node_type: str = ""
     name: str = ""
