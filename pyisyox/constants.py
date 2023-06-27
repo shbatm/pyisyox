@@ -537,6 +537,29 @@ UOM_FRIENDLY_NAME: dict[str, str] = {
     "118": "hPa",
     "119": "Wh",
     "120": "in/day",
+    "122": "μg/m³",  # Microgram per cubic meter
+    "123": "bq/m³",  # Becquerel per cubic meter
+    "124": "pCi/L",  # Picocuries per liter
+    "125": "pH",
+    "126": "bpm",  # Beats per Minute
+    "127": "mmHg",
+    "128": "J",
+    "129": "BMI",  # Body Mass Index
+    "130": "L/h",
+    "131": "dBm",
+    "132": "bpm",  # Breaths per minute
+    "133": "kHz",
+    "134": "m/²",
+    "135": "VA",  # Volt-Amp
+    "136": "var",  # VAR = Volt-Amp Reactive
+    "137": "",  # NTP DateTime - Number of seconds since 1900
+    "138": "psi",
+    "139": "°",
+    "140": "mg/L",
+    "141": "N",
+    "142": "gal/s",
+    "143": "gpm",
+    "144": "gph",
 }
 
 UOM_TO_STATES: dict[str, dict[str, str]] = {
