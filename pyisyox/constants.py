@@ -537,8 +537,8 @@ UOM_FRIENDLY_NAME: dict[str, str] = {
     "118": "hPa",
     "119": "Wh",
     "120": "in/day",
-    "122": "μg/m^3",  # Microgram per cubic meter
-    "123": "bq/m^3",  # Becquerel per cubic meter
+    "122": "μg/m³",  # Microgram per cubic meter
+    "123": "bq/m³",  # Becquerel per cubic meter
     "124": "pCi/L",  # Picocuries per liter
     "125": "pH",
     "126": "bpm",  # Beats per Minute
@@ -549,7 +549,7 @@ UOM_FRIENDLY_NAME: dict[str, str] = {
     "131": "dBm",
     "132": "bpm",  # Breaths per minute
     "133": "kHz",
-    "134": "m/s^2",
+    "134": "m/²",
     "135": "VA",  # Volt-Amp
     "136": "var",  # VAR = Volt-Amp Reactive
     "137": "",  # NTP DateTime - Number of seconds since 1900
