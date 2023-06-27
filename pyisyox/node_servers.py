@@ -355,7 +355,8 @@ class NodeServers:
                     self._node_server_nls[slot] = nls_lookup
                 except ValueError:
                     _LOGGER.error(
-                        "Error parsing language file for node server slot %s, invalid format"
+                        "Error parsing language file for node server slot %s, invalid format",
+                        slot,
                     )
 
             if self.isy.args and self.isy.args.file:
