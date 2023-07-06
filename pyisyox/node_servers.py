@@ -41,6 +41,10 @@ LANG_EN_US = "en_us"
 
 URL_NS_ALL = "0"
 
+# Regex to remove comments and blank lines from NLS files
+NLS_CLEAN = re.compile(r"^(#.*)?\r?\n", flags=re.M)
+NLS_SPLIT = re.compile(r"\s+=\s+")
+
 
 @dataclass
 class EditorRange:
@@ -344,20 +348,19 @@ class NodeServers:
                 return
         elif f"{ATTR_NLS}/{LANG_EN_US}" in path:
             nls_lookup: dict = {}
-            nls_list = [
-                line
-                for line in file_content.split("\n")
-                if not line.startswith("#") and line != ""
-            ]
-            if nls_list:
-                try:
-                    nls_lookup = dict(re.split(r"\s+=\s+", line) for line in nls_list)
-                    self._node_server_nls[slot] = nls_lookup
-                except ValueError:
-                    _LOGGER.error(
-                        "Error parsing language file for node server slot %s, invalid format",
-                        slot,
-                    )
+            try:
+                nls_lookup = dict(
+                    NLS_SPLIT.split(line.strip(), maxsplit=1)
+                    for line in NLS_CLEAN.sub("", file_content).strip().split("\n")
+                )
+            except ValueError as err:
+                _LOGGER.error(
+                    "Error processing language file for node server slot %s, invalid format: %s\n%s",
+                    slot,
+                    err,
+                    repr(file_content),
+                )
+            self._node_server_nls[slot] = nls_lookup
 
             if self.isy.args and self.isy.args.file:
                 filename = "-".join(path.split("/")[-2:]).replace(".txt", ".yaml")
@@ -403,10 +406,9 @@ class NodeServers:
         """Fetch the node server connections from the ISY."""
         try:
             # Update NLS information
-            if slot not in self._node_server_nls:
+            if not (nls := self._node_server_nls.get(slot)):
                 # Missing NLS file for this node server
                 return
-            nls = self._node_server_nls[slot]
             if not (editors := self._node_server_node_editors.get(slot)):
                 return
 
