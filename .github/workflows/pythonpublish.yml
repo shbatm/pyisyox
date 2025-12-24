@@ -2,6 +2,10 @@
 # For more information see: https://help.github.com/en/actions/language-and-framework-guides/using-python-with-github-actions#publishing-to-package-registries
 name: Upload Python Package
 
+permissions:
+  id-token: write
+  contents: read
+
 "on":
   release:
     types:
@@ -31,8 +35,8 @@ jobs:
         # Use the action's release branch to follow the stable v1 releases.
         # The action recommends `release/v1` or a specific tag; `release/v1`
         # will resolve to the latest v1.x release.
+        # With `permissions.id-token: write` and a configured trusted repository
+        # on PyPI, the action will use OIDC token-based authentication and
+        # no repository secret is required. If you prefer an API token, add
+        # `password: ${{ secrets.PYPI_TOKEN }}` under `with` instead.
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # For tokenless Trusted Publishing set `id-token: write` above and
-          # omit the password. If you prefer an API token, set it here.
-          password: ${{ secrets.PYPI_TOKEN }}
