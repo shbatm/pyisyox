@@ -231,7 +231,10 @@ class NodeServers:
         if not (connections := ns_conn_xml[ATTR_CONNECTIONS]):
             return
 
-        if isinstance((connection_list := connections[ATTR_CONNECTION]), dict):
+        if not (connection_list := connections.get(ATTR_CONNECTION)):
+            return
+
+        if isinstance(connection_list, dict):
             connection_list = [connection_list]  # Handle case for 1 Node Server
 
         for connection in connection_list:
