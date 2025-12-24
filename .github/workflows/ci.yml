@@ -29,6 +29,8 @@ jobs:
           node-version: "18"
       - name: Run pre-commit hooks
         uses: pre-commit/action@v3.0.0
+        env:
+          SKIP: no-commit-to-branch
         with:
           extra_args: --all-files
 
