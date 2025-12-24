@@ -1,4 +1,5 @@
 """Dataclass and TypedDict models for PyISYoX."""
+
 from __future__ import annotations
 
 from contextlib import suppress

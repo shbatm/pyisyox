@@ -213,7 +213,7 @@ class EventRouter:
                 # Key Changed (node = key)
                 self.key = cast(str, event.node)
                 _LOGGER.debug("Key changed: %s", self.key)
-            case (Action.VAR_STATUS | Action.VAR_INIT) if self.isy.variables.loaded:
+            case Action.VAR_STATUS | Action.VAR_INIT if self.isy.variables.loaded:
                 self.isy.variables.update_received(
                     event, init=(event.action == Action.VAR_INIT)
                 )

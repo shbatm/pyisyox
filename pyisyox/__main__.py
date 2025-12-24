@@ -7,6 +7,7 @@ Use `python3 -m pyisyox -h` for full usage information.
 This script can also be copied and used as a template for
 using this module.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,6 +37,7 @@ async def main(args: argparse.Namespace) -> None:
 
     Args:
         args (argparse.Namespace): Command-line parameters
+
     """
     _LOGGER.info("Starting PyISYoX...")
     t_0 = time.time()
@@ -72,6 +74,7 @@ async def main(args: argparse.Namespace) -> None:
         Args:
             event (NodeChangedEvent): The event details
             key (str): The key provided for this listener
+
         """
         _LOGGER.info(
             "Node %s Changed: %s %s",
@@ -86,6 +89,7 @@ async def main(args: argparse.Namespace) -> None:
         Args:
             event (EntityStatus): The event details
             key (str): The key provided for this listener
+
         """
         _LOGGER.info("Node status updated: %s", json.dumps(asdict(event), default=str))
 
@@ -94,6 +98,7 @@ async def main(args: argparse.Namespace) -> None:
 
         Args:
             event (SystemStatus): The system status event.
+
         """
         _LOGGER.info("System Status Changed: %s", event.name.replace("_", " ").title())
 
@@ -103,6 +108,7 @@ async def main(args: argparse.Namespace) -> None:
         Args:
             event (Any): The event details
             key (str): The key provided for this listener
+
         """
         output: str
         if is_dataclass(event):

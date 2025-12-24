@@ -69,3 +69,5 @@ example/
 
 # Output when dumping to file enabled
 .output/*
+
+ruff_cache/

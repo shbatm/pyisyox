@@ -1,4 +1,5 @@
 """Utilities for outputting results to file."""
+
 from __future__ import annotations
 
 import json

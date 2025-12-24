@@ -1,4 +1,5 @@
 """ISY Node Server Information."""
+
 from __future__ import annotations
 
 import asyncio
@@ -382,9 +383,9 @@ class NodeServers:
     def parse_node_server_defs(self, slot: str, node_def: dict) -> None:
         """Retrieve and parse the node server definitions."""
         try:
-            self._node_server_node_definitions[slot][
-                node_def[ATTR_ID]
-            ] = NodeDef.from_dict(node_def)
+            self._node_server_node_definitions[slot][node_def[ATTR_ID]] = (
+                NodeDef.from_dict(node_def)
+            )
 
         except (ValueError, KeyError, NameError) as exc:
             _LOGGER.error("Could not parse node server definition: %s", exc)

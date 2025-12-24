@@ -1,4 +1,5 @@
 """Representation of a program from the ISY."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

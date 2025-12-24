@@ -1,4 +1,5 @@
 """Representation of ISY Nodes."""
+
 from __future__ import annotations
 
 import asyncio

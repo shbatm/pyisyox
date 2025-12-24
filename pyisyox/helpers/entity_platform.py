@@ -3,6 +3,7 @@
 This has been adapted from home-assistant/core:
 homeassistant.helpers.entity_platform
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

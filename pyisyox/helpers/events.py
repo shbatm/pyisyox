@@ -1,4 +1,5 @@
 """Event Handlers and Helpers."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable
@@ -51,6 +52,7 @@ class EventEmitter:
         Returns:
             EventListener:
                 The EventListener object reference.
+
         """
         listener = EventListener(
             emitter=self, callback=callback, event_filter=event_filter, key=key
@@ -64,6 +66,7 @@ class EventEmitter:
         Args:
             listener (EventListener):
                 The listener object reference returned when subscribed.
+
         """
         self._subscribers.remove(listener)
 
@@ -73,6 +76,7 @@ class EventEmitter:
         Args:
             event (_EventT):
                 The event to pass on to the subscribed listeners.
+
         """
         for subscriber in self._subscribers:
             # Guard against downstream errors interrupting the socket connection (#249)
@@ -118,6 +122,7 @@ class EventEmitter:
         Returns:
             bool:
                 If the event matches against the filter.
+
         """
         if isinstance(event, NodeChangedEvent) and ATTR_EVENT_INFO in evt_filter:
             # NodeChangedEvents can have a nested dict in the filter
