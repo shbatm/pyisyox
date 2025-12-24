@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyisyox"
 description = "Python module for asynchronous communication with Universal Devices, Inc.'s ISY & IoX controllers."
-license     = {text = "Apache-2.0"}
+license = "Apache-2.0"
 keywords = ["home", "automation", "isy", "isy994", "isy-994", "UDI", "polisy", "eisy", "home-assistant"]
 authors = [
     {name = "Ryan Kraus", email = "automicus@gmail.com"},
@@ -16,7 +16,6 @@ classifiers=[
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: End Users/Desktop",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -38,6 +37,11 @@ dependencies = [
 "Homepage" = "https://github.com/shbatm/pyisyox"
 
 [tool.setuptools_scm]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyisyox*"]
+exclude = ["script*"]
 
 [tool.black]
 target-version = ["py310", "py311"]
