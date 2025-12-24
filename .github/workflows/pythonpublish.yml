@@ -10,6 +10,9 @@ name: Upload Python Package
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout
@@ -25,9 +28,11 @@ jobs:
           python -m pip install --upgrade build
           python -m build
       - name: Publish package to PyPI
-        # Pin to a specific released version to avoid resolving issues with
-        # floating tags. Using v1.0.6 which is a stable release at time of
-        # update; adjust if newer stable tag is preferred.
-        uses: pypa/gh-action-pypi-publish@v1.0.6
+        # Use the action's release branch to follow the stable v1 releases.
+        # The action recommends `release/v1` or a specific tag; `release/v1`
+        # will resolve to the latest v1.x release.
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          # For tokenless Trusted Publishing set `id-token: write` above and
+          # omit the password. If you prefer an API token, set it here.
           password: ${{ secrets.PYPI_TOKEN }}
