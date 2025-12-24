@@ -16,6 +16,7 @@ repos:
         args:
           - --toml
           - pyproject.toml
+          - --ignore-words-list=ETo,ETO
           - --quiet-level=2
         exclude: ^tests/fixtures/|homeassistant/generated/|tests/components/.*/snapshots/
 
@@ -57,7 +58,7 @@ repos:
         files: ^pyisyox/.*\.py$
       - id: pylint
         name: pylint
-        entry: script/run-in-env.sh pylint --rcfile=.pylintrc --ignore-missing-annotations=y
+        entry: script/run-in-env.sh pylint --rcfile=.pylintrc
         language: script
         require_serial: true
         files: ^pyisyox/.*\.py$
