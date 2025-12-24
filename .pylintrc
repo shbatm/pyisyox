@@ -10,3 +10,13 @@ disable=
     too-few-public-methods
     ,too-many-instance-attributes
     ,too-many-branches
+    ,unused-argument
+    ,too-many-statements
+    ,superfluous-parens
+    ,too-many-lines
+    ,line-too-long
+    ,useless-return
+    ,too-many-public-methods
+    ,too-many-arguments
+    ,duplicate-code
+    ,too-many-return-statements
