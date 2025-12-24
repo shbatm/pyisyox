@@ -1,4 +1,5 @@
 """Connection to the ISY."""
+
 from __future__ import annotations
 
 from argparse import Namespace
@@ -133,13 +134,16 @@ class Connection:
         if delay:
             await asyncio.sleep(delay)
         try:
-            async with self.semaphore, self.req_session.get(
-                url,
-                auth=self.connection_info.auth,
-                headers=HTTP_HEADERS,
-                timeout=HTTP_TIMEOUT,
-                ssl=self.sslcontext,
-            ) as res:
+            async with (
+                self.semaphore,
+                self.req_session.get(
+                    url,
+                    auth=self.connection_info.auth,
+                    headers=HTTP_HEADERS,
+                    timeout=HTTP_TIMEOUT,
+                    ssl=self.sslcontext,
+                ) as res,
+            ):
                 if res.status == HTTP_OK:
                     _LOGGER.debug("Response received: %s", endpoint)
                     results = await res.text(encoding="utf-8", errors="ignore")

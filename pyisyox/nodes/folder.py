@@ -1,4 +1,5 @@
 """Folder object for nodes and groups."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

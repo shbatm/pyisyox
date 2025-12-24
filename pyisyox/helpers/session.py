@@ -1,4 +1,5 @@
 """ISY Websession and SSL Helper Functions."""
+
 from __future__ import annotations
 
 import ssl
@@ -18,8 +19,7 @@ def get_new_client_session(conn_info: ISYConnectionInfo) -> aiohttp.ClientSessio
         if not can_https(conn_info.tls_version):
             raise (
                 ValueError(
-                    "PyISYoX could not connect to the ISY. "
-                    "Check log for SSL/TLS error."
+                    "PyISYoX could not connect to the ISY. Check log for SSL/TLS error."
                 )
             )
         return aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
@@ -33,6 +33,9 @@ def get_sslcontext(conn_info: ISYConnectionInfo) -> ssl.SSLContext | None:
     if conn_info.tls_version is None:
         # Auto-negotiate TLS Version (non-ISY994 models only)
         return ssl.SSLContext(ssl.PROTOCOL_TLS)
+
+    # Default context; will be overridden for specific TLS versions
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS)
     if conn_info.tls_version == 1.1:
         context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_1)
     elif conn_info.tls_version == 1.2:

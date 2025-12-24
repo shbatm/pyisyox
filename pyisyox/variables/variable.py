@@ -1,4 +1,5 @@
 """Manage variables from the ISY."""
+
 from __future__ import annotations
 
 from dataclasses import InitVar, dataclass, field

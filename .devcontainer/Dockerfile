@@ -6,11 +6,14 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
     apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        git \
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspaces
+
+# Upgrade pip and setuptools for Python 3.13+ compatibility
+RUN pip3 install -U "pip>=23.0" "setuptools>=70.0" wheel
 
 # Install Python dependencies from requirements
 COPY requirements.txt requirements-dev.txt ./

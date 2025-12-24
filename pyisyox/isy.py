@@ -1,4 +1,5 @@
 """Module for connecting to and interacting with the ISY."""
+
 from __future__ import annotations
 
 import argparse
@@ -229,6 +230,7 @@ class ISY:
 
         Returns:
             boolean: Returns `True` on successful command, `False` on error.
+
         """
         req_path = [URL_QUERY]
         if address is not None:

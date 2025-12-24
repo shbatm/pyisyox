@@ -1,4 +1,5 @@
 """Constants for the PyISYoX Module."""
+
 from __future__ import annotations
 
 import datetime

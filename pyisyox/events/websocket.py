@@ -1,10 +1,11 @@
 """ISY Websocket Event Stream."""
+
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
 
@@ -158,9 +159,10 @@ class WebSocketClient:
                 auth=self.connection_info.auth,
                 heartbeat=WS_HEARTBEAT,
                 headers=WS_HEADERS,
-                timeout=WS_TIMEOUT,
+                # Don't pass ClientTimeout here to avoid mypy/aiohttp signature mismatch;
+                # rely on `receive_timeout` and heartbeat for websocket timeouts.
                 receive_timeout=self._heartbeat_interval + WS_HB_GRACE,
-                ssl=self.sslcontext,
+                ssl=cast(Any, self.sslcontext),
             ) as ws:
                 self.status = EventStreamStatus.CONNECTED
                 retries = 0

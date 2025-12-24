@@ -28,6 +28,7 @@ var/
 .installed.cfg
 *.egg
 .mypy.cache/
+.venv/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -68,3 +69,5 @@ example/
 
 # Output when dumping to file enabled
 .output/*
+
+ruff_cache/

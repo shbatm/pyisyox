@@ -1,4 +1,5 @@
 """Exceptions used by the PyISYoX module."""
+
 # FUTURE: change to xmltodict.expat.ExpatError
 from xml.parsers.expat import ExpatError
 

@@ -1,4 +1,5 @@
 """Helper functions for the PyISYoX Module."""
+
 from __future__ import annotations
 
 from typing import cast
@@ -34,6 +35,7 @@ def convert_isy_raw_value(
     Returns:
         float | int:
             The converted value
+
     """
     if value is None or value == ISY_VALUE_UNKNOWN:
         return ISY_VALUE_UNKNOWN
