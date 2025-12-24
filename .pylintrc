@@ -20,3 +20,4 @@ disable=
     ,too-many-arguments
     ,duplicate-code
     ,too-many-return-statements
+    ,too-many-positional-arguments
