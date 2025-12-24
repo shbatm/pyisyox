@@ -71,3 +71,4 @@ example/
 .output/*
 
 ruff_cache/
+.claude/
