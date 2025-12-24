@@ -25,6 +25,9 @@ jobs:
           python -m pip install --upgrade build
           python -m build
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@v1
+        # Pin to a specific released version to avoid resolving issues with
+        # floating tags. Using v1.0.6 which is a stable release at time of
+        # update; adjust if newer stable tag is preferred.
+        uses: pypa/gh-action-pypi-publish@v1.0.6
         with:
           password: ${{ secrets.PYPI_TOKEN }}
