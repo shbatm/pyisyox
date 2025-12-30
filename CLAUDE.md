@@ -120,6 +120,32 @@ pylint pyisyox
 - `ConfigurationData`: uuid, name, model, firmware, platform, networking status
 - Auto-detects ISY994 vs IoX platform
 
+### Connection Flow & Initialization
+
+**For a detailed explanation of how connections are established**, see [Connection Flow Documentation](docs/connection-flow.md).
+
+**Quick Summary**:
+
+1. **Initialization Phase** - Create `ISY` object with `ISYConnectionInfo` (no network calls yet)
+2. **Connection Testing** - `await isy.initialize()` calls `/rest/config` to validate credentials
+3. **Parallel Platform Loading** - All platforms load concurrently via `asyncio.gather()`:
+   - Nodes: `/rest/nodes` + `/rest/status` (2 calls)
+   - Programs: `/rest/programs?subfolders=true` (1 call)
+   - Variables: `/rest/vars/definitions/{1,2}` + `/rest/vars/get/{1,2}` (4 calls)
+   - Clock: `/rest/time` (1 call)
+   - Networking: `/rest/networking/resources` (1 call, if enabled)
+   - Node Servers: `/rest/profiles/ns` (1 call, if enabled)
+4. **Event Stream Setup** - WebSocket (`ws://.../rest/subscribe`) or TCP for real-time updates
+
+**Total Initial Load**: 1 config call + 8-11 parallel platform calls (11-12 total)
+
+**Performance**: Connection limits enforced via semaphore:
+
+- ISY994: 2 HTTPS / 5 HTTP concurrent
+- IoX: 20 HTTPS / 50 HTTP concurrent (auto-upgraded)
+
+See [Connection Flow Documentation](docs/connection-flow.md) for complete endpoint sequence, retry logic, event routing, and connection state machine details.
+
 ### Platform Modules
 
 Each platform follows a similar pattern with collection classes and entity classes:
