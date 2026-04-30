@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from datetime import datetime
-from io import TextIOWrapper
 import logging
 import socket
 import ssl
-from threading import Thread, ThreadError
 import time
+from collections.abc import Callable
+from datetime import datetime
+from io import TextIOWrapper
+from threading import Thread, ThreadError
 from typing import TYPE_CHECKING, Any, cast
 
 from pyisyox.connection import ISYConnectionInfo
@@ -161,10 +161,8 @@ class EventStream:
                 )
                 if self.connection_info.tls_version and self.connection_info.use_https:
                     self.cert = cast(ssl.SSLSocket, self.socket).getpeercert()
-            except OSError as err:
-                _LOGGER.exception(
-                    "PyISYoX could not connect to ISY event stream. %s", err
-                )
+            except OSError:
+                _LOGGER.exception("PyISYoX could not connect to ISY event stream.")
                 if self._on_lost_function is not None:
                     self._on_lost_function()
                 return False
@@ -202,10 +200,9 @@ class EventStream:
             try:
                 msg = self._create_message(strings.UNSUB_MSG)
                 self.write(msg)
-            except (OSError, KeyError) as ex:
-                _LOGGER.error(
-                    "PyISYoX encountered a socket error while writing unsubscribe message to the socket: %s.",
-                    ex,
+            except (OSError, KeyError):
+                _LOGGER.exception(
+                    "PyISYoX encountered a socket error while writing unsubscribe message to the socket."
                 )
             self._subscribed = False
             self.disconnect()
@@ -248,16 +245,14 @@ class EventStream:
             try:
                 events = event_reader.read_events(POLL_TIME)
             except ISYMaxConnections:
-                _LOGGER.error(
+                _LOGGER.exception(
                     "PyISYoX reached maximum connections, delaying reconnect attempt by %s seconds.",
                     RECONNECT_DELAY,
                 )
                 self._lost_connection(RECONNECT_DELAY)
                 return
             except ISYInvalidAuthError:
-                _LOGGER.error(
-                    "Invalid authentication used to connect to the event stream."
-                )
+                _LOGGER.exception("Invalid authentication used to connect to the event stream.")
                 return
             except ISYStreamDataError as ex:
                 _LOGGER.warning(

@@ -1,14 +1,35 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: debug-statements
+      - id: check-builtin-literals
+      - id: check-case-conflict
+      - id: check-docstring-first
+      - id: check-json
+        exclude: (.vscode|.devcontainer)
+      - id: check-toml
+      - id: check-xml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-executables-have-shebangs
+        stages: [manual]
+      - id: no-commit-to-branch
+        args: ["--branch=dev", "--branch=main"]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
+    rev: v0.15.12
     hooks:
       - id: ruff-check
-        args: ["--fix"]
+        args:
+          - --fix
       - id: ruff-format
         files: ^((pyisyox|examples)/.+)?[^/]+\.py$
 
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
         additional_dependencies:
@@ -18,25 +39,10 @@ repos:
           - pyproject.toml
           - --ignore-words-list=ETo,ETO
           - --quiet-level=2
-        exclude: ^tests/fixtures/|homeassistant/generated/|tests/components/.*/snapshots/
-
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: check-executables-have-shebangs
-        stages: [manual]
-      - id: check-json
-        exclude: (.vscode|.devcontainer)
-      - id: no-commit-to-branch
-        args: ["--branch=dev", "--branch=main"]
+        exclude: ^tests/fixtures/
 
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
 
@@ -44,9 +50,6 @@ repos:
     rev: v3.6.2
     hooks:
       - id: prettier
-        additional_dependencies:
-          - prettier@3.6.2
-          - prettier-plugin-sort-json@4.1.1
 
   - repo: local
     hooks:

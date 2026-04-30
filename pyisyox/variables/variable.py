@@ -50,9 +50,7 @@ class Variable(Entity[VariableDetail, NumT]):
     _var_type: str
     _precision: int
 
-    def __init__(
-        self, platform: Variables, address: str, name: str, detail: VariableDetail
-    ) -> None:
+    def __init__(self, platform: Variables, address: str, name: str, detail: VariableDetail) -> None:
         """Initialize a Variable class."""
         self.status_events = EventEmitter()
         self.platform = platform

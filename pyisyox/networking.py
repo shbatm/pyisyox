@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import inspect
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyisyox.constants import TAG_ID, TAG_NAME, URL_NETWORK, URL_RESOURCES, Protocol
@@ -26,9 +26,7 @@ class NetworkCommandDetail(EntityDetail):
     @classmethod
     def from_dict(cls: type[NetworkCommandDetail], props: dict) -> NetworkCommandDetail:
         """Create a dataclass from a dictionary."""
-        return cls(
-            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
-        )
+        return cls(**{k: v for k, v in props.items() if k in inspect.signature(cls).parameters})
 
     control_info: dict[str, str | bool] = field(default_factory=dict)
     id: str = ""
@@ -49,9 +47,7 @@ class NetworkResources(EntityPlatform):
 
     def parse(self, xml_dict: dict[str, Any]) -> None:
         """Parse the results from the ISY."""
-        if not (net_config := xml_dict.get("net_config")) or not (
-            features := net_config.get("net_rule")
-        ):
+        if not (net_config := xml_dict.get("net_config")) or not (features := net_config.get("net_rule")):
             return
         for feature in features:
             self.parse_entity(feature)

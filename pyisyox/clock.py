@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import time
 from asyncio import sleep
 from dataclasses import dataclass
 from datetime import date, datetime
-import json
-import time
 from typing import TYPE_CHECKING
 
 from pyisyox.constants import (

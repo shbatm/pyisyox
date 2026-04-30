@@ -17,9 +17,5 @@ def write_to_file(xml_dict: dict, path: str) -> None:
     # JSON dumps used to serialize everything as as string since these
     # YAML files will not be parsed again
     json_object = json.dumps(xml_dict, indent=4, default=str)
-    with open(
-        path,
-        "w",
-        encoding="utf-8",
-    ) as outfile:
+    with Path(path).open("w", encoding="utf-8") as outfile:
         yaml.safe_dump(json.loads(json_object), outfile)

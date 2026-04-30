@@ -83,11 +83,9 @@ class ISYEventReader:
         try:
             # We have data on the wire, read as much as we can
             # up to 32 * SOCKET_BUFFER_SIZE
-            for read_count in range(0, 32):
+            for read_count in range(32):
                 new_data = self._socket.recv(SOCKET_BUFFER_SIZE)
-                _LOGGER.log(
-                    LOG_VERBOSE, "read_count: %s new_data: %s", read_count, new_data
-                )
+                _LOGGER.log(LOG_VERBOSE, "read_count: %s new_data: %s", read_count, new_data)
                 if len(new_data) == 0:
                     if read_count != 0:
                         break
@@ -111,9 +109,7 @@ class ISYEventReader:
             raise ISYMaxConnections(self._event_buffer)
         if headers.startswith(HTTP_NOT_AUTHORIZED_RESPONSE):
             raise ISYInvalidAuthError(self._event_buffer)
-        self._event_buffer = self._event_buffer[
-            separator_position + HTTP_HEADER_BODY_SEPERATOR_LEN :
-        ]
+        self._event_buffer = self._event_buffer[separator_position + HTTP_HEADER_BODY_SEPERATOR_LEN :]
         for header in headers.split(HTTP_HEADER_SEPERATOR)[1:]:
             header_name, header_value = header.split(HEADER_SEPERATOR, 1)
             if header_name.strip().lower() != CONTENT_LENGTH_HEADER:

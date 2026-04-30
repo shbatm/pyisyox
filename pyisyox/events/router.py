@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict
 import json
 import logging
+from dataclasses import asdict
 from typing import TYPE_CHECKING, cast
 
 from pyisyox.constants import ATTR_STATUS
@@ -130,7 +130,7 @@ class EventRouter:
             try:
                 self.route_message(EventData.from_dict(event))
             except (KeyError, ValueError, NameError):
-                _LOGGER.error("Could not validate event", exc_info=True)
+                _LOGGER.exception("Could not validate event")
 
     def route_message(self, event: EventData) -> None:
         """Route a received message from the event stream.
@@ -172,9 +172,7 @@ class EventRouter:
                 progress_report_received(self.isy.nodes, event)
             case ControlEvent.PORTAL:
                 # Portal Control Event
-                self.isy.diagnostics.portal_status = cast(dict, event.event_info)[
-                    "portal_status"
-                ]
+                self.isy.diagnostics.portal_status = cast(dict, event.event_info)["portal_status"]
                 _LOGGER.debug(
                     "Portal Control Event: %s",
                     json.dumps(self.isy.diagnostics.portal_status, default=str),
@@ -214,9 +212,7 @@ class EventRouter:
                 self.key = cast(str, event.node)
                 _LOGGER.debug("Key changed: %s", self.key)
             case Action.VAR_STATUS | Action.VAR_INIT if self.isy.variables.loaded:
-                self.isy.variables.update_received(
-                    event, init=(event.action == Action.VAR_INIT)
-                )
+                self.isy.variables.update_received(event, init=(event.action == Action.VAR_INIT))
             case Action.KEY:
                 # Key (event_info = key)
                 self.key = cast(str, event.event_info)
@@ -240,9 +236,7 @@ class EventRouter:
                 self.isy.background_tasks.add(update_status_task)
                 update_status_task.add_done_callback(self.isy.background_tasks.discard)
             case ConfigAction.BATCH_MODE:
-                self.isy.diagnostics.batch_mode = (
-                    cast(dict, event.event_info)[ATTR_STATUS] == "1"
-                )
+                self.isy.diagnostics.batch_mode = cast(dict, event.event_info)[ATTR_STATUS] == "1"
                 _LOGGER.debug(
                     "Batch mode changed to: %s",
                     self.isy.diagnostics.batch_mode,

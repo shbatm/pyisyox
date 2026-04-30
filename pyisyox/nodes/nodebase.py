@@ -131,7 +131,7 @@ class NodeBase(Entity[NodeBaseDetail, OptionalIntT]):
     async def send_cmd(
         self,
         cmd: str,
-        val: str | int | float | None = None,
+        val: str | float | None = None,
         uom: str | None = None,
         query: dict[str, str] | None = None,
     ) -> bool:
@@ -151,9 +151,7 @@ class NodeBase(Entity[NodeBaseDetail, OptionalIntT]):
                 self.address,
             )
             return False
-        _LOGGER.debug(
-            "Command %s sent to %s.", COMMAND_FRIENDLY_NAME.get(cmd), self.address
-        )
+        _LOGGER.debug("Command %s sent to %s.", COMMAND_FRIENDLY_NAME.get(cmd), self.address)
         return True
 
     async def beep(self) -> bool:

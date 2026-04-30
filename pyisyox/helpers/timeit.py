@@ -1,9 +1,9 @@
 """Helpers for testing performance during development."""
 
-from collections.abc import Callable
-from functools import wraps
 import logging
 import time
+from collections.abc import Callable
+from functools import wraps
 from typing import TypeVar
 
 _LOGGER = logging.getLogger(__name__)

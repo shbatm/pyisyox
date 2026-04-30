@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from abc import ABC
 from dataclasses import asdict
 from datetime import datetime
-import json
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from pyisyox.constants import Protocol

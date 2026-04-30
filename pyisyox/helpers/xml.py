@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import suppress
 import re
+from contextlib import suppress
 from typing import Any, cast
 
-from dateutil import parser
 import xmltodict
+from dateutil import parser
 
 from pyisyox.constants import (
     ATTR_FLAG,
@@ -60,10 +60,7 @@ def post_processor(path: str, key: str, value: Any) -> tuple[str, Any]:
         key = TAG_VALUE
         with suppress(ValueError):
             value = int(cast(str, value))
-    elif key == ATTR_FLAG:
-        with suppress(ValueError):
-            value = int(cast(str, value))
-    elif key == "step":
+    elif key in (ATTR_FLAG, "step"):
         with suppress(ValueError):
             value = int(cast(str, value))
     # Convert known dates

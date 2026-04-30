@@ -5,6 +5,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, TypeVar
 
+from typing_extensions import Self
+
 T = TypeVar("T", bound="StrEnum")
 
 
@@ -14,7 +16,7 @@ class StrEnum(str, Enum):
     Adapted from home-assistant/core.
     """
 
-    def __new__(cls: type[T], value: str, *args: Any, **kwargs: Any) -> T:
+    def __new__(cls, value: str, *args: Any, **kwargs: Any) -> Self:
         """Create a new StrEnum instance."""
         if not isinstance(value, str):
             raise TypeError(f"{value!r} is not a string")
