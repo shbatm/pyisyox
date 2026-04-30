@@ -84,19 +84,12 @@ class EventStream:
         else:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def _create_message(self, msg: dict[str, str]) -> str:
-        """Prepare a message for sending."""
-        head: str = msg["head"]
-        body: str = msg["body"]
-        body = body.format(sid=self._stream_id)
-        length = len(body)
+    def _build_message(self, head_fn: Callable, body: str) -> str:
+        """Wrap body in an HTTP envelope using the provided head builder."""
         parsed_url = self.connection_info.parsed_url
-        head = head.format(
-            length=length,
-            url=f"{parsed_url[1]}{parsed_url[2]}",
-            auth=self.connection_info.auth.encode(),
-        )
-        return head + body
+        url = f"{parsed_url[1]}{parsed_url[2]}"
+        auth = self.connection_info.auth.encode()
+        return head_fn(url, auth, len(body)) + body
 
     def heartbeat(self, interval: int = SOCKET_HEARTBEAT) -> None:
         """Receive a heartbeat from the ISY event thread."""
@@ -187,18 +180,17 @@ class EventStream:
         """Subscribe to the Event Stream."""
         if not self._subscribed and self._connected:
             if self._stream_id == "":
-                msg = self._create_message(strings.SUB_MSG)
-                self.write(msg)
+                msg = self._build_message(strings.sub_head, strings.sub_body())
             else:
-                msg = self._create_message(strings.RESUB_MSG)
-                self.write(msg)
+                msg = self._build_message(strings.resub_head, strings.resub_body(self._stream_id))
+            self.write(msg)
             self._subscribed = True
 
     def unsubscribe(self) -> None:
         """Unsubscribe from the Event Stream."""
         if self._subscribed and self._connected:
             try:
-                msg = self._create_message(strings.UNSUB_MSG)
+                msg = self._build_message(strings.unsub_head, strings.unsub_body(self._stream_id))
                 self.write(msg)
             except (OSError, KeyError):
                 _LOGGER.exception(
