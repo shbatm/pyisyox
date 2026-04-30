@@ -106,7 +106,11 @@ async def main(args: argparse.Namespace) -> None:
             key (str): The key provided for this listener
 
         """
-        output: str = json.dumps(asdict(event), default=str) if is_dataclass(event) else event
+        output: str = (
+            json.dumps(asdict(event), default=str)
+            if is_dataclass(event) and not isinstance(event, type)
+            else event
+        )
         _LOGGER.info("%s status changed: %s", key.title(), output)
 
     # Print a representation of all the Nodes
