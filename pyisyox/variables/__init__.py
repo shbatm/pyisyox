@@ -74,9 +74,15 @@ class Variables(EntityPlatform[Variable]):
         # Check if State Variables defined
         await self.check_if_variables_defined("state", results[1], results[3])
 
-    async def check_if_variables_defined(self, var_type: str, def_result: str, var_result: str) -> None:
+    async def check_if_variables_defined(
+        self, var_type: str, def_result: str | BaseException | None, var_result: str | BaseException | None
+    ) -> None:
         """Check if variables are correctly defined and collect dict."""
-        if def_result is None or def_result in EMPTY_VARIABLES_RESPONSE:
+        if (
+            def_result is None
+            or isinstance(def_result, BaseException)
+            or def_result in EMPTY_VARIABLES_RESPONSE
+        ):
             return
 
         def_dict = parse_xml(def_result, attr_prefix="")
@@ -87,6 +93,8 @@ class Variables(EntityPlatform[Variable]):
         if isinstance(e_list, dict):
             e_list = [e_list]
 
+        if var_result is None or isinstance(var_result, BaseException):
+            return
         var_dict = parse_xml(var_result, attr_prefix="")
         if not (var_list := var_dict["vars"][ATTR_VAR]):
             return

@@ -156,7 +156,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
 
         Check ISYv4 UOM, then Insteon and Z-Wave Types for dimmable types.
         """
-        dimmable = (
+        return (
             "%" in str(self._uom)
             or (
                 self._protocol == Protocol.INSTEON
@@ -170,14 +170,11 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
                 and self.zwave_props.category in ZWAVE_CAT_DIMMABLE
             )
         )
-        return dimmable
 
     @property
     def is_lock(self) -> bool:
         """Determine if this device is a door lock type."""
-        return (
-            self.type_ and any(self.type_.startswith(t) for t in INSTEON_TYPE_LOCK)
-        ) or (
+        return (self.type_ and any(self.type_.startswith(t) for t in INSTEON_TYPE_LOCK)) or (
             self.protocol == Protocol.ZWAVE
             and self.zwave_props is not None
             and self.zwave_props.category in ZWAVE_CAT_LOCK
@@ -186,10 +183,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
     @property
     def is_thermostat(self) -> bool:
         """Determine if this device is a thermostat/climate control device."""
-        return (
-            self.type_
-            and any(self.type_.startswith(t) for t in INSTEON_TYPE_THERMOSTAT)
-        ) or (
+        return (self.type_ and any(self.type_.startswith(t) for t in INSTEON_TYPE_THERMOSTAT)) or (
             self._protocol == Protocol.ZWAVE
             and self.zwave_props is not None
             and self.zwave_props.category in ZWAVE_CAT_THERMOSTAT
@@ -277,7 +271,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         self.update_last_update()
 
         if aux_prop := self.aux_properties.get(prop.control):
-            if prop.uom == "" and not aux_prop.uom == "":
+            if prop.uom == "" and aux_prop.uom != "":
                 # Guard against overwriting known UOM with blank UOM (ISYv4).
                 prop.uom = aux_prop.uom
             if aux_prop == prop:
@@ -312,9 +306,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         parameter_xml = await self.isy.conn.request(
             self.isy.conn.compile_url(
                 [
-                    URL_ZMATTER_ZWAVE
-                    if self.detail.family == NodeFamily.ZMATTER_ZWAVE
-                    else URL_ZWAVE,
+                    URL_ZMATTER_ZWAVE if self.detail.family == NodeFamily.ZMATTER_ZWAVE else URL_ZWAVE,
                     URL_NODE,
                     self.address,
                     URL_CONFIG,
@@ -346,9 +338,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
 
         return result
 
-    async def set_zwave_parameter(
-        self, parameter: int, value: int | str, size: int
-    ) -> bool:
+    async def set_zwave_parameter(self, parameter: int, value: int | str, size: int) -> bool:
         """Set a Z-Wave Parameter on an end device via the ISY."""
         if self.protocol != Protocol.ZWAVE:
             _LOGGER.warning("Cannot set parameters of non-Z-Wave device")
@@ -380,9 +370,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         # /rest/zwave/node/<nodeAddress>/config/set/<parameterNumber>/<value>/<size>
         req_url = self.isy.conn.compile_url(
             [
-                URL_ZMATTER_ZWAVE
-                if self.detail.family == NodeFamily.ZMATTER_ZWAVE
-                else URL_ZWAVE,
+                URL_ZMATTER_ZWAVE if self.detail.family == NodeFamily.ZMATTER_ZWAVE else URL_ZWAVE,
                 URL_NODE,
                 self.address,
                 URL_CONFIG,
@@ -420,9 +408,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         # /rest/zwave/node/<nodeAddress>/security/user/<user_num>/set/code/<code>
         req_url = self.isy.conn.compile_url(
             [
-                URL_ZMATTER_ZWAVE
-                if self.detail.family == NodeFamily.ZMATTER_ZWAVE
-                else URL_ZWAVE,
+                URL_ZMATTER_ZWAVE if self.detail.family == NodeFamily.ZMATTER_ZWAVE else URL_ZWAVE,
                 URL_NODE,
                 self.address,
                 "security",
@@ -451,9 +437,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         # /rest/zwave/node/<nodeAddress>/security/user/<user_num>/delete
         req_url = self.isy.conn.compile_url(
             [
-                URL_ZMATTER_ZWAVE
-                if self.detail.family == NodeFamily.ZMATTER_ZWAVE
-                else URL_ZWAVE,
+                URL_ZMATTER_ZWAVE if self.detail.family == NodeFamily.ZMATTER_ZWAVE else URL_ZWAVE,
                 URL_NODE,
                 self.address,
                 "security",
@@ -476,13 +460,9 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
     def get_command_value(self, uom: str, cmd: str) -> str | None:
         """Check against the list of UOM States if this is a valid command."""
         if cmd not in UOM_TO_STATES[uom].values():
-            _LOGGER.warning(
-                "Failed to call %s on %s, invalid command.", cmd, self.address
-            )
+            _LOGGER.warning("Failed to call %s on %s, invalid command.", cmd, self.address)
             return None
-        return list(UOM_TO_STATES[uom].keys())[
-            list(UOM_TO_STATES[uom].values()).index(cmd)
-        ]
+        return list(UOM_TO_STATES[uom].keys())[list(UOM_TO_STATES[uom].values()).index(cmd)]
 
     def get_property_uom(self, prop: str) -> str:
         """Get the Unit of Measurement an aux property."""
@@ -540,9 +520,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         """Send a command to the device to set the system heat setpoint."""
         return await self._set_climate_setpoint(val, "cool", PROP_SETPOINT_COOL)
 
-    async def _set_climate_setpoint(
-        self, val: int, setpoint_name: str, setpoint_prop: str
-    ) -> bool:
+    async def _set_climate_setpoint(self, val: int, setpoint_name: str, setpoint_prop: str) -> bool:
         """Send a command to the device to set the system heat setpoint."""
         if not self.is_thermostat:
             _LOGGER.warning(
@@ -554,9 +532,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         # ISY wants 2 times the temperature for Insteon in order to not lose precision
         if self._uom in ("101", "degrees"):
             val = 2 * val
-        return await self.send_cmd(
-            setpoint_prop, str(val), self.get_property_uom(setpoint_prop)
-        )
+        return await self.send_cmd(setpoint_prop, str(val), self.get_property_uom(setpoint_prop))
 
     async def set_fan_mode(self, cmd: str) -> bool:
         """Send a command to the device to set the fan mode setting."""
@@ -588,16 +564,12 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
 
     async def start_manual_dimming(self) -> bool:
         """Begin manually dimming a device."""
-        _LOGGER.warning(
-            "'%s' is depreciated, use FADE<xx> commands instead", CMD_MANUAL_DIM_BEGIN
-        )
+        _LOGGER.warning("'%s' is depreciated, use FADE<xx> commands instead", CMD_MANUAL_DIM_BEGIN)
         return await self.send_cmd(CMD_MANUAL_DIM_BEGIN)
 
     async def stop_manual_dimming(self) -> bool:
         """Stop manually dimming  a device."""
-        _LOGGER.warning(
-            "'%s' is depreciated, use FADE<xx> commands instead", CMD_MANUAL_DIM_STOP
-        )
+        _LOGGER.warning("'%s' is depreciated, use FADE<xx> commands instead", CMD_MANUAL_DIM_STOP)
         return await self.send_cmd(CMD_MANUAL_DIM_STOP)
 
     def get_node_def(self) -> NodeDef | None:

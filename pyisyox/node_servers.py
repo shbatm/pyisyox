@@ -120,7 +120,7 @@ class NodeDef:
         return cls(**{k: v for k, v in props.items() if k in inspect.signature(cls).parameters})
 
     sts: InitVar[dict[str, list | dict]]
-    cmds: InitVar[dict[str, Any]] | None = None
+    cmds: InitVar[dict[str, Any] | None] = None
     id: str = ""
     node_type: str = ""
     name: str = ""
