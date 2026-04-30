@@ -17,11 +17,7 @@ def get_new_client_session(conn_info: ISYConnectionInfo) -> aiohttp.ClientSessio
     """Create a new Client Session for Connecting."""
     if conn_info.use_https:
         if not can_https(conn_info.tls_version):
-            raise (
-                ValueError(
-                    "PyISYoX could not connect to the ISY. Check log for SSL/TLS error."
-                )
-            )
+            raise (ValueError("PyISYoX could not connect to the ISY. Check log for SSL/TLS error."))
         return aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
     return aiohttp.ClientSession()
 
@@ -42,9 +38,7 @@ def get_sslcontext(conn_info: ISYConnectionInfo) -> ssl.SSLContext | None:
         context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
 
     # Allow older ciphers for older ISYs
-    context.set_ciphers(
-        "DEFAULT:!aNULL:!eNULL:!MD5:!3DES:!DES:!RC4:!IDEA:!SEED:!aDSS:!SRP:!PSK"
-    )
+    context.set_ciphers("DEFAULT:!aNULL:!eNULL:!MD5:!3DES:!DES:!RC4:!IDEA:!SEED:!aDSS:!SRP:!PSK")
     return context
 
 
@@ -59,9 +53,7 @@ def can_https(tls_ver: float | None) -> bool:
 
     # check that Python was compiled against correct OpenSSL lib
     if "PROTOCOL_TLSv1_1" not in dir(ssl):
-        _LOGGER.error(
-            "PyISYoX cannot use HTTPS: Compiled against old OpenSSL library. See docs."
-        )
+        _LOGGER.error("PyISYoX cannot use HTTPS: Compiled against old OpenSSL library. See docs.")
         output = False
 
     # check the requested TLS version

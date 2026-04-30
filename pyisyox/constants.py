@@ -48,7 +48,6 @@ class EventStreamStatus(StrEnum):
 ISY_VALUE_UNKNOWN = -1 * float("inf")
 ISY_PROP_NOT_SET = "-1"
 
-""" Dictionary of X10 commands. """
 X10_COMMANDS: dict[str, int] = {
     "all_off": 1,
     "all_on": 4,
@@ -726,17 +725,13 @@ UOM_TO_STATES: dict[str, dict[str, str]] = {
         "4": "highly polluted",
     },
     "97": {  # Barrier Status
-        **{
-            "0": "closed",
-            "100": "open",
-            "101": "unknown",
-            "102": "stopped",
-            "103": "closing",
-            "104": "opening",
-        },
-        **{
-            str(b): f"{b} %" for a, b in enumerate(list(range(1, 100)))
-        },  # 1-99 are percentage open
+        "0": "closed",
+        "100": "open",
+        "101": "unknown",
+        "102": "stopped",
+        "103": "closing",
+        "104": "opening",
+        **{str(b): f"{b} %" for a, b in enumerate(list(range(1, 100)))},  # 1-99 are percentage open
     },
     "98": {  # Insteon Thermostat Mode
         "0": "off",

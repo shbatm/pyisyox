@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from dataclasses import asdict, is_dataclass
 import json
 import logging
 import time
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from pyisyox.connection import (
@@ -42,9 +42,7 @@ async def main(args: argparse.Namespace) -> None:
     _LOGGER.info("Starting PyISYoX...")
     t_0 = time.time()
 
-    connection_info = ISYConnectionInfo(
-        args.url, args.username, args.password, tls_version=args.tls_version
-    )
+    connection_info = ISYConnectionInfo(args.url, args.username, args.password, tls_version=args.tls_version)
     # Connect to ISY controller.
     isy = ISY(connection_info, use_websocket=True, args=args)
 
@@ -58,13 +56,11 @@ async def main(args: argparse.Namespace) -> None:
             node_servers=args.node_servers,
         )
     except (ISYInvalidAuthError, ISYConnectionError):
-        _LOGGER.error(
-            "Failed to connect to the ISY, please adjust settings and try again."
-        )
+        _LOGGER.exception("Failed to connect to the ISY, please adjust settings and try again.")
         await isy.shutdown()
         return
     except Exception as err:  # pylint: disable=broad-except
-        _LOGGER.error("Unknown error occurred: %s", err.args[0], exc_info=True)
+        _LOGGER.exception("Unknown error occurred: %s", err.args[0])
         await isy.shutdown()
         return
 
@@ -110,11 +106,7 @@ async def main(args: argparse.Namespace) -> None:
             key (str): The key provided for this listener
 
         """
-        output: str
-        if is_dataclass(event):
-            output = json.dumps(asdict(event), default=str)
-        else:
-            output = event
+        output: str = json.dumps(asdict(event), default=str) if is_dataclass(event) else event
         _LOGGER.info("%s status changed: %s", key.title(), output)
 
     # Print a representation of all the Nodes
@@ -186,9 +178,7 @@ async def main(args: argparse.Namespace) -> None:
         if args.events:
             await asyncio.sleep(1)
             isy.websocket.start()
-            system_status_subscriber = isy.status_events.subscribe(
-                system_status_handler
-            )
+            system_status_subscriber = isy.status_events.subscribe(system_status_handler)
             while True:
                 await asyncio.sleep(1)
     except asyncio.CancelledError:
@@ -227,9 +217,7 @@ if __name__ == "__main__":
         action="store_false",
         help="Disable the event stream",
     )
-    parser.add_argument(
-        "-n", "--no-nodes", dest="nodes", action="store_false", help="Do not load Nodes"
-    )
+    parser.add_argument("-n", "--no-nodes", dest="nodes", action="store_false", help="Do not load Nodes")
     parser.add_argument(
         "-c",
         "--no-clock",

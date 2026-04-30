@@ -8,7 +8,7 @@ from pyisyox.constants import ISY_VALUE_UNKNOWN, UOM_DOUBLE_TEMP, UOM_ISYV4_DEGR
 
 
 def convert_isy_raw_value(
-    value: int | float,
+    value: float,
     uom: str | None,
     precision: int | str,
     fallback_precision: int | None = None,

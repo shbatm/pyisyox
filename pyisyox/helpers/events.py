@@ -16,7 +16,7 @@ from pyisyox.logging import _LOGGER
 
 ATTR_EVENT_INFO = "event_info"
 
-_T = TypeVar("_T")
+_T = TypeVar("_T")  # noqa: PYI018
 _KeyT = TypeVar("_KeyT", bound=Hashable)
 _EventT = NodeProperty | NodeChangedEvent | EntityStatus | EventData
 _CallableT = TypeVar("_CallableT", bound=Callable[..., Any])
@@ -54,9 +54,7 @@ class EventEmitter:
                 The EventListener object reference.
 
         """
-        listener = EventListener(
-            emitter=self, callback=callback, event_filter=event_filter, key=key
-        )
+        listener = EventListener(emitter=self, callback=callback, event_filter=event_filter, key=key)
         self._subscribers.append(listener)
         return listener
 
@@ -133,9 +131,7 @@ class EventEmitter:
             ):
                 return False
             del evt_filter[ATTR_EVENT_INFO]
-        if not (evt_filter.items() <= asdict(event).items()):
-            return False
-        return True
+        return evt_filter.items() <= asdict(event).items()
 
 
 @dataclass

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict
 import json
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, cast
 
 from pyisyox.constants import (
@@ -67,27 +67,21 @@ class Variables(EntityPlatform[Variable]):
         ]
         urls = [compile_url(e) for e in endpoints]
 
-        results = await asyncio.gather(
-            *[request(url) for url in urls], return_exceptions=True
-        )
+        results = await asyncio.gather(*[request(url) for url in urls], return_exceptions=True)
 
         # Check if Integer Variables defined
         await self.check_if_variables_defined("integer", results[0], results[2])
         # Check if State Variables defined
         await self.check_if_variables_defined("state", results[1], results[3])
 
-    async def check_if_variables_defined(
-        self, var_type: str, def_result: str, var_result: str
-    ) -> None:
+    async def check_if_variables_defined(self, var_type: str, def_result: str, var_result: str) -> None:
         """Check if variables are correctly defined and collect dict."""
         if def_result is None or def_result in EMPTY_VARIABLES_RESPONSE:
-            return None
+            return
 
         def_dict = parse_xml(def_result, attr_prefix="")
-        if not (def_list := def_dict.get("c_list")) or not (
-            e_list := def_list.get("e")
-        ):
-            return None
+        if not (def_list := def_dict.get("c_list")) or not (e_list := def_list.get("e")):
+            return
 
         # Handle single variable edge case
         if isinstance(e_list, dict):
@@ -95,7 +89,7 @@ class Variables(EntityPlatform[Variable]):
 
         var_dict = parse_xml(var_result, attr_prefix="")
         if not (var_list := var_dict["vars"][ATTR_VAR]):
-            return None
+            return
 
         if isinstance(var_list, dict):
             var_list = [var_list]
@@ -148,9 +142,7 @@ class Variables(EntityPlatform[Variable]):
         event_info: dict[str, dict] = cast(dict, event.event_info)
         var_info = event_info[ATTR_VAR]
 
-        if (
-            address := f"{var_info[ATTR_TYPE]}.{var_info[ATTR_ID]}"
-        ) not in self.addresses:
+        if (address := f"{var_info[ATTR_TYPE]}.{var_info[ATTR_ID]}") not in self.addresses:
             # New/unknown variable, refresh full set.
             update_task = asyncio.create_task(self.update())
             self.isy.background_tasks.add(update_task)
@@ -161,13 +153,9 @@ class Variables(EntityPlatform[Variable]):
 
         detail.precision = var_info["precision"]
         if init:
-            detail.initial = convert_isy_raw_value(
-                int(var_info["init"]), "", var_info["precision"]
-            )
+            detail.initial = convert_isy_raw_value(int(var_info["init"]), "", var_info["precision"])
         else:
-            detail.value = convert_isy_raw_value(
-                int(var_info["val"]), "", var_info["precision"]
-            )
+            detail.value = convert_isy_raw_value(int(var_info["val"]), "", var_info["precision"])
         entity.update_entity(name=entity.name, detail=detail)
         _LOGGER.debug(
             "Updated variable: %s detail=%s",

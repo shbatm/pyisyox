@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
@@ -183,9 +183,9 @@ class WebSocketClient:
         except asyncio.TimeoutError:
             _LOGGER.debug("Websocket Timeout.")
         except ConnectionRefusedError:
-            _LOGGER.error("Websocket connection refused")
-        except aiohttp.client_exceptions.ClientConnectorError as err:
-            _LOGGER.error("Websocket Client Connector Error %s", err)
+            _LOGGER.exception("Websocket connection refused")
+        except aiohttp.client_exceptions.ClientConnectorError:
+            _LOGGER.exception("Websocket Client Connector Error")
         except (
             aiohttp.ClientOSError,
             aiohttp.client_exceptions.ServerDisconnectedError,
@@ -194,19 +194,15 @@ class WebSocketClient:
         except aiohttp.client_exceptions.WSServerHandshakeError as err:
             _LOGGER.warning("Web socket server response error: %s", err.message)
 
-        except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.error("Unexpected websocket error %s", err, exc_info=True)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.exception("Unexpected websocket error")
         else:
             if isinstance(ws.exception(), asyncio.TimeoutError):
                 _LOGGER.debug("Websocket Timeout.")
             elif isinstance(ws.exception(), aiohttp.streams.EofStream):
-                _LOGGER.warning(
-                    "Websocket disconnected unexpectedly. Check network connection."
-                )
+                _LOGGER.warning("Websocket disconnected unexpectedly. Check network connection.")
             else:
-                _LOGGER.warning(
-                    "Websocket disconnected unexpectedly with code: %s", ws.close_code
-                )
+                _LOGGER.warning("Websocket disconnected unexpectedly with code: %s", ws.close_code)
         if self.status != EventStreamStatus.STOP_UPDATES:
             self.status = EventStreamStatus.LOST_CONNECTION
             self._loop.create_task(self.reconnect(retries=retries))

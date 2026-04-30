@@ -60,10 +60,14 @@ def node_changed_received(nodes: Nodes, event: EventData) -> None:
 
     if action == NodeChangeAction.NODE_ERROR:
         _LOGGER.error("Could not communicate with device: %s", address)
-    elif action == NodeChangeAction.NODE_ENABLED and address in nodes.addresses:
-        if detail and TAG_ENABLED in detail:
-            entity = nodes.entities[address]
-            entity.update_enabled(cast(bool, detail[TAG_ENABLED]))
+    elif (
+        action == NodeChangeAction.NODE_ENABLED
+        and address in nodes.addresses
+        and detail
+        and TAG_ENABLED in detail
+    ):
+        entity = nodes.entities[address]
+        entity.update_enabled(cast(bool, detail[TAG_ENABLED]))
 
     nodes.platform_events.notify(event=NodeChangedEvent(address, action, detail))
     _LOGGER.debug(

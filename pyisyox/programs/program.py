@@ -31,9 +31,7 @@ class ProgramDetail(FolderDetail):
 class Program(Folder, Entity[ProgramDetail, bool]):
     """Class representing a program on the ISY controller."""
 
-    def __init__(
-        self, platform: Programs, address: str, name: str, detail: ProgramDetail
-    ) -> None:
+    def __init__(self, platform: Programs, address: str, name: str, detail: ProgramDetail) -> None:
         """Initialize a Program class."""
         super().__init__(platform, address, name, detail)
         self._protocol = Protocol.PROGRAM

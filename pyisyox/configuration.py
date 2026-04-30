@@ -108,16 +108,8 @@ class Configuration:
         )
         config = xml_dict[TAG_CONFIG]
         features = config[TAG_FEATURES][TAG_FEATURE]
-        networking = any(
-            i
-            for i in features
-            if i[TAG_DESC] == CONFIG_NETWORKING and i[TAG_INSTALLED] == TRUE
-        )
-        portal = any(
-            i
-            for i in features
-            if i[TAG_DESC] == CONFIG_PORTAL and i[TAG_INSTALLED] == TRUE
-        )
+        networking = any(i for i in features if i[TAG_DESC] == CONFIG_NETWORKING and i[TAG_INSTALLED] == TRUE)
+        portal = any(i for i in features if i[TAG_DESC] == CONFIG_PORTAL and i[TAG_INSTALLED] == TRUE)
 
         self.config_data = ConfigurationData(
             config=config,

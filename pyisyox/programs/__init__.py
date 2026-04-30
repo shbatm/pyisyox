@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import asdict
 from enum import IntEnum
-import json
 from typing import TYPE_CHECKING, Any, cast
 
 from dateutil import parser

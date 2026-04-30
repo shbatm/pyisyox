@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict
 import json
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, cast
 
 from pyisyox.constants import (
@@ -114,9 +114,7 @@ class Nodes(EntityPlatform[NodesT]):
             address = feature[TAG_ADDRESS]
             name = feature[TAG_NAME]
             _LOGGER.log(LOG_VERBOSE, "Parsing %s: %s (%s)", PLATFORM, name, address)
-            entity = NodeFolder(
-                self, address, name, NodeFolderDetail.from_dict(feature)
-            )
+            entity = NodeFolder(self, address, name, NodeFolderDetail.from_dict(feature))
             self.add_or_update_entity(address, name, entity)
         except (TypeError, KeyError, ValueError) as exc:
             _LOGGER.exception("Error loading %s: %s", PLATFORM, exc)
@@ -129,10 +127,7 @@ class Nodes(EntityPlatform[NodesT]):
             _LOGGER.log(LOG_VERBOSE, "Parsing %s: %s (%s)", PLATFORM, name, address)
 
             if family := feature.get(TAG_FAMILY):
-                if (
-                    isinstance(family, dict)
-                    and family[TAG_ADDRESS] == NodeFamily.NODESERVER
-                ):
+                if isinstance(family, dict) and family[TAG_ADDRESS] == NodeFamily.NODESERVER:
                     feature["node_server"] = family.get("instance", "")
                 feature["protocol"] = self.get_protocol_from_family(family)
 

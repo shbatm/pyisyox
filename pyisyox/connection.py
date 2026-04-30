@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from argparse import Namespace
 import asyncio
+from argparse import Namespace
 from dataclasses import InitVar, dataclass, field
 from urllib.parse import ParseResult, quote, urlencode, urlparse
 
@@ -69,9 +69,7 @@ class Connection:
     connection_info: ISYConnectionInfo
     args: Namespace | None
 
-    def __init__(
-        self, connection_info: ISYConnectionInfo, args: Namespace | None = None
-    ) -> None:
+    def __init__(self, connection_info: ISYConnectionInfo, args: Namespace | None = None) -> None:
         """Initialize the Connection object."""
         if len(_LOGGER.handlers) == 0:
             enable_logging(add_null_handler=True)
@@ -80,9 +78,7 @@ class Connection:
         self.args = args
 
         self.semaphore = asyncio.Semaphore(
-            MAX_HTTPS_CONNECTIONS_ISY
-            if connection_info.use_https
-            else MAX_HTTP_CONNECTIONS_ISY
+            MAX_HTTPS_CONNECTIONS_ISY if connection_info.use_https else MAX_HTTP_CONNECTIONS_ISY
         )
 
         if connection_info.websession is None:
@@ -94,18 +90,14 @@ class Connection:
         """Test the connection and get the config for the ISY."""
         config = Configuration()
         if not (config_data := await config.update(self)):
-            raise ISYConnectionError(
-                "Could not connect to the ISY with the parameters provided"
-            )
+            raise ISYConnectionError("Could not connect to the ISY with the parameters provided")
         return config_data
 
     def increase_available_connections(self) -> None:
         """Increase the number of allowed connections for newer hardware."""
         _LOGGER.debug("Increasing available simultaneous connections")
         self.semaphore = asyncio.Semaphore(
-            MAX_HTTPS_CONNECTIONS_IOX
-            if self.connection_info.use_https
-            else MAX_HTTP_CONNECTIONS_IOX
+            MAX_HTTPS_CONNECTIONS_IOX if self.connection_info.use_https else MAX_HTTP_CONNECTIONS_IOX
         )
 
     async def close(self) -> None:
@@ -125,9 +117,7 @@ class Connection:
             url += f"?{urlencode(query)}"
         return url
 
-    async def request(
-        self, url: str, retries: int = 0, ok404: bool = False, delay: float = 0
-    ) -> str | None:
+    async def request(self, url: str, retries: int = 0, ok404: bool = False, delay: float = 0) -> str | None:
         """Execute request to ISY REST interface."""
         _LOGGER.debug("Request: %s", url)
         endpoint = url.split("rest", 1)[1]
@@ -162,9 +152,7 @@ class Connection:
                 if res.status == HTTP_UNAUTHORIZED:
                     _LOGGER.error("Invalid credentials provided for ISY connection.")
                     res.release()
-                    raise ISYInvalidAuthError(
-                        "Invalid credentials provided for ISY connection."
-                    )
+                    raise ISYInvalidAuthError("Invalid credentials provided for ISY connection.")
                 if res.status == HTTP_SERVICE_UNAVAILABLE:
                     _LOGGER.warning("ISY too busy to process request %s", endpoint)
                     res.release()
@@ -177,9 +165,7 @@ class Connection:
         ):
             _LOGGER.debug("ISY not ready or closed connection.")
         except aiohttp.ClientResponseError as err:
-            _LOGGER.error(
-                "Client Response %s Error %s %s", err.status, err.message, endpoint
-            )
+            _LOGGER.error("Client Response %s Error %s %s", err.status, err.message, endpoint)
         except aiohttp.ClientError as err:
             _LOGGER.error(
                 "Could not receive response from device because of a network issue: %s",
@@ -187,7 +173,7 @@ class Connection:
             )
 
         if retries is None:
-            raise ISYConnectionError()
+            raise ISYConnectionError
         if retries < MAX_RETRIES:
             _LOGGER.debug(
                 "Retrying ISY Request in %ss, retry %s.",
@@ -197,8 +183,7 @@ class Connection:
             # sleep to allow the ISY to catch up
             await asyncio.sleep(RETRY_BACKOFF[retries])
             # recurse to try again
-            retry_result = await self.request(url, retries + 1, ok404=ok404)
-            return retry_result
+            return await self.request(url, retries + 1, ok404=ok404)
         # fail for good
         _LOGGER.error(
             "Bad ISY Request: (%s) Failed after %s retries.",

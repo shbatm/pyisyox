@@ -157,19 +157,13 @@ class ISY:
     def auto_update(self, val: bool) -> None:
         """Set the auto_update property."""
         if self.websocket:
-            raise ISYConnectionError(
-                "Websockets are enabled. Use isy.websocket.start() or .stop() instead."
-            )
+            raise ISYConnectionError("Websockets are enabled. Use isy.websocket.start() or .stop() instead.")
         if val and not self.auto_update:
             # create new event stream socket
-            self._events = EventStream(
-                self, self.conn.connection_info, self._on_lost_event_stream
-            )
+            self._events = EventStream(self, self.conn.connection_info, self._on_lost_event_stream)
         if self._events:
             self.connection_events.notify(
-                EventStreamStatus.START_UPDATES
-                if val
-                else EventStreamStatus.STOP_UPDATES
+                EventStreamStatus.START_UPDATES if val else EventStreamStatus.STOP_UPDATES
             )
             self._events.running = val
 
@@ -207,9 +201,7 @@ class ISY:
         while self.auto_reconnect and not self.auto_update:
             _LOGGER.warning("PyISYoX attempting stream reconnect.")
             self._events = None
-            self._events = EventStream(
-                self, self.conn.connection_info, self._on_lost_event_stream
-            )
+            self._events = EventStream(self, self.conn.connection_info, self._on_lost_event_stream)
             self._events.running = True
             self.connection_events.notify(EventStreamStatus.RECONNECTING)
 

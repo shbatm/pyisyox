@@ -43,9 +43,7 @@ class FolderDetail(EntityDetail):
 class Folder(Entity[FolderDetail, bool]):
     """Object representing a program folder on the ISY device."""
 
-    def __init__(
-        self, platform: Programs, address: str, name: str, detail: FolderDetail
-    ) -> None:
+    def __init__(self, platform: Programs, address: str, name: str, detail: FolderDetail) -> None:
         """Initialize the Folder class."""
         self.status_events = EventEmitter()
         self.platform = platform
@@ -62,9 +60,7 @@ class Folder(Entity[FolderDetail, bool]):
         req_url = self.isy.conn.compile_url([URL_PROGRAMS, self.address, command])
         result = await self.isy.conn.request(req_url)
         if not result:
-            _LOGGER.warning(
-                'ISY could not call "%s" on program: %s', command, self.address
-            )
+            _LOGGER.warning('ISY could not call "%s" on program: %s', command, self.address)
             return False
         _LOGGER.debug('ISY ran "%s" on program: %s', command, self.address)
         return True

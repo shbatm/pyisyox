@@ -78,9 +78,7 @@ class Group(NodeBase, Entity[GroupDetail, StatusT]):
             if not (entity := self.platform.entities.get(link)):
                 # Node missing or not loaded
                 continue
-            self._members_handlers.append(
-                entity.status_events.subscribe(self.update_callback)
-            )
+            self._members_handlers.append(entity.status_events.subscribe(self.update_callback))
 
         # get and update the status
         self._update()
@@ -126,8 +124,7 @@ class Group(NodeBase, Entity[GroupDetail, StatusT]):
             node = self.platform.entities[address]
             if (
                 node.status is not None
-                and cast(NodeBaseDetail, node.detail).node_def_id
-                not in INSTEON_STATELESS_NODEDEFID
+                and cast(NodeBaseDetail, node.detail).node_def_id not in INSTEON_STATELESS_NODEDEFID
             ):
                 valid_nodes.append(node)
                 if node.status > 0:

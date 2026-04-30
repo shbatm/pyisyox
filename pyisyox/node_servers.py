@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import InitVar, asdict, dataclass, field
 import inspect
 import json
 import re
+from dataclasses import InitVar, asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from pyisyox.constants import ATTR_ID, DEFAULT_DIR, TAG_NAME, UOM_INDEX, URL_PROFILE_NS
@@ -54,9 +54,7 @@ class EditorRange:
     @classmethod
     def from_dict(cls, props: dict) -> EditorRange:
         """Create a dataclass from a dictionary."""
-        return cls(
-            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
-        )
+        return cls(**{k: v for k, v in props.items() if k in inspect.signature(cls).parameters})
 
     uom: str = ""
     min: str = ""
@@ -74,9 +72,7 @@ class NodeEditor:
     @classmethod
     def from_dict(cls, props: dict) -> NodeEditor:
         """Create a dataclass from a dictionary."""
-        return cls(
-            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
-        )
+        return cls(**{k: v for k, v in props.items() if k in inspect.signature(cls).parameters})
 
     editor_id: str = ""
     # Ranges are a dict with UoM as the key
@@ -93,9 +89,7 @@ class NodeServerConnection:
     @classmethod
     def from_dict(cls, props: dict) -> NodeServerConnection:
         """Create a dataclass from a dictionary."""
-        return cls(
-            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
-        )
+        return cls(**{k: v for k, v in props.items() if k in inspect.signature(cls).parameters})
 
     profile: str = ""
     type_: str = ""
@@ -123,9 +117,7 @@ class NodeDef:
     @classmethod
     def from_dict(cls, props: dict) -> NodeDef:
         """Create a dataclass from a dictionary."""
-        return cls(
-            **{k: v for k, v in props.items() if k in inspect.signature(cls).parameters}
-        )
+        return cls(**{k: v for k, v in props.items() if k in inspect.signature(cls).parameters})
 
     sts: InitVar[dict[str, list | dict]]
     cmds: InitVar[dict[str, Any]] | None = None
@@ -141,9 +133,7 @@ class NodeDef:
     sends: dict[str, Any] = field(init=False, default_factory=dict)
     accepts: dict[str, Any] = field(init=False, default_factory=dict)
 
-    def __post_init__(
-        self, sts: dict[str, list | dict], cmds: dict[str, Any] | None
-    ) -> None:
+    def __post_init__(self, sts: dict[str, list | dict], cmds: dict[str, Any] | None) -> None:
         """Post-process node server definition."""
         statuses = {}
         if sts:
@@ -305,21 +295,17 @@ class NodeServers:
 
     async def fetch_node_server_file(self, path: str) -> None:
         """Fetch a node server file from the ISY."""
-        result = await self.isy.conn.request(
-            self.isy.conn.compile_url([URL_PROFILE_NS, path])
-        )
+        result = await self.isy.conn.request(self.isy.conn.compile_url([URL_PROFILE_NS, path]))
         if result is None:
             return
         await self.parse_node_server_file(path, result)
 
     async def parse_node_server_file(self, path: str, file_content: str) -> None:
         """Retrieve and parse the node server definitions."""
-        slot = path.split("/")[0]
+        slot = path.split("/", maxsplit=1)[0]
         path = path.lower()
 
-        _LOGGER.debug(
-            "Parsing node server %s file %s", slot, "/".join(path.split("/")[-2:])
-        )
+        _LOGGER.debug("Parsing node server %s file %s", slot, "/".join(path.split("/")[-2:]))
         if path.endswith(".xml"):
             xml_dict = parse_xml(file_content)
 
@@ -376,16 +362,12 @@ class NodeServers:
                 )
 
             return
-        _LOGGER.warning(
-            "Unknown file for slot %s: %s", slot, "/".join(path.split("/")[-2:])
-        )
+        _LOGGER.warning("Unknown file for slot %s: %s", slot, "/".join(path.split("/")[-2:]))
 
     def parse_node_server_defs(self, slot: str, node_def: dict) -> None:
         """Retrieve and parse the node server definitions."""
         try:
-            self._node_server_node_definitions[slot][node_def[ATTR_ID]] = (
-                NodeDef.from_dict(node_def)
-            )
+            self._node_server_node_definitions[slot][node_def[ATTR_ID]] = NodeDef.from_dict(node_def)
 
         except (ValueError, KeyError, NameError) as exc:
             _LOGGER.error("Could not parse node server definition: %s", exc)

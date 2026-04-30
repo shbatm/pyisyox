@@ -6,14 +6,15 @@ homeassistant.helpers.entity_platform
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import asyncio
+import json
+from abc import ABC, abstractmethod
 from collections.abc import Iterable, ValuesView
 from dataclasses import asdict, dataclass, field
-import json
 from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 
-from pyisyox.constants import DEFAULT_DIR, Protocol as EntityProtocol
+from pyisyox.constants import DEFAULT_DIR
+from pyisyox.constants import Protocol as EntityProtocol
 from pyisyox.helpers.entity import Entity, EntityT
 from pyisyox.helpers.events import EventEmitter
 from pyisyox.helpers.xml import parse_xml
@@ -30,9 +31,7 @@ T = TypeVar("T")
 class AddEntitiesCallback(Protocol):
     """Protocol type for EntityPlatform.add_entities callback."""
 
-    def __call__(
-        self, new_entities: Iterable[Entity], update_before_add: bool = False
-    ) -> None:
+    def __call__(self, new_entities: Iterable[Entity], update_before_add: bool = False) -> None:
         """Define add_entities type."""
 
 
@@ -127,7 +126,7 @@ class EntityPlatform(ABC, Generic[EntityT]):
 
         This method should be overloaded in the child class.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def add_or_update_entity(self, address: str, name: str, entity: EntityT) -> None:
         """Add or update an entity on the platform."""
@@ -136,17 +135,13 @@ class EntityPlatform(ABC, Generic[EntityT]):
             if entity.detail != self.entities[address].detail:
                 self.names[self.addresses.index(address)] = name
                 self.entities[address].update_entity(name, entity.detail)
-                self.platform_events.notify(
-                    f"{self.platform_name}.{EntityPlatformEvent.ENTITY_CHANGED}"
-                )
+                self.platform_events.notify(f"{self.platform_name}.{EntityPlatformEvent.ENTITY_CHANGED}")
             return
 
         self.entities[address] = entity
         self.addresses.append(address)
         self.names.append(name)
-        self.platform_events.notify(
-            f"{self.platform_name}.{EntityPlatformEvent.ENTITY_ADDED}"
-        )
+        self.platform_events.notify(f"{self.platform_name}.{EntityPlatformEvent.ENTITY_ADDED}")
 
     def __getitem__(self, key: str) -> EntityT | None:
         """Return the item from the collection."""
@@ -159,7 +154,7 @@ class EntityPlatform(ABC, Generic[EntityT]):
 
     def __setitem__(self, key: str, value: Any) -> None:
         """Set the item value (Not supported)."""
-        return None
+        return
 
     def values(self) -> ValuesView:
         """Return the underlying values to avoid __iter__ overhead."""

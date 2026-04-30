@@ -42,9 +42,7 @@ class NodeFolder(Entity[NodeFolderDetail, OptionalIntT]):
     detail: NodeFolderDetail
     platform: Nodes
 
-    def __init__(
-        self, platform: Nodes, address: str, name: str, detail: NodeFolderDetail
-    ):
+    def __init__(self, platform: Nodes, address: str, name: str, detail: NodeFolderDetail):
         """Initialize a Node Folder class."""
         self.platform = platform
         self.isy = platform.isy
