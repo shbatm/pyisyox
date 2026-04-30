@@ -510,7 +510,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
             self.set_climate_setpoint_cool(val + adjustment),
         ]
         result = await asyncio.gather(*commands, return_exceptions=True)
-        return all(result)
+        return all(r is True for r in result)
 
     async def set_climate_setpoint_heat(self, val: int) -> bool:
         """Send a command to the device to set the system heat setpoint."""
