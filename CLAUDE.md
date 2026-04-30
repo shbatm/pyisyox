@@ -65,14 +65,9 @@ pytest --cov=pyisyox
 ### Linting & Formatting
 
 ```bash
-# Format code with black
-black pyisyox
-
-# Sort imports with isort
-isort pyisyox
-
-# Run ruff linter
+# Format and lint (ruff handles both formatting and import sorting)
 ruff check pyisyox --fix
+ruff format pyisyox
 
 # Type checking with mypy
 mypy pyisyox
@@ -83,13 +78,12 @@ pylint pyisyox
 
 ### Pre-commit Hooks
 
-- **black**: Code formatting
-- **isort**: Import sorting
-- **codespell**: Spell checking (ignores ISY-specific terms)
+- **ruff**: Formatting, import sorting, and linting (replaces black and isort)
+- **codespell**: Spell checking (ISY-specific terms ignored via pyproject.toml `[tool.codespell]`)
 - **yamllint**: YAML validation
+- **prettier**: JSON/YAML/markdown formatting
 - **mypy**: Type checking
 - **pylint**: Code quality checks
-- **ruff**: Fast Python linter
 
 ## Architecture
 
@@ -327,12 +321,11 @@ await isy.variables[2][5].set_value(100)  # Type 2, ID 5
 
 Follows standard Python conventions with Home Assistant influence:
 
-- **Black** for formatting (target Python 3.10-3.11)
-- **isort** with multi_line_output=3, line_length=88
+- **ruff-format** for formatting (line length 110, target Python 3.10+)
+- **ruff** for linting and import sorting (replaces separate black, isort)
 - **Pylint** with Home Assistant config (complexity checks mostly disabled)
-- **Ruff** for fast linting (same rules as Home Assistant)
 - **Type hints** enforced with mypy
-- **Docstrings** required (Google style, D213)
+- **Docstrings** recommended (Google style)
 
 ## Documentation
 

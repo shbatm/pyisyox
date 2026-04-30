@@ -43,27 +43,6 @@ where = ["."]
 include = ["pyisyox*"]
 exclude = ["script*"]
 
-[tool.black]
-target-version = ["py310", "py311"]
-
-[tool.isort]
-# https://github.com/timothycrosley/isort
-# https://github.com/timothycrosley/isort/wiki/isort-Settings
-# splits long import on multiple lines indented by 4 spaces
-multi_line_output = 3
-include_trailing_comma=true
-force_grid_wrap=0
-use_parentheses=true
-line_length=88
-indent = "    "
-# will group `import x` and `from x import` of the same module.
-force_sort_within_sections = true
-default_section = "THIRDPARTY"
-known_first_party = ["pyisyox","tests"]
-forced_separate = ["tests"]
-combine_as_imports = true
-
-
 [tool.pylint.MAIN]
 py-version = "3.10"
 ignore = [
@@ -105,7 +84,7 @@ good-names = [
 
 [tool.pylint."MESSAGES CONTROL"]
 # Reasons disabled:
-# format - handled by black
+# format - handled by ruff-format
 # locally-disabled - it spams too much
 # duplicate-code - unavoidable
 # cyclic-import - doesn't test if both import on load
@@ -116,7 +95,7 @@ good-names = [
 # abstract-method - with intro of async there are always methods missing
 # inconsistent-return-statements - doesn't handle raise
 # too-many-ancestors - it's too strict.
-# wrong-import-order - isort guards this
+# wrong-import-order - ruff guards this
 # consider-using-f-string - str.format sometimes more readable
 # ---
 # Enable once current issues are fixed:
@@ -188,49 +167,94 @@ log_date_format = "%Y-%m-%d %H:%M:%S"
 asyncio_mode = "auto"
 
 [tool.ruff]
+required-version = ">=0.15.12"
 target-version = "py310"
+line-length = 110
 
-select = [
-    "C",  # complexity
-    "D",  # docstrings
-    "E",  # pycodestyle
-    "F",  # pyflakes/autoflake
-    "PGH004",  # Use specific rule codes when using noqa
-    "PLC0414", # Useless import alias. Import alias does not rename original package.
-    "SIM105", # Use contextlib.suppress({exception}) instead of try-except-pass
-    "SIM117", # Merge with-statements that use the same scope
-    "SIM300", # Yoda conditions. Use 'age == 42' instead of '42 == age'.
-    "SIM401", # Use get from dict with default instead of an if block
-    "T20",  # flake8-print
-    "TRY004", # Prefer TypeError exception for invalid type
-    "UP",  # pyupgrade
-    "W",  # pycodestyle
-]
-
+[tool.ruff.lint]
 ignore = [
-    "D202",  # No blank lines allowed after function docstring
-    "D203",  # 1 blank line required before class docstring
-    "D213",  # Multi-line docstring summary should start at the second line
-    "D404",  # First word of the docstring should not be This
-    "D406",  # Section name should end with a newline
-    "D407",  # Section name underlining
-    "D411",  # Missing blank line before section
-    "E501",  # line too long
-    "E731",  # do not assign a lambda expression, use a def
+    "S101",    # use of assert
+    "TID252",  # skip
+    "SLF001",  # design choice
+    "SIM110",  # this is slower
+    "S318",    # intentional
+    "TRY003",  # nice to have
+    "PLR2004", # too many to fix right now
+    "PLR0913", # ship has sail on this one
+    "PLR0911", # ship has sail on this one
+    "PLR0912", # hard to fix without a major refactor
+    "PLR0915", # hard to fix without a major refactor
+    "PYI034",  # enable when we drop Py3.10
+    "RUF003",  # probably not worth fixing
+    "SIM105",  # this is slower
+]
+select = [
+    "ASYNC", # async rules
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "S",     # flake8-bandit
+    "F",     # pyflakes
+    "E",     # pycodestyle
+    "W",     # pycodestyle
+    "UP",    # pyupgrade
+    "I",     # isort
+    "RUF",   # ruff specific
+    "FLY",   # flynt
+    "G",     # flake8-logging-format
+    "PERF",  # Perflint
+    "PGH",   # pygrep-hooks
+    "PIE",   # flake8-pie
+    "PL",    # pylint
+    "PT",    # flake8-pytest-style
+    "PTH",   # flake8-pathlib
+    "PYI",   # flake8-pyi
+    "RET",   # flake8-return
+    "RSE",   # flake8-raise
+    "SIM",   # flake8-simplify
+    "SLF",   # flake8-self
+    "SLOT",  # flake8-slots
+    "T100",  # Trace found: {name} used
+    "T20",   # flake8-print
+    "TID",   # Tidy imports
+    "TRY",   # tryceratops
 ]
 
-[tool.ruff.flake8-pytest-style]
-fixture-parentheses = false
-
-[tool.ruff.per-file-ignores]
-# Match Case syntax not yet supported by ruff
-"pyisyox/events/router.py" = ["E999"]
-
-# Allow for main entry & scripts to write to stdout
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "S101",
+    "SLF001",
+    "PLR2004",
+    "PT011",
+    "PT006",
+    "PGH003",
+    "PT007",
+    "PT027",
+    "PLW0603",
+    "PLR0915",
+    "FLY002",
+    "PT018",
+    "PLR0124",
+    "SIM202",
+    "PT012",
+    "TID252",
+    "PLR0913",
+    "SIM102",
+    "SIM108",
+    "T201",
+    "PT004",
+]
+"examples/**/*" = [
+    "T201", # intended
+]
 "pyisyox/__main__.py" = ["T201"]
 
-[tool.ruff.mccabe]
-max-complexity = 25
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
 
 [tool.codespell]
 ignore-words-list = "pyisyox,hass,isy,nid,dof,dfof,don,dfon,tim,automic,automicus,batlvl,homeassistant,colorlog,nd,anull,enull"
