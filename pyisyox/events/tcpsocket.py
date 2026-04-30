@@ -84,11 +84,11 @@ class EventStream:
         else:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def _build_message(self, head_fn: Callable, body: str) -> str:
+    def _build_message(self, head_fn: Callable[[str, str, int], str], body: str) -> str:
         """Wrap body in an HTTP envelope using the provided head builder."""
         parsed_url = self.connection_info.parsed_url
         url = f"{parsed_url[1]}{parsed_url[2]}"
-        auth = self.connection_info.auth.encode()
+        auth: str = self.connection_info.auth.encode()
         return head_fn(url, auth, len(body)) + body
 
     def heartbeat(self, interval: int = SOCKET_HEARTBEAT) -> None:

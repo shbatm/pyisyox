@@ -1,7 +1,7 @@
 """Strings for Event Stream Requests."""
 
 
-def sub_head(url: str, auth: bytes, length: int) -> str:
+def sub_head(url: str, auth: str, length: int) -> str:
     """Return the Subscribe HTTP header."""
     return (
         f"POST /services HTTP/1.1\r\n"
@@ -26,7 +26,7 @@ def sub_body() -> str:
     )
 
 
-def unsub_head(url: str, auth: bytes, length: int) -> str:
+def unsub_head(url: str, auth: str, length: int) -> str:
     """Return the Unsubscribe HTTP header."""
     return (
         f"POST /services HTTP/1.1\r\n"
@@ -50,7 +50,7 @@ def unsub_body(sid: str) -> str:
     )
 
 
-def resub_head(url: str, auth: bytes, length: int) -> str:
+def resub_head(url: str, auth: str, length: int) -> str:
     """Return the Resubscribe HTTP header."""
     return (
         f"POST /services HTTP/1.1\r\n"
