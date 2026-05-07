@@ -2,9 +2,42 @@
 
 from __future__ import annotations
 
+import datetime
 from typing import cast
 
-from pyisyox.constants import ISY_VALUE_UNKNOWN, UOM_DOUBLE_TEMP, UOM_ISYV4_DEGREES
+from pyisyox.constants import (
+    EMPTY_TIME,
+    ISY_VALUE_UNKNOWN,
+    MILITARY_TIME,
+    STANDARD_TIME,
+    UOM_DOUBLE_TEMP,
+    UOM_ISYV4_DEGREES,
+    XML_STRPTIME,
+    XML_STRPTIME_YY,
+)
+from pyisyox.logging import _LOGGER
+
+
+def parse_isy_datetime(dt_str: str | None) -> datetime.datetime:
+    """Parse an ISY datetime string, returning ``EMPTY_TIME`` on failure.
+
+    Handles the four documented ISY datetime formats plus an ISO 8601 fallback.
+    Replaces the prior dependency on ``python-dateutil``.
+    """
+    if not dt_str or not isinstance(dt_str, str):
+        return EMPTY_TIME
+
+    for fmt in (MILITARY_TIME, STANDARD_TIME, XML_STRPTIME, XML_STRPTIME_YY):
+        try:
+            return datetime.datetime.strptime(dt_str, fmt)
+        except ValueError:
+            continue
+
+    try:
+        return datetime.datetime.fromisoformat(dt_str)
+    except ValueError:
+        _LOGGER.debug("Could not parse ISY datetime: %s", dt_str)
+        return EMPTY_TIME
 
 
 def convert_isy_raw_value(

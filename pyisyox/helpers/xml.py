@@ -7,7 +7,6 @@ from contextlib import suppress
 from typing import Any, cast
 
 import xmltodict
-from dateutil import parser
 
 from pyisyox.constants import (
     ATTR_FLAG,
@@ -24,6 +23,7 @@ from pyisyox.exceptions import (
     ISYResponseError,
     ISYResponseParseError,
 )
+from pyisyox.helpers import parse_isy_datetime
 from pyisyox.logging import _LOGGER
 
 SNAKE = re.compile(r"((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))")
@@ -66,7 +66,7 @@ def post_processor(path: str, key: str, value: Any) -> tuple[str, Any]:
     # Convert known dates
     if (key.endswith("_time") or key == "ts") and value is not None:
         with suppress(ValueError):
-            value = parser.parse(cast(str, value))
+            value = parse_isy_datetime(cast(str, value))
 
     return key, value
 

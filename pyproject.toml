@@ -22,12 +22,10 @@ classifiers=[
     "Topic :: Home Automation",
 ]
 dynamic = ["version"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 dependencies = [
     "aiohttp>=3.8.1",
-    "python-dateutil>=2.8.1",
-    "requests>=2.28.1",
     "colorlog>=6.6.0",
     "xmltodict>=0.12.0",
 ]
@@ -44,7 +42,7 @@ include = ["pyisyox*"]
 exclude = ["script*"]
 
 [tool.pylint.MAIN]
-py-version = "3.10"
+py-version = "3.11"
 ignore = [
     "tests",
 ]
@@ -168,7 +166,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 required-version = ">=0.15.12"
-target-version = "py310"
+target-version = "py311"
 line-length = 110
 
 [tool.ruff.lint]

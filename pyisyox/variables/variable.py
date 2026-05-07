@@ -58,7 +58,9 @@ class Variable(Entity[VariableDetail, NumT]):
         self._last_update = datetime.now()
         self._address = address
         self._var_type = detail.type_
-        if self._var_type == VAR_INTEGER:
+        # `_var_type` may arrive as int from JSON or str from XML; cast for
+        # the comparison since VAR_INTEGER is the string "1" (PyISY #491).
+        if str(self._var_type) == VAR_INTEGER:
             self._protocol = Protocol.INT_VAR
         else:
             self._protocol = Protocol.STATE_VAR

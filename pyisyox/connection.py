@@ -120,7 +120,10 @@ class Connection:
     async def request(self, url: str, retries: int = 0, ok404: bool = False, delay: float = 0) -> str | None:
         """Execute request to ISY REST interface."""
         _LOGGER.debug("Request: %s", url)
-        endpoint = url.split("rest", 1)[1]
+        # /desc and other non-/rest URLs lack the "rest" substring (PyISY #489).
+        _, _, endpoint = url.partition("rest")
+        if not endpoint:
+            endpoint = url
         if delay:
             await asyncio.sleep(delay)
         try:
@@ -157,7 +160,7 @@ class Connection:
                     _LOGGER.warning("ISY too busy to process request %s", endpoint)
                     res.release()
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _LOGGER.warning("Timeout while trying to connect to the ISY.")
         except (
             aiohttp.ClientOSError,

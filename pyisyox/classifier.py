@@ -36,14 +36,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from pyisyox.schema.cmd import Command
 from pyisyox.schema.editor import Editor
 from pyisyox.schema.nodedef import NodeDef, NodeProperty
 
 
-class ControllablePlatform(str, Enum):
+class ControllablePlatform(StrEnum):
     """The single controllable HA platform a nodedef may map to."""
 
     LIGHT = "light"
@@ -54,7 +54,7 @@ class ControllablePlatform(str, Enum):
     ALARM_CONTROL_PANEL = "alarm_control_panel"
 
 
-class ReadingPlatform(str, Enum):
+class ReadingPlatform(StrEnum):
     """HA platform for a property reading entity."""
 
     SENSOR = "sensor"

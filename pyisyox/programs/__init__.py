@@ -8,9 +8,8 @@ from dataclasses import asdict
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, cast
 
-from dateutil import parser
-
 from pyisyox.constants import TAG_FOLDER, URL_PROGRAMS, URL_SUBFOLDERS, XML_TRUE
+from pyisyox.helpers import parse_isy_datetime
 from pyisyox.helpers.entity_platform import EntityPlatform
 from pyisyox.helpers.events import EventEmitter
 from pyisyox.helpers.models import EventData
@@ -124,10 +123,10 @@ class Programs(EntityPlatform[ProgramsT]):
             detail.running = RunningStatus(int(status[1])).name.lower()
 
         if last_run := event_info.get("r"):
-            detail.last_run_time = parser.parse(last_run)
+            detail.last_run_time = parse_isy_datetime(last_run)
 
         if last_finish := event_info.get("f"):
-            detail.last_finish_time = parser.parse(last_finish)
+            detail.last_finish_time = parse_isy_datetime(last_finish)
 
         entity.update_status(entity.status, force=True)
 

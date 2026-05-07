@@ -6,9 +6,7 @@ import inspect
 from contextlib import suppress
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime
-from typing import Any, Generic, TypeVar, cast
-
-from typing_extensions import Self
+from typing import Any, Generic, Self, TypeVar, cast
 
 from pyisyox.constants import DEFAULT_PRECISION, DEFAULT_UNIT_OF_MEASURE
 
