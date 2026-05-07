@@ -51,7 +51,6 @@ from pyisyox.helpers.models import (
 )
 from pyisyox.helpers.xml import parse_xml
 from pyisyox.logging import _LOGGER
-from pyisyox.node_servers import NodeDef, NodeServers
 from pyisyox.nodes.nodebase import NodeBase, NodeBaseDetail
 
 if TYPE_CHECKING:
@@ -575,15 +574,9 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         _LOGGER.warning("'%s' is depreciated, use FADE<xx> commands instead", CMD_MANUAL_DIM_STOP)
         return await self.send_cmd(CMD_MANUAL_DIM_STOP)
 
-    def get_node_def(self) -> NodeDef | None:
-        """Retrieve the node server information for a node and control."""
-        if not (self.protocol == Protocol.NODE_SERVER and self.node_def_id):
-            return None
-        servers: NodeServers = self.isy.node_servers
-        if not servers.loaded or self.node_server not in servers.slots:
-            return None
-
-        if not (profile := servers.profiles.get(self.node_server)) or profile is None:
-            _LOGGER.error("Node profile not found")
-            return None
-        return profile.get(self.node_def_id)
+    # NOTE: get_node_def() was removed under workstream A.0 retirement. The
+    # legacy NodeServers loader (per-file XML profile downloads) is gone;
+    # the JSON-first /rest/profiles loader and lookup live in
+    # pyisyox.schema.profile.Profile and will be re-wired into the runtime
+    # Node objects in phase 4. Consumers needing a NodeDef should resolve
+    # via the schema lookup directly until that wiring lands.

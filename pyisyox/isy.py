@@ -6,7 +6,6 @@ import argparse
 import asyncio
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from threading import Thread
 from typing import Any
 
 from pyisyox.clock import Clock
@@ -20,13 +19,11 @@ from pyisyox.constants import (
     Protocol,
     SystemStatus,
 )
-from pyisyox.events.tcpsocket import EventStream
 from pyisyox.events.websocket import WebSocketClient
-from pyisyox.exceptions import ISYConnectionError, ISYNotInitializedError
+from pyisyox.exceptions import ISYNotInitializedError
 from pyisyox.helpers.events import EventEmitter
 from pyisyox.logging import _LOGGER, enable_logging
 from pyisyox.networking import NetworkResources
-from pyisyox.node_servers import NodeServers
 from pyisyox.nodes import Nodes
 from pyisyox.programs import Programs
 from pyisyox.variables import Variables
@@ -36,10 +33,7 @@ class ISY:
     """This is the main class that handles interaction with the ISY device."""
 
     _connected: bool = False
-    _events: EventStream | None = None
-    _reconnect_thread: Thread | None = None
     args: argparse.Namespace | None = None
-    auto_reconnect: bool = True
     background_tasks: set[asyncio.Task] = set()
     clock: Clock
     conn: Connection
@@ -47,7 +41,6 @@ class ISY:
     connection_info: ISYConnectionInfo
     loop: asyncio.AbstractEventLoop
     networking: NetworkResources
-    node_servers: NodeServers
     nodes: Nodes
     programs: Programs
     status_events: EventEmitter
@@ -62,7 +55,6 @@ class ISY:
     def __init__(
         self,
         connection_info: ISYConnectionInfo,
-        use_websocket: bool = True,
         args: argparse.Namespace | None = None,
     ) -> None:
         """Initialize the primary ISY Class."""
@@ -76,9 +68,8 @@ class ISY:
         self.connection_info = connection_info
         self.conn = Connection(connection_info, args)
 
-        # Setup websocket or fall back to TCP socket
-        if use_websocket:
-            self.websocket = WebSocketClient(self, connection_info)
+        # WebSocket is the only event-stream transport on IoX 6+.
+        self.websocket = WebSocketClient(self, connection_info)
 
         # Initialize platforms
         self.clock = Clock(self)
@@ -86,7 +77,6 @@ class ISY:
         self.variables = Variables(self)
         self.programs = Programs(self)
         self.nodes = Nodes(self)
-        self.node_servers = NodeServers(self)
 
         # Setup event emitters and loop
         self.connection_events = EventEmitter()
@@ -100,19 +90,13 @@ class ISY:
         programs: bool = True,
         variables: bool = True,
         networking: bool = True,
-        node_servers: bool = False,
     ) -> None:
         """Initialize the connection with the ISY."""
         self.config = await self.conn.test_connection()
 
-        if self.config.platform == "IoX":
-            self.conn.increase_available_connections()
-
         isy_setup_tasks: list[Awaitable[Any]] = []
         if nodes:
             isy_setup_tasks.append(self.nodes.initialize())
-            if node_servers:
-                isy_setup_tasks.append(self.node_servers.update())
 
         if clock:
             isy_setup_tasks.append(self.clock.update())
@@ -134,9 +118,6 @@ class ISY:
         """Cleanup connections and prepare for exit."""
         if self.websocket:
             self.websocket.stop()
-        if self._events and self._events.running:
-            self.connection_events.notify(EventStreamStatus.STOP_UPDATES)
-            self._events.running = False
         await self.conn.close()
 
     @property
@@ -146,26 +127,8 @@ class ISY:
 
     @property
     def auto_update(self) -> bool:
-        """Return the auto_update property."""
-        if self.websocket:
-            return self.websocket.status == EventStreamStatus.CONNECTED
-        if self._events is not None:
-            return self._events.running
-        return False
-
-    @auto_update.setter
-    def auto_update(self, val: bool) -> None:
-        """Set the auto_update property."""
-        if self.websocket:
-            raise ISYConnectionError("Websockets are enabled. Use isy.websocket.start() or .stop() instead.")
-        if val and not self.auto_update:
-            # create new event stream socket
-            self._events = EventStream(self, self.conn.connection_info, self._on_lost_event_stream)
-        if self._events:
-            self.connection_events.notify(
-                EventStreamStatus.START_UPDATES if val else EventStreamStatus.STOP_UPDATES
-            )
-            self._events.running = val
+        """Return whether the WebSocket event stream is connected."""
+        return self.websocket is not None and self.websocket.status == EventStreamStatus.CONNECTED
 
     @property
     def hostname(self) -> str | None:
@@ -185,34 +148,6 @@ class ISY:
                 "Module connection to ISY must first be initialized with isy.initialize()"
             )
         return self.config.uuid
-
-    def _on_lost_event_stream(self) -> None:
-        """Handle lost connection to event stream."""
-        self._events = None
-
-        if self.auto_reconnect and self._reconnect_thread is None:
-            # attempt to reconnect
-            self._reconnect_thread = Thread(target=self._auto_reconnecter)
-            self._reconnect_thread.daemon = True
-            self._reconnect_thread.start()
-
-    def _auto_reconnecter(self) -> None:
-        """Auto-reconnect to the event stream."""
-        while self.auto_reconnect and not self.auto_update:
-            _LOGGER.warning("PyISYoX attempting stream reconnect.")
-            self._events = None
-            self._events = EventStream(self, self.conn.connection_info, self._on_lost_event_stream)
-            self._events.running = True
-            self.connection_events.notify(EventStreamStatus.RECONNECTING)
-
-        if not self.auto_update:
-            self._events = None
-            _LOGGER.warning("PyISYoX could not reconnect to the event stream.")
-            self.connection_events.notify(EventStreamStatus.RECONNECT_FAILED)
-        else:
-            _LOGGER.warning("PyISYoX reconnected to the event stream.")
-
-        self._reconnect_thread = None
 
     async def query(self, address: str | None = None) -> bool:
         """Query all the nodes or a specific node if an address is provided .

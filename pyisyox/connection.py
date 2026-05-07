@@ -15,10 +15,8 @@ from pyisyox.exceptions import ISYConnectionError, ISYInvalidAuthError
 from pyisyox.helpers.session import get_new_client_session, get_sslcontext
 from pyisyox.logging import _LOGGER, enable_logging
 
-MAX_HTTPS_CONNECTIONS_ISY = 2
-MAX_HTTP_CONNECTIONS_ISY = 5
-MAX_HTTPS_CONNECTIONS_IOX = 20
-MAX_HTTP_CONNECTIONS_IOX = 50
+MAX_HTTPS_CONNECTIONS = 20
+MAX_HTTP_CONNECTIONS = 50
 
 MAX_RETRIES = 5
 RETRY_BACKOFF = [0.01, 0.10, 0.25, 1, 2]  # Seconds
@@ -78,7 +76,7 @@ class Connection:
         self.args = args
 
         self.semaphore = asyncio.Semaphore(
-            MAX_HTTPS_CONNECTIONS_ISY if connection_info.use_https else MAX_HTTP_CONNECTIONS_ISY
+            MAX_HTTPS_CONNECTIONS if connection_info.use_https else MAX_HTTP_CONNECTIONS
         )
 
         if connection_info.websession is None:
@@ -92,13 +90,6 @@ class Connection:
         if not (config_data := await config.update(self)):
             raise ISYConnectionError("Could not connect to the ISY with the parameters provided")
         return config_data
-
-    def increase_available_connections(self) -> None:
-        """Increase the number of allowed connections for newer hardware."""
-        _LOGGER.debug("Increasing available simultaneous connections")
-        self.semaphore = asyncio.Semaphore(
-            MAX_HTTPS_CONNECTIONS_IOX if self.connection_info.use_https else MAX_HTTP_CONNECTIONS_IOX
-        )
 
     async def close(self) -> None:
         """Cleanup connections and prepare for exit."""

@@ -21,7 +21,6 @@ from pyisyox.nodes.node_events import (
 from pyisyox.util.backports import StrEnum
 
 if TYPE_CHECKING:
-    from pyisyox.events.tcpsocket import EventStream
     from pyisyox.events.websocket import WebSocketClient
     from pyisyox.isy import ISY
 
@@ -102,13 +101,13 @@ class EventRouter:
     """Class to represent the message router for the event stream."""
 
     isy: ISY
-    stream: EventStream | WebSocketClient
+    stream: WebSocketClient
     _stream_id: str = ""
     key: str = ""
     _loaded: bool = False
     events: EventEmitter
 
-    def __init__(self, stream: EventStream | WebSocketClient) -> None:
+    def __init__(self, stream: WebSocketClient) -> None:
         """Initialize a new router class."""
         self.isy = stream.isy
         self.stream = stream

@@ -44,7 +44,7 @@ async def main(args: argparse.Namespace) -> None:
 
     connection_info = ISYConnectionInfo(args.url, args.username, args.password, tls_version=args.tls_version)
     # Connect to ISY controller.
-    isy = ISY(connection_info, use_websocket=True, args=args)
+    isy = ISY(connection_info, args=args)
 
     try:
         await isy.initialize(
@@ -53,7 +53,6 @@ async def main(args: argparse.Namespace) -> None:
             programs=args.programs,
             variables=args.variables,
             networking=args.networking,
-            node_servers=args.node_servers,
         )
     except (ISYInvalidAuthError, ISYConnectionError):
         _LOGGER.exception("Failed to connect to the ISY, please adjust settings and try again.")
@@ -163,15 +162,6 @@ async def main(args: argparse.Namespace) -> None:
                 isy.networking.to_dict(),
                 f"{DEFAULT_DIR}networking.yaml",
             )
-    if args.node_servers:
-        _LOGGER.debug(isy.node_servers)
-        if args.file:
-            await isy.loop.run_in_executor(
-                None,
-                write_to_file,
-                isy.node_servers.to_dict(),
-                f"{DEFAULT_DIR}node-servers.yaml",
-            )
     if args.clock:
         _LOGGER.debug(repr(isy.clock))
     _LOGGER.info("Total Loading time: %.2fs", time.time() - t_0)
@@ -249,13 +239,6 @@ if __name__ == "__main__":
         dest="networking",
         action="store_false",
         help="Do not load Network Resources",
-    )
-    parser.add_argument(
-        "-s",
-        "--node-servers",
-        dest="node_servers",
-        action="store_false",
-        help="Do not load Node Server Definitions",
     )
     parser.add_argument(
         "-o",
