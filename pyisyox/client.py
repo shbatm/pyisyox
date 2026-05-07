@@ -154,6 +154,10 @@ class IoXClient:
         self.auth = auth
         self.session = session
         self._authenticated = False
+        # Serialises authenticate() so concurrent first-use callers
+        # collapse onto a single auth.authenticate() round-trip. Lazy
+        # because asyncio.Lock construction needs a running loop.
+        self._auth_lock: asyncio.Lock | None = None
 
     async def connect(self) -> LoadResult:
         """Authenticate (if needed) and run the parallel initial load.
@@ -198,11 +202,11 @@ class IoXClient:
             config=config,
             profile=profile,
             nodes=nodes,
-            programs=_unwrap_data(programs_raw),
-            triggers=_unwrap_data(triggers_raw),
+            programs=_unwrap_data(programs_raw, source="/api/programs"),
+            triggers=_unwrap_data(triggers_raw, source="/api/triggers"),
             variables={
-                "1": _unwrap_data(vars_int_raw),
-                "2": _unwrap_data(vars_state_raw),
+                "1": _unwrap_data(vars_int_raw, source="/api/variables/1"),
+                "2": _unwrap_data(vars_state_raw, source="/api/variables/2"),
             },
         )
 
@@ -218,10 +222,26 @@ class IoXClient:
         )
 
     async def _authenticate_once(self) -> None:
+        """Run ``auth.authenticate`` exactly once across concurrent callers.
+
+        The lock-then-recheck pattern collapses concurrent first-use
+        callers onto a single ``auth.authenticate`` round-trip. Without
+        it, two parallel requests during ``connect()`` setup could both
+        observe ``_authenticated is False`` and each call ``authenticate``.
+        """
         if self._authenticated:
             return
-        await self.auth.authenticate(self.session, self.base_url)
-        self._authenticated = True
+        if self._auth_lock is None:
+            self._auth_lock = asyncio.Lock()
+        async with self._auth_lock:
+            # Double-checked: another coroutine may have authenticated
+            # while we were queued for the lock. We deliberately re-read
+            # via a local so mypy doesn't narrow it away as unreachable.
+            already_authenticated: bool = self._authenticated
+            if already_authenticated:
+                return
+            await self.auth.authenticate(self.session, self.base_url)
+            self._authenticated = True
 
     async def _get_json(self, path: str, *, authenticated: bool = True) -> Any:
         """GET a JSON endpoint. Applies auth (if requested) and retries
@@ -376,17 +396,30 @@ def merge_status_into_nodes(
 # --- private helpers ------------------------------------------------------
 
 
-def _unwrap_data(raw: Any) -> list[dict[str, Any]]:
+def _unwrap_data(raw: Any, *, source: str = "endpoint") -> list[dict[str, Any]]:
     """Pull the ``data`` array from a ``{successful, data: [...]}`` envelope.
 
-    The eisy ``/api/*`` JSON endpoints all return that envelope. Returns
-    an empty list when ``data`` is missing or not a list, so callers can
-    rely on a stable shape even when an endpoint is empty.
+    The eisy ``/api/*`` JSON endpoints all return that envelope. Raises
+    :class:`ClientError` when the envelope reports ``successful: false``
+    so server-side errors don't get silently flattened to "endpoint is
+    empty". A response that is not a dict, or is a dict without a
+    ``successful`` key, is treated as legacy/raw and unwrapped
+    permissively.
+
+    Args:
+        raw: The decoded JSON body.
+        source: Short label included in any raised error to help the
+            consumer distinguish ``/api/programs`` from ``/api/triggers``
+            etc. when the failure surfaces.
     """
-    if isinstance(raw, dict):
-        data = raw.get("data")
-        if isinstance(data, list):
-            return data
+    if not isinstance(raw, dict):
+        return []
+    if raw.get("successful") is False:
+        detail = raw.get("error") or raw.get("message") or raw
+        raise ClientError(f"{source} returned successful=false: {detail}")
+    data = raw.get("data")
+    if isinstance(data, list):
+        return data
     return []
 
 

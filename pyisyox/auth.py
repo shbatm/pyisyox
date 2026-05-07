@@ -28,16 +28,17 @@ Endpoint discovery and shape verification: ``POST /api/login`` body
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import aiohttp
 
-if TYPE_CHECKING:
-    pass
+_LOGGER = logging.getLogger(__name__)
 
 
 class AuthError(Exception):
@@ -94,18 +95,40 @@ def _jwt_exp(token: str) -> float:
 
     No signature verification — we trust whatever the eisy issued. The exp
     claim is used solely for client-side proactive-refresh scheduling.
+
+    A return value of ``0`` is a sentinel meaning "expiry unknown";
+    :meth:`TokenPair.access_expires_within` treats this as
+    "skip proactive refresh", so reactive 401-handling is the only
+    recovery path until the operator notices the warning logged here
+    and updates the parser. Forcing immediate refresh on undecodable
+    tokens would loop endlessly if the eisy persisted in returning
+    malformed JWTs.
     """
     try:
         _, payload_b64, _ = token.split(".", 2)
     except ValueError:
+        _LOGGER.warning(
+            "JWT does not have three dot-separated segments — skipping proactive "
+            "refresh; reactive 401 handling will still recover from server-side expiry."
+        )
         return 0.0
     padded = payload_b64 + "=" * (-len(payload_b64) % 4)
     try:
         payload = json.loads(base64.urlsafe_b64decode(padded))
-    except (ValueError, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError) as exc:
+        _LOGGER.warning(
+            "JWT payload not decodable as base64-url JSON (%s) — skipping proactive refresh",
+            exc,
+        )
         return 0.0
     exp = payload.get("exp")
-    return float(exp) if isinstance(exp, (int, float)) else 0.0
+    if not isinstance(exp, (int, float)):
+        _LOGGER.warning(
+            "JWT payload missing numeric 'exp' claim (got %r) — skipping proactive refresh",
+            exp,
+        )
+        return 0.0
+    return float(exp)
 
 
 @runtime_checkable
@@ -201,6 +224,23 @@ class PortalAuth:
         self._email = email
         self._password = password
         self._tokens: TokenPair | None = None
+        # Serialises _login / _refresh / _refresh_or_relogin so concurrent
+        # consumers (e.g. a background poll racing a user command inside
+        # the proactive-refresh leeway window) collapse onto a single
+        # network round-trip. Each entry re-checks the cached token state
+        # after acquiring the lock, so the second waiter no-ops.
+        self._auth_lock: asyncio.Lock | None = None
+
+    def _lock(self) -> asyncio.Lock:
+        """Lazy-construct the lock so the constructor stays event-loop-free.
+
+        Lock creation needs a running event loop; the constructor is
+        called synchronously (often before the loop exists) so we defer
+        construction to the first ``async`` entry point.
+        """
+        if self._auth_lock is None:
+            self._auth_lock = asyncio.Lock()
+        return self._auth_lock
 
     @property
     def tokens(self) -> TokenPair | None:
@@ -213,33 +253,50 @@ class PortalAuth:
     async def authenticate(self, session: aiohttp.ClientSession, base_url: str) -> None:
         """Perform ``POST /api/login`` and store the returned token pair.
 
+        Concurrent calls collapse onto a single login round-trip via the
+        instance lock; the second caller observes the tokens already set
+        and returns without making a network request.
+
         Raises:
             AuthError: When the login response is not ``successful: true``
                 or lacks tokens.
         """
-        await self._login(session, base_url)
+        async with self._lock():
+            if self._tokens is not None:
+                return
+            await self._login_locked(session, base_url)
 
     async def request_kwargs(self, session: aiohttp.ClientSession, base_url: str) -> dict[str, Any]:
         """Return ``Authorization: Bearer <accessToken>`` headers.
 
         Refreshes the token proactively if it expires within
         :attr:`PROACTIVE_REFRESH_LEEWAY` seconds, avoiding the cost of an
-        in-flight 401 + refresh + retry round.
+        in-flight 401 + refresh + retry round. Concurrent callers that
+        observe an expiring token both queue on the auth lock; the
+        winner refreshes once, the runners-up re-check and skip.
         """
         if self._tokens is None:
             raise AuthError("PortalAuth.request_kwargs called before authenticate()")
         if self._tokens.access_expires_within(self.PROACTIVE_REFRESH_LEEWAY):
             await self._refresh_or_relogin(session, base_url)
+        # Re-read after the lock — another coroutine may have refreshed.
+        if self._tokens is None:  # pragma: no cover — defensive; refresh sets tokens or raises
+            raise AuthError("tokens disappeared during refresh")
         return {"headers": {"Authorization": f"Bearer {self._tokens.access_token}"}}
 
     async def handle_unauthorized(self, session: aiohttp.ClientSession, base_url: str) -> bool:
         """Handle 401: try refresh, then re-login.
 
-        Returns True if re-auth succeeded and the caller should retry the
-        original request; False if both refresh and login failed.
+        Concurrent 401s from in-flight requests all enter
+        ``_refresh_or_relogin``; the first runs the refresh, subsequent
+        callers re-check the cached token (which has just been updated)
+        and skip the network round-trip. Returns True if re-auth
+        succeeded and the caller should retry the original request;
+        False if both refresh and login failed.
         """
+        token_at_call = self._tokens.access_token if self._tokens else None
         try:
-            await self._refresh_or_relogin(session, base_url)
+            await self._refresh_or_relogin(session, base_url, observed_token=token_at_call)
         except AuthError:
             return False
         return True
@@ -252,22 +309,51 @@ class PortalAuth:
         """
         self._tokens = None
 
-    async def _refresh_or_relogin(self, session: aiohttp.ClientSession, base_url: str) -> None:
-        """Try refresh first; on failure (refresh expired/rejected), re-login."""
-        refreshed = False
-        if self._tokens is not None:
-            try:
-                await self._refresh(session, base_url)
-            except AuthError:
-                # Refresh failed — fall through to a full login.
-                self._tokens = None
-            else:
-                refreshed = True
-        if not refreshed:
-            await self._login(session, base_url)
+    async def _refresh_or_relogin(
+        self,
+        session: aiohttp.ClientSession,
+        base_url: str,
+        *,
+        observed_token: str | None = None,
+    ) -> None:
+        """Refresh the access token (or re-login on failure), serialised.
 
-    async def _login(self, session: aiohttp.ClientSession, base_url: str) -> None:
-        """``POST /api/login`` — exchange credentials for a token pair."""
+        ``observed_token`` is the access token the caller saw when it
+        decided a refresh was needed. After acquiring the lock we
+        compare against the current token; if it has changed, another
+        coroutine already refreshed on our behalf and we no-op. This
+        collapses concurrent 401s and concurrent
+        proactive-refresh-window misses onto a single round-trip.
+        """
+        async with self._lock():
+            current = self._tokens.access_token if self._tokens else None
+            if observed_token is not None and current != observed_token:
+                # Another waiter completed the refresh while we were queued.
+                return
+            if (
+                observed_token is None
+                and self._tokens is not None
+                and not self._tokens.access_expires_within(self.PROACTIVE_REFRESH_LEEWAY)
+            ):
+                # Proactive path: while we waited for the lock, the
+                # winner refreshed and the new token has comfortable
+                # life left. Skip.
+                return
+
+            refreshed = False
+            if self._tokens is not None:
+                try:
+                    await self._refresh_locked(session, base_url)
+                except AuthError:
+                    # Refresh failed — fall through to a full login.
+                    self._tokens = None
+                else:
+                    refreshed = True
+            if not refreshed:
+                await self._login_locked(session, base_url)
+
+    async def _login_locked(self, session: aiohttp.ClientSession, base_url: str) -> None:
+        """``POST /api/login`` — caller must hold ``_auth_lock``."""
         body = {"username": self._email, "password": self._password}
         url = f"{base_url.rstrip('/')}{self.LOGIN_PATH}"
         async with session.post(url, json=body) as resp:
@@ -276,8 +362,8 @@ class PortalAuth:
             data = await resp.json()
         self._tokens = self._tokens_from_response(data, "login")
 
-    async def _refresh(self, session: aiohttp.ClientSession, base_url: str) -> None:
-        """``POST /api/jwt/refresh`` — mint a fresh access+refresh pair."""
+    async def _refresh_locked(self, session: aiohttp.ClientSession, base_url: str) -> None:
+        """``POST /api/jwt/refresh`` — caller must hold ``_auth_lock``."""
         if self._tokens is None:
             raise AuthError("cannot refresh without an existing refresh token")
         body = {"refreshToken": self._tokens.refresh_token}

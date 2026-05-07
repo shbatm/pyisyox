@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pyisyox.client import (
+    ClientError,
     NodePropertyValue,
+    _unwrap_data,
     merge_status_into_nodes,
     parse_api_nodes,
     parse_rest_status,
@@ -207,3 +211,36 @@ def test_merge_no_status_for_address_is_noop() -> None:
     nodes = parse_api_nodes({"data": {"nodes": {"node": [{"address": "A", "nodeDefId": "X"}]}}})
     merge_status_into_nodes(nodes, {})
     assert nodes["A"].properties == {}
+
+
+# --- _unwrap_data envelope handling --------------------------------------
+
+
+def test_unwrap_data_returns_list_on_success() -> None:
+    items = [{"id": "1", "name": "X"}]
+    assert _unwrap_data({"successful": True, "data": items}) == items
+
+
+def test_unwrap_data_returns_empty_when_data_missing_or_wrong_type() -> None:
+    assert _unwrap_data({"successful": True}) == []
+    assert _unwrap_data({"successful": True, "data": {"k": "v"}}) == []
+
+
+def test_unwrap_data_raises_on_successful_false_with_error() -> None:
+    """Server-side error envelopes used to silently flatten to []. The fix
+    raises ClientError so consumers see the actual failure instead of
+    'oh, no programs configured'."""
+    with pytest.raises(ClientError, match="successful=false"):
+        _unwrap_data({"successful": False, "error": "internal"})
+
+
+def test_unwrap_data_includes_source_label_in_error() -> None:
+    with pytest.raises(ClientError, match="/api/programs"):
+        _unwrap_data({"successful": False}, source="/api/programs")
+
+
+def test_unwrap_data_passes_through_non_dict() -> None:
+    """A non-dict response (e.g. a bare list from a legacy endpoint) is
+    treated as not-an-envelope and yields []."""
+    assert _unwrap_data([{"id": "1"}]) == []
+    assert _unwrap_data(None) == []

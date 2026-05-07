@@ -7,8 +7,10 @@ test suite zero-dep beyond pytest itself, mirroring phase 1/2 fixtures.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import logging
 import time
 from typing import Any
 
@@ -40,9 +42,14 @@ class _FakeResponse:
         self._body = body or {}
 
     async def json(self) -> dict[str, Any]:
+        # Yield once so concurrent coroutines actually interleave —
+        # without this, asyncio.gather runs each task to completion
+        # before the next starts, masking concurrency-correctness bugs.
+        await asyncio.sleep(0)
         return self._body
 
     async def __aenter__(self) -> _FakeResponse:
+        await asyncio.sleep(0)
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -78,6 +85,29 @@ def test_jwt_exp_extracts_claim() -> None:
 def test_jwt_exp_returns_zero_on_garbage() -> None:
     assert _jwt_exp("not-a-jwt") == 0.0
     assert _jwt_exp("a.b.c") == 0.0
+
+
+def test_jwt_exp_warns_on_undecodable_token(caplog: pytest.LogCaptureFixture) -> None:
+    """Returning 0 silently would let proactive refresh fail forever; we
+    must emit a warning so operators see when the eisy's token format
+    drifts away from what we expect."""
+    with caplog.at_level(logging.WARNING, logger="pyisyox.auth"):
+        _jwt_exp("not-a-jwt")
+    assert any("three dot-separated segments" in rec.message for rec in caplog.records)
+
+
+def test_jwt_exp_warns_on_payload_without_exp(caplog: pytest.LogCaptureFixture) -> None:
+    """A well-formed JWT lacking the 'exp' claim is still 'expiry unknown'.
+    Warn and keep returning 0 (skip-proactive sentinel)."""
+
+    def _b64(d: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").decode()
+
+    no_exp_token = f"{_b64({'alg': 'ES256'})}.{_b64({'iss': 'eisy'})}.sig"
+    with caplog.at_level(logging.WARNING, logger="pyisyox.auth"):
+        result = _jwt_exp(no_exp_token)
+    assert result == 0.0
+    assert any("missing numeric 'exp'" in rec.message for rec in caplog.records)
 
 
 def test_token_pair_from_response_decodes_expiry() -> None:
@@ -277,3 +307,75 @@ async def test_portal_auth_close_clears_tokens() -> None:
 
 def test_portal_auth_implements_protocol() -> None:
     assert isinstance(PortalAuth("u@x", "p"), Auth)
+
+
+# --- concurrency ----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_portal_auth_concurrent_authenticate_collapses_to_one_login() -> None:
+    """Two coroutines both call authenticate() before either completes;
+    the lock + post-acquire re-check ensures only one POST /api/login fires."""
+
+    auth = PortalAuth("u@x", "p")
+    sess = FakeSession()
+    sess.queue(200, _login_body(time.time() + 3600, time.time() + 30 * 86400))
+
+    await asyncio.gather(
+        auth.authenticate(sess, "https://eisy"),
+        auth.authenticate(sess, "https://eisy"),
+        auth.authenticate(sess, "https://eisy"),
+    )
+
+    login_calls = [c for c in sess.calls if c[0].endswith("/api/login")]
+    assert len(login_calls) == 1, "concurrent authenticate() must collapse to one login"
+
+
+@pytest.mark.asyncio
+async def test_portal_auth_concurrent_proactive_refresh_collapses() -> None:
+    """N coroutines all see an expiring token in request_kwargs at the same
+    time. Only one /api/jwt/refresh round-trip should fire; the runners-up
+    re-check inside the lock and skip."""
+
+    auth = PortalAuth("u@x", "p")
+    sess = FakeSession()
+    # Initial login: token expires in 30 s (under 60 s leeway).
+    sess.queue(200, _login_body(time.time() + 30, time.time() + 30 * 86400))
+    # Single refresh queued — if more than one fires the test fails with
+    # "no scripted response".
+    sess.queue(200, _login_body(time.time() + 3600, time.time() + 30 * 86400))
+    await auth.authenticate(sess, "https://eisy")
+
+    results = await asyncio.gather(
+        auth.request_kwargs(sess, "https://eisy"),
+        auth.request_kwargs(sess, "https://eisy"),
+        auth.request_kwargs(sess, "https://eisy"),
+    )
+
+    refresh_calls = [c for c in sess.calls if c[0].endswith("/api/jwt/refresh")]
+    assert len(refresh_calls) == 1, "concurrent proactive refresh must collapse to one POST"
+    # All callers see the same fresh access token in their headers.
+    headers = [r["headers"]["Authorization"] for r in results]
+    assert len(set(headers)) == 1
+
+
+@pytest.mark.asyncio
+async def test_portal_auth_concurrent_handle_unauthorized_collapses() -> None:
+    """Two parallel requests both get 401 and call handle_unauthorized.
+    The first refreshes; the second observes a different access token at
+    lock-acquire time and no-ops."""
+
+    auth = PortalAuth("u@x", "p")
+    sess = FakeSession()
+    sess.queue(200, _login_body(time.time() + 3600, time.time() + 30 * 86400))
+    sess.queue(200, _login_body(time.time() + 3600, time.time() + 30 * 86400))
+    await auth.authenticate(sess, "https://eisy")
+
+    results = await asyncio.gather(
+        auth.handle_unauthorized(sess, "https://eisy"),
+        auth.handle_unauthorized(sess, "https://eisy"),
+        auth.handle_unauthorized(sess, "https://eisy"),
+    )
+    assert all(results), "all callers should report retry-OK"
+    refresh_calls = [c for c in sess.calls if c[0].endswith("/api/jwt/refresh")]
+    assert len(refresh_calls) == 1, "concurrent 401s must share a single refresh"
