@@ -1,16 +1,24 @@
 """Runtime objects that wrap :class:`pyisyox.client.LoadResult` data.
 
-Phase 4a deliverable: :class:`Node` (wraps :class:`NodeRecord` plus the
-resolved :class:`NodeDef` plus a back-reference to the
-:class:`IoXClient` for command sends), with an editor-codec-validated
-:meth:`Node.send_command`.
-
-Group/Folder/Program/Variable runtime classes follow in subsequent
-phase 4 commits; this module deliberately stays narrow so the new code
-path is testable in isolation before it replaces the legacy
-:mod:`pyisyox.nodes` / :mod:`pyisyox.programs` modules.
+* :class:`Node` — wraps a :class:`NodeRecord` plus the resolved
+  :class:`NodeDef` plus a back-reference to the :class:`IoXClient`,
+  with an editor-codec-validated :meth:`Node.send_command`.
+* :class:`EventDispatcher` and :func:`parse_event_frame` — decode
+  ``/rest/subscribe`` event frames and overlay property updates onto
+  the same node registry.
 """
 
+from pyisyox.runtime.events import Event, EventDispatcher, EventListener, parse_event_frame
 from pyisyox.runtime.node import Node, NodeCommandError
+from pyisyox.runtime.ws import StatusListener, WebSocketEventStream
 
-__all__ = ["Node", "NodeCommandError"]
+__all__ = [
+    "Event",
+    "EventDispatcher",
+    "EventListener",
+    "Node",
+    "NodeCommandError",
+    "StatusListener",
+    "WebSocketEventStream",
+    "parse_event_frame",
+]

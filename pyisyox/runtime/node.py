@@ -141,7 +141,7 @@ class Node:
         For native nodes these are merged from ``/api/nodes`` + the
         ``/rest/status`` overlay during initial load. Plugin nodes get
         all values from ``/rest/status``. WebSocket events update them
-        in place at runtime (phase 4b).
+        in place at runtime via :class:`pyisyox.runtime.EventDispatcher`.
         """
         return self._record.properties
 

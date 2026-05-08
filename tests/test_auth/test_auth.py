@@ -2,7 +2,7 @@
 
 Uses a hand-rolled fake aiohttp ClientSession that records POST calls and
 returns scripted responses. Avoids aresponses/aioresponses to keep the
-test suite zero-dep beyond pytest itself, mirroring phase 1/2 fixtures.
+test suite zero-dep beyond pytest itself.
 """
 
 from __future__ import annotations

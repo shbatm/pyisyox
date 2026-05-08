@@ -574,9 +574,7 @@ class Node(NodeBase, Entity[NodeDetail, StatusT]):
         _LOGGER.warning("'%s' is depreciated, use FADE<xx> commands instead", CMD_MANUAL_DIM_STOP)
         return await self.send_cmd(CMD_MANUAL_DIM_STOP)
 
-    # NOTE: get_node_def() was removed under workstream A.0 retirement. The
-    # legacy NodeServers loader (per-file XML profile downloads) is gone;
-    # the JSON-first /rest/profiles loader and lookup live in
-    # pyisyox.schema.profile.Profile and will be re-wired into the runtime
-    # Node objects in phase 4. Consumers needing a NodeDef should resolve
-    # via the schema lookup directly until that wiring lands.
+    # NodeDef lookup lives on pyisyox.schema.profile.Profile —
+    # find_nodedef(nodedef_id, family_id, instance_id). Use that or
+    # the runtime Node wrapper (pyisyox.runtime.Node) instead of the
+    # legacy NodeServers collection that previously lived here.

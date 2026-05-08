@@ -17,8 +17,7 @@ Sits between the auth layer (:mod:`pyisyox.auth`) and the schema layer
     * ``GET /api/programs``, ``/api/triggers`` — JSON.
     * ``GET /api/variables/1`` and ``/api/variables/2`` — JSON.
 
-Total: ≤ 7 HTTP + 1 WebSocket (phase 3b lands the HTTP half; WebSocket
-attaches later in phase 4 wiring).
+Total: ≤ 7 HTTP + 1 WebSocket regardless of node-server count.
 
 The client is auth-mode-agnostic — it accepts any :class:`pyisyox.auth.Auth`
 implementation (``PortalAuth`` or ``LocalAuth``). On a 401 it asks the
@@ -29,8 +28,7 @@ XML decoders here are deliberately narrow — the only legacy XML surfaces
 left after the JSON-first cut are ``/rest/status`` (used here),
 ``/rest/nodes/{addr}/cmd/...`` responses (touched at command-send time),
 and ``/rest/subscribe`` event frames (handled by the WebSocket pipeline).
-``xml.etree.ElementTree`` from the stdlib covers all three; the
-``xmltodict`` runtime dep is dropped in phase 3c.
+``xml.etree.ElementTree`` from the stdlib covers all three.
 """
 
 from __future__ import annotations
@@ -82,8 +80,8 @@ class NodePropertyValue:
     whether it arrived from ``/api/nodes`` JSON or ``/rest/status`` XML.
 
     The shape mirrors :class:`pyisyox.schema.nodedef.Property` but is kept
-    here as a private data carrier so the client can produce them without
-    importing the runtime Node classes (which arrive in phase 4).
+    here as a private data carrier so the client can produce values
+    without importing the runtime Node classes.
     """
 
     id: str
@@ -122,8 +120,7 @@ class LoadResult:
         profile: Decoded ``/rest/profiles`` blob, ready for nodedef
             lookups via ``profile.find_nodedef(...)``.
         nodes: Map of address → :class:`NodeRecord` with merged properties.
-        programs: Raw ``/api/programs`` ``data`` payload (typed wrappers
-            arrive in phase 4).
+        programs: Raw ``/api/programs`` ``data`` payload.
         triggers: Raw ``/api/triggers`` payload — the program AST as JSON.
         variables: Map of variable type id (``"1"`` or ``"2"``) to the
             raw ``/api/variables/{type}`` ``data`` list.
