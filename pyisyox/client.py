@@ -40,6 +40,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 import aiohttp
@@ -274,6 +275,34 @@ class IoXClient:
                 if resp.status >= 400:
                     raise HTTPError(resp.status, url)
                 return await resp.text()
+
+    async def send_node_command(self, address: str, command_id: str, *params: int) -> str:
+        """Issue ``GET /rest/nodes/{addr}/cmd/{cmd}[/{p1}[/{p2}...]]``.
+
+        The legacy XML command surface is still the only command path
+        on IoX 6 — no ``/api/*`` equivalent has surfaced in captures.
+        Both auth modes (PortalAuth JWT, LocalAuth basic) accept this
+        path. ``address`` is URL-quoted because Insteon addresses
+        contain spaces (``"3D 7D 87 1"``).
+
+        Args:
+            address: Wire address of the target node.
+            command_id: IoX command id (e.g. ``"DON"``).
+            *params: Already-encoded integer parameters (the runtime
+                :meth:`Node.send_command` runs the editor codec; this
+                client method trusts its input).
+
+        Returns:
+            The text body of the response — typically a small
+            ``<RestResponse status="200">...</RestResponse>`` envelope.
+            Caller doesn't usually need to parse it; HTTPError covers
+            non-2xx.
+        """
+        encoded_addr = quote(address, safe="")
+        path_parts = [f"/rest/nodes/{encoded_addr}/cmd/{command_id}"]
+        path_parts.extend(str(p) for p in params)
+        path = "/".join(path_parts)
+        return await self._get_text(path)
 
 
 # --- parsers --------------------------------------------------------------
