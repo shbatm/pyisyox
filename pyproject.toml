@@ -159,6 +159,11 @@ testpaths = [
 norecursedirs = [
     ".git",
 ]
+# Add the repo root so cross-test imports like
+# ``from tests.test_client.conftest import FakeSession`` resolve
+# under any pytest invocation (CI's ``pytest -q`` and local
+# ``pytest tests/`` both honour this).
+pythonpath = ["."]
 log_format = "%(asctime)s.%(msecs)03d %(levelname)-8s %(name)s:%(filename)s:%(lineno)s %(message)s"
 log_date_format = "%Y-%m-%d %H:%M:%S"
 asyncio_mode = "auto"

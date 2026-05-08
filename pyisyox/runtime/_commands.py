@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyisyox.runtime.node import NodeCommandError
 from pyisyox.schema.editor import EditorCodecError
 
 if TYPE_CHECKING:
@@ -23,6 +22,16 @@ if TYPE_CHECKING:
     from pyisyox.schema.cmd import Command
     from pyisyox.schema.nodedef import NodeDef
     from pyisyox.schema.profile import Profile
+
+
+class NodeCommandError(Exception):
+    """Raised when a command can't be sent — unknown command id, missing
+    parameter, validation failure, or no nodedef resolved for this node.
+
+    Defined here (not in ``node.py``) to keep the module dependency
+    one-way: ``node.py`` imports from ``_commands.py``, never the
+    reverse.
+    """
 
 
 def encode_command_params(

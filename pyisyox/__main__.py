@@ -116,6 +116,6 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    enable_logging(LOG_VERBOSE if args.verbose else logging.INFO)
-    sys.exit(asyncio.run(main(args)))
+    cli_args = parse_args()
+    enable_logging(LOG_VERBOSE if cli_args.verbose else logging.INFO)
+    sys.exit(asyncio.run(main(cli_args)))

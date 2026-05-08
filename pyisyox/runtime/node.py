@@ -29,15 +29,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pyisyox.runtime._commands import NodeCommandError, encode_command_params
+
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
     from pyisyox.schema.nodedef import NodeDef
     from pyisyox.schema.profile import Profile
 
-
-class NodeCommandError(Exception):
-    """Raised when a command can't be sent — unknown command id, missing
-    parameter, validation failure, or no nodedef resolved for this node."""
+__all__ = ["Node", "NodeCommandError"]
 
 
 class Node:
@@ -171,9 +170,6 @@ class Node:
                 parameter count is wrong, or any parameter fails
                 editor validation.
         """
-        # Late import — _commands depends on NodeCommandError defined above.
-        from pyisyox.runtime._commands import encode_command_params  # noqa: PLC0415
-
         encoded = encode_command_params(
             nodedef=self._nodedef,
             profile=self._profile,

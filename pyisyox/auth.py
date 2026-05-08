@@ -148,17 +148,16 @@ class Auth(Protocol):
 
     async def authenticate(self, session: aiohttp.ClientSession, base_url: str) -> None:
         """Perform any one-time authentication setup (e.g., login POST)."""
-        ...
 
     async def request_kwargs(self, session: aiohttp.ClientSession, base_url: str) -> dict[str, Any]:
         """Return kwargs for ``session.request()`` (auth, headers, etc.)."""
-        ...
+        return {}
 
     async def handle_unauthorized(self, session: aiohttp.ClientSession, base_url: str) -> bool:
         """Handle a 401 response. Return True if re-auth succeeded and the
         original request should be retried; False if the auth state cannot
         recover (caller should propagate the 401 as a permanent error)."""
-        ...
+        return False
 
     async def close(self, session: aiohttp.ClientSession, base_url: str) -> None:
         """Release any auth-held resources (e.g., explicit logout).
@@ -168,7 +167,6 @@ class Auth(Protocol):
         (PortalAuth posts ``/api/logout``); LocalAuth ignores them
         since basic-auth has no server-side session.
         """
-        ...
 
 
 class LocalAuth:

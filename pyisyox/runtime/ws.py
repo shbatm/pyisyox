@@ -159,9 +159,11 @@ class WebSocketEventStream:
                     _LOGGER.warning("WS auth failed and could not be recovered; giving up")
                     self._notify(EventStreamStatus.RECONNECT_FAILED)
                     return
-                except asyncio.CancelledError:
-                    raise
                 except Exception:  # pylint: disable=broad-except
+                    # asyncio.CancelledError is a BaseException, so this
+                    # `except Exception` does not catch it — stop() can
+                    # cancel the task cleanly without the loop swallowing
+                    # the cancellation.
                     _LOGGER.exception("WS read loop hit unexpected error; will reconnect")
                 # Read into a local so mypy doesn't narrow `_stop_requested`
                 # to its loop-entry value across the await suspension above.
@@ -217,7 +219,11 @@ class WebSocketEventStream:
 
     async def _auth_kwargs(self) -> dict:
         """Authenticate (if not already) and gather aiohttp kwargs."""
-        await self._client._authenticate_once()
+        # _authenticate_once is intentionally accessed across the client
+        # boundary — the WS reader needs the same lazy-auth handshake the
+        # HTTP fan-out uses, and exposing it as a public method would
+        # invite consumers to call it directly.
+        await self._client._authenticate_once()  # pylint: disable=protected-access
         return await self._client.auth.request_kwargs(self._client.session, self._client.base_url)
 
     def _ws_url(self) -> str:

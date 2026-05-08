@@ -107,55 +107,63 @@ def parse_event_frame(raw: str) -> Event | None:
     """
     if not raw:
         return None
-
     payload = _maybe_unwrap_json_envelope(raw)
     if payload is None:
         return None
-
     try:
         root = ET.fromstring(payload)  # noqa: S314 — eisy LAN traffic
     except ET.ParseError as exc:
         _LOGGER.debug("WS frame XML parse failed (%s); frame=%r", exc, payload[:200])
         return None
-
     if root.tag != "Event":
         return None
 
-    seqnum_raw = root.get("seqnum", "0")
-    try:
-        seqnum = int(seqnum_raw)
-    except ValueError:
-        seqnum = 0
-
-    control_el = root.find("control")
     action_el = root.find("action")
-    node_el = root.find("node")
-    fmt_act = root.findtext("fmtAct", default="") or ""
-    fmt_name = root.findtext("fmtName", default="") or ""
-
-    control = (control_el.text or "") if control_el is not None else ""
-    action = (action_el.text or "") if action_el is not None else ""
-    node_address = (node_el.text or "") if node_el is not None else ""
-    uom = action_el.get("uom", "") if action_el is not None else ""
-    prec_raw = action_el.get("prec") if action_el is not None else None
-    prec: int | None = None
-    if prec_raw is not None:
-        try:
-            prec = int(prec_raw)
-        except ValueError:
-            prec = None
-
+    uom, prec = _decode_action_attrs(action_el)
     return Event(
-        seqnum=seqnum,
+        seqnum=_int_or(root.get("seqnum", "0"), default=0),
         timestamp=root.get("timestamp", ""),
-        control=control,
-        action=action,
-        node_address=node_address,
-        formatted_action=fmt_act,
-        formatted_name=fmt_name,
+        control=_text(root.find("control")),
+        action=_text(action_el),
+        node_address=_text(root.find("node")),
+        formatted_action=root.findtext("fmtAct", default="") or "",
+        formatted_name=root.findtext("fmtName", default="") or "",
         uom=uom,
         prec=prec,
     )
+
+
+def _text(element: ET.Element | None) -> str:
+    """Read an element's text safely, treating absent elements as empty."""
+    if element is None:
+        return ""
+    return element.text or ""
+
+
+def _int_or(raw: str, *, default: int) -> int:
+    """Coerce a string to int; return ``default`` on failure."""
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _decode_action_attrs(action_el: ET.Element | None) -> tuple[str, int | None]:
+    """Pull ``uom`` and ``prec`` attrs off an ``<action>`` element.
+
+    ``prec`` is ``None`` when absent or non-numeric; legitimate negative
+    values (rare but possible per the IoX spec) round-trip unchanged.
+    """
+    if action_el is None:
+        return "", None
+    uom = action_el.get("uom", "")
+    prec_raw = action_el.get("prec")
+    if prec_raw is None:
+        return uom, None
+    try:
+        return uom, int(prec_raw)
+    except ValueError:
+        return uom, None
 
 
 def _maybe_unwrap_json_envelope(raw: str) -> str | None:
