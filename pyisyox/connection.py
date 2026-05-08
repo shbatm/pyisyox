@@ -51,6 +51,7 @@ class ISYConnectionInfo:
     use_https: bool = field(init=False)
     websession: aiohttp.ClientSession | None = None
     tls_version: float | None = None
+    verify_ssl: bool = False
 
     def __post_init__(self, username: str, password: str) -> None:
         """Post process the connection info."""
