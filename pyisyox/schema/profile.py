@@ -107,6 +107,67 @@ class Profile:
 
         return profile
 
+    def merge(self, other: Profile) -> ProfileMergeResult:
+        """Merge ``other`` into ``self`` in place; return a diff summary.
+
+        Designed for PG3 dynamic profile reload: when a plugin updates
+        its nodedefs at runtime (per
+        https://developer.isy.io/docs/API/pg/DynamicProfiles), the
+        consumer refetches ``/rest/profiles`` and constructs a fresh
+        :class:`Profile` from the new payload, then calls this method
+        to fold the updates into the live one. Existing
+        :class:`pyisyox.runtime.Node` instances hold a reference to
+        the resolved :class:`NodeDef`; if we replaced the Profile
+        wholesale they'd cling to stale lookups, so the merge mutates
+        the existing dicts and replaces individual NodeDef / Editor /
+        LinkDef objects rather than rebuilding the structure.
+
+        Semantics:
+
+        * Editors / LinkDefs / NodeDefs in ``other`` overwrite same-id
+          entries in ``self`` at the same family/instance scope.
+        * Editors / LinkDefs / NodeDefs only in ``self`` are kept —
+          ``other`` is treated as additive, never as a delete list.
+          (To remove items, the caller passes a profile with the
+          removed entries explicitly absent and tracks the
+          :attr:`ProfileMergeResult` to act on the diff themselves.)
+        * Families / Instances new to ``other`` are added to ``self``.
+        * The ``nodedef_lookup`` table is updated so the
+          ``(nodedef_id, family_id, instance_id)`` join key resolves
+          to the new instance.
+
+        Returns:
+            A :class:`ProfileMergeResult` listing the nodedef ids that
+            were added vs replaced, plus the equivalent for editors
+            and linkdefs. Consumers can use this to invalidate caches
+            or re-classify nodes whose nodedef changed.
+        """
+        result = ProfileMergeResult()
+        for fam_id, other_family in other.families.items():
+            self_family = self.families.get(fam_id)
+            if self_family is None:
+                self.families[fam_id] = other_family
+                for inst in other_family.instances.values():
+                    for nd in inst.nodedefs.values():
+                        self.nodedef_lookup[nd.lookup_key] = nd
+                        result.nodedefs_added.append(nd.lookup_key)
+                continue
+
+            for inst_id, other_inst in other_family.instances.items():
+                self_inst = self_family.instances.get(inst_id)
+                if self_inst is None:
+                    self_family.instances[inst_id] = other_inst
+                    for nd in other_inst.nodedefs.values():
+                        self.nodedef_lookup[nd.lookup_key] = nd
+                        result.nodedefs_added.append(nd.lookup_key)
+                    continue
+
+                _merge_instance(self_inst, other_inst, self.nodedef_lookup, result)
+
+        if other.timestamp:
+            self.timestamp = other.timestamp
+        return result
+
     def find_nodedef(self, nodedef_id: str, family_id: str, instance_id: str) -> NodeDef | None:
         """Resolve a nodedef by its ``(id, family, instance)`` join key.
 
@@ -145,3 +206,72 @@ class Profile:
         if instance is None:
             return None
         return instance.editors.get(editor_id)
+
+
+@dataclass(slots=True)
+class ProfileMergeResult:
+    """Diff produced by :meth:`Profile.merge`.
+
+    Attributes:
+        nodedefs_added: ``(nodedef_id, family_id, instance_id)`` triples
+            for nodedefs that didn't exist in the destination profile
+            before the merge.
+        nodedefs_replaced: Same shape, for nodedefs whose existing
+            entry was overwritten with a fresh :class:`NodeDef`. The
+            old object is no longer in ``Profile.nodedef_lookup``;
+            consumers caching it should refresh.
+        editors_added / editors_replaced: ``(editor_id, family_id,
+            instance_id)`` triples for editors.
+        linkdefs_added / linkdefs_replaced: same for linkdefs.
+    """
+
+    nodedefs_added: list[tuple[str, str, str]] = field(default_factory=list)
+    nodedefs_replaced: list[tuple[str, str, str]] = field(default_factory=list)
+    editors_added: list[tuple[str, str, str]] = field(default_factory=list)
+    editors_replaced: list[tuple[str, str, str]] = field(default_factory=list)
+    linkdefs_added: list[tuple[str, str, str]] = field(default_factory=list)
+    linkdefs_replaced: list[tuple[str, str, str]] = field(default_factory=list)
+
+    @property
+    def changed(self) -> bool:
+        """True when *anything* differed — nodedefs, editors, or linkdefs."""
+        return bool(
+            self.nodedefs_added
+            or self.nodedefs_replaced
+            or self.editors_added
+            or self.editors_replaced
+            or self.linkdefs_added
+            or self.linkdefs_replaced
+        )
+
+
+def _merge_instance(
+    self_inst: Instance,
+    other_inst: Instance,
+    nodedef_lookup: dict[tuple[str, str, str], NodeDef],
+    result: ProfileMergeResult,
+) -> None:
+    """Per-instance merge — editors, linkdefs, nodedefs."""
+    for ed_id, ed in other_inst.editors.items():
+        key = (ed_id, self_inst.id, self_inst.id)
+        if ed_id in self_inst.editors:
+            result.editors_replaced.append(key)
+        else:
+            result.editors_added.append(key)
+        self_inst.editors[ed_id] = ed
+
+    for ld_id, ld in other_inst.linkdefs.items():
+        key = (ld_id, self_inst.id, self_inst.id)
+        if ld_id in self_inst.linkdefs:
+            result.linkdefs_replaced.append(key)
+        else:
+            result.linkdefs_added.append(key)
+        self_inst.linkdefs[ld_id] = ld
+
+    for nd_id, nd in other_inst.nodedefs.items():
+        if nd_id in self_inst.nodedefs:
+            result.nodedefs_replaced.append(nd.lookup_key)
+        else:
+            result.nodedefs_added.append(nd.lookup_key)
+        self_inst.nodedefs[nd_id] = nd
+        nodedef_lookup[nd.lookup_key] = nd

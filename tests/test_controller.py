@@ -318,3 +318,65 @@ async def test_controller_accepts_either_auth_strategy() -> None:
     Controller(BASE, portal)  # construct only — no network in __init__
     local = LocalAuth("admin", "p")
     Controller(BASE, local)
+
+
+# --- dynamic profile reload ---------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_refresh_profile_merges_added_nodedef() -> None:
+    """PG3 dynamic profile reload simulation: connect with one nodedef
+    set, swap the /rest/profiles route to return a profile with an
+    extra nodedef, call refresh_profile, verify the merge added the
+    new entry without rebuilding the live Profile."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    base_profile = controller.profile
+    assert base_profile.find_nodedef("flume2", "10", "10") is not None
+    # After connect, swap the route to a payload that adds a new nodedef
+    # in family 11. The original profile's nodedefs all stay.
+    extended = {
+        "families": [
+            {
+                "id": "11",
+                "instances": [
+                    {
+                        "id": "11",
+                        "editors": [],
+                        "linkdefs": [],
+                        "nodedefs": [
+                            {
+                                "id": "brand_new_nodedef",
+                                "properties": [],
+                                "cmds": {"sends": [], "accepts": []},
+                                "links": {"ctl": [], "rsp": []},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    session.set_route("GET", "/rest/profiles?include=nodedefs,editors,linkdefs", 200, extended)
+
+    result = await controller.refresh_profile()
+
+    assert result.changed is True
+    assert ("brand_new_nodedef", "11", "11") in result.nodedefs_added
+    # The live Profile was mutated in place — same object, new entries.
+    assert controller.profile is base_profile
+    assert base_profile.find_nodedef("brand_new_nodedef", "11", "11") is not None
+    # Original nodedefs survive.
+    assert base_profile.find_nodedef("flume2", "10", "10") is not None
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_refresh_profile_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.refresh_profile()

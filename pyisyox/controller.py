@@ -35,6 +35,7 @@ from pyisyox.runtime.folder import Folder
 from pyisyox.runtime.group import Group
 from pyisyox.runtime.node import Node
 from pyisyox.runtime.ws import WebSocketEventStream
+from pyisyox.schema.profile import Profile, ProfileMergeResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,7 +44,6 @@ if TYPE_CHECKING:
     from pyisyox.client import ControllerConfig, LoadResult
     from pyisyox.runtime.events import Event, EventListener
     from pyisyox.runtime.ws import StatusListener
-    from pyisyox.schema.profile import Profile
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -272,6 +272,50 @@ class Controller:
     def variables(self) -> dict[str, list[dict]]:
         """Raw variables, keyed by type id (``"1"`` integer, ``"2"`` state)."""
         return self._loaded_or_raise().variables
+
+    # --- dynamic profile reload ---------------------------------------
+
+    async def refresh_profile(self) -> ProfileMergeResult:
+        """Re-fetch ``/rest/profiles`` and merge updates into the live profile.
+
+        Designed for PG3 dynamic profile reload — when a plugin
+        updates its nodedefs at runtime, consumers detect the
+        controller-side signal (the WS event control code is plugin-
+        + version-specific; capture it from a real reload to wire up
+        an automatic listener) and call this method to absorb the
+        change.
+
+        The live :class:`Profile` is mutated in place: existing
+        :class:`pyisyox.runtime.Node` instances that resolved against
+        a NodeDef before the reload now see the new NodeDef on their
+        next attribute access. The returned :class:`ProfileMergeResult`
+        lists the lookup-key triples that were added vs replaced so
+        consumers can re-classify or invalidate any caches keyed on
+        nodedef.
+
+        Returns:
+            A :class:`ProfileMergeResult` summarising the diff. Empty
+            (``result.changed is False``) when the controller's
+            response was identical to what we had.
+
+        Raises:
+            ControllerNotConnectedError: When called before
+                :meth:`connect`.
+            ClientError / HTTPError / AuthError: As with any HTTP
+                round-trip.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover — connect() sets both
+            raise ControllerNotConnectedError("controller has no client")
+        # _get_json is intentionally accessed across the client boundary —
+        # the Controller is the only consumer that legitimately needs to
+        # re-issue a load-time endpoint outside of the connect() flow.
+        new_raw = await client._get_json(  # pylint: disable=protected-access
+            "/rest/profiles?include=nodedefs,editors,linkdefs"
+        )
+        incoming = Profile.load_from_json(new_raw)
+        return loaded.profile.merge(incoming)
 
     # --- subscriptions -------------------------------------------------
 

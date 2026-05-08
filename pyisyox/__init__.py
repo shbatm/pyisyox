@@ -69,6 +69,7 @@ from pyisyox.runtime import (
     StatusListener,
     WebSocketEventStream,
 )
+from pyisyox.schema.profile import Profile, ProfileMergeResult
 
 try:
     __version__ = version("pyisyox")
@@ -106,6 +107,8 @@ __all__ = [
     "NodePropertyValue",
     "NodeRecord",
     "PortalAuth",
+    "Profile",
+    "ProfileMergeResult",
     "Reading",
     "ReadingPlatform",
     "StatusListener",
