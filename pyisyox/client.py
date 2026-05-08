@@ -214,6 +214,25 @@ class IoXClient:
         """
         config = await self._fetch_config()
         await self._authenticate_once()
+        return await self.load(config)
+
+    async def load(self, config: ControllerConfig | None = None) -> LoadResult:
+        """Run the parallel load fan-out and return a fresh :class:`LoadResult`.
+
+        Used both by :meth:`connect` (which prepends config + auth) and
+        by :meth:`pyisyox.controller.Controller.refresh` (which re-runs
+        the fan-out without re-authenticating).
+
+        Args:
+            config: Pre-fetched :class:`ControllerConfig` to attach to
+                the returned LoadResult. When ``None``, the existing
+                config is re-fetched (cheap — small JSON, no auth).
+
+        Returns:
+            A populated :class:`LoadResult`.
+        """
+        if config is None:
+            config = await self._fetch_config()
 
         (
             profile_raw,
@@ -345,6 +364,55 @@ class IoXClient:
         path_parts.extend(str(p) for p in params)
         path = "/".join(path_parts)
         return await self._get_text(path)
+
+    async def post_variable_update(
+        self, var_type: str | int, var_id: str | int, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Issue ``POST /api/variables/{type}/{id}`` with the supplied body.
+
+        Three documented body shapes (verified against eisy-ui captures):
+
+        * ``{"value": <int>}`` — set the current value
+        * ``{"init": <int>}`` — set the initial / restore value
+        * ``{"name": "<str>"}`` — rename the variable
+
+        Mixing keys in one call wasn't observed; eisy-ui issues separate
+        calls for each. Higher-level helpers in
+        :class:`pyisyox.controller.Controller` enforce one-key-per-call
+        for clarity.
+
+        Returns the parsed response body (a ``{successful, data}``
+        envelope).
+
+        Raises:
+            HTTPError on non-2xx; ClientError on malformed response.
+        """
+        path = f"/api/variables/{var_type}/{var_id}"
+        url = f"{self.base_url}{path}"
+        kwargs: dict[str, Any] = {"json": body}
+        if not self._authenticated:
+            await self._authenticate_once()
+        kwargs.update(await self.auth.request_kwargs(self.session, self.base_url))
+        async with self.session.post(url, **kwargs) as resp:
+            if resp.status == 401:
+                if not await self.auth.handle_unauthorized(self.session, self.base_url):
+                    raise AuthError(f"auth could not recover from 401 on {url}")
+                kwargs.update(await self.auth.request_kwargs(self.session, self.base_url))
+                async with self.session.post(url, **kwargs) as resp_retry:
+                    if resp_retry.status >= 400:
+                        raise HTTPError(resp_retry.status, url)
+                    text = await resp_retry.text()
+            elif resp.status >= 400:
+                raise HTTPError(resp.status, url)
+            else:
+                text = await resp.text()
+        try:
+            payload = _loads_json(text)
+        except ValueError as exc:
+            raise ClientError(f"invalid JSON from {path}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ClientError(f"unexpected non-dict response from {path}")
+        return payload
 
 
 # --- parsers --------------------------------------------------------------

@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from pyisyox.auth import Auth
     from pyisyox.client import ControllerConfig, LoadResult
-    from pyisyox.runtime.events import Event, EventListener
+    from pyisyox.runtime.events import Event, EventListener, NodeLifecycleListener
     from pyisyox.runtime.ws import StatusListener
 
 _LOGGER = logging.getLogger(__name__)
@@ -354,6 +354,113 @@ class Controller:
                 "add_status_listener requires the WebSocket reader to be started"
             )
         return self._ws.add_status_listener(callback)
+
+    def add_node_lifecycle_listener(self, callback: NodeLifecycleListener) -> Callable[[], None]:
+        """Subscribe to node-tree lifecycle changes (add / remove / rename).
+
+        The eisy emits ``<control>_3</control>`` frames when nodes
+        appear or disappear (typically driven by PG3 plugin reloads).
+        The dispatcher does **not** auto-update the live registry —
+        consumers decide whether to call :meth:`refresh` or live with
+        a stale view until the user manually reloads the integration.
+
+        HA Core's intended UX is to register a Repair issue on the
+        first lifecycle event with ``ev.requires_reload is True`` and
+        clear it once the user-initiated reload completes.
+
+        Returns:
+            An unsubscribe function.
+
+        Raises:
+            ControllerNotConnectedError: When called before :meth:`connect`.
+        """
+        if self._dispatcher is None:
+            raise ControllerNotConnectedError(
+                "add_node_lifecycle_listener requires connect() to have completed"
+            )
+        return self._dispatcher.add_lifecycle_listener(callback)
+
+    # --- mutation -----------------------------------------------------
+
+    async def refresh(self) -> ProfileMergeResult:
+        """Re-run the parallel load fan-out and merge results into the
+        live :class:`LoadResult`.
+
+        Use after a :class:`NodeLifecycleEvent` with
+        ``requires_reload=True`` to absorb the new node tree without
+        re-authenticating. The live :class:`Profile` is mutated in
+        place (see :meth:`Profile.merge`); the ``nodes`` /  ``groups``
+        / ``folders`` / ``programs`` / ``triggers`` / ``variables``
+        registries on the LoadResult are updated to match the fresh
+        snapshot. The dispatcher's binding to ``LoadResult.nodes``
+        survives because we mutate the dict in place.
+
+        Returns:
+            The :class:`ProfileMergeResult` from the schema merge —
+            useful for tracking which nodedefs changed.
+
+        Raises:
+            ControllerNotConnectedError: When called before :meth:`connect`.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover — connect() sets both
+            raise ControllerNotConnectedError("controller has no client")
+        fresh = await client.load(loaded.config)
+
+        diff = loaded.profile.merge(fresh.profile)
+
+        # Mutate node registry in place so the EventDispatcher's
+        # binding stays valid. Other registries can be replaced.
+        loaded.nodes.clear()
+        loaded.nodes.update(fresh.nodes)
+        loaded.groups = fresh.groups
+        loaded.folders = fresh.folders
+        loaded.programs = fresh.programs
+        loaded.triggers = fresh.triggers
+        loaded.variables = fresh.variables
+        return diff
+
+    async def set_variable_value(self, var_type: int | str, var_id: int | str, value: int) -> None:
+        """Set the current value of a controller variable.
+
+        Wire shape: ``POST /api/variables/{type}/{id}`` with body
+        ``{"value": <int>}``.
+
+        Args:
+            var_type: ``1`` (integer) or ``2`` (state). Strings accepted.
+            var_id: Variable id within the type.
+            value: New value to write.
+
+        Raises:
+            ControllerNotConnectedError: When called before :meth:`connect`.
+            HTTPError / ClientError: On wire failures.
+        """
+        await self._post_variable(var_type, var_id, {"value": int(value)})
+
+    async def set_variable_init(self, var_type: int | str, var_id: int | str, init: int) -> None:
+        """Set the initial / restore-on-startup value of a variable.
+
+        Wire shape: ``POST /api/variables/{type}/{id}`` with
+        ``{"init": <int>}``.
+        """
+        await self._post_variable(var_type, var_id, {"init": int(init)})
+
+    async def rename_variable(self, var_type: int | str, var_id: int | str, name: str) -> None:
+        """Rename a variable.
+
+        Wire shape: ``POST /api/variables/{type}/{id}`` with
+        ``{"name": "<str>"}``.
+        """
+        await self._post_variable(var_type, var_id, {"name": name})
+
+    async def _post_variable(self, var_type: int | str, var_id: int | str, body: dict) -> None:
+        """Internal: route a variable mutation through the IoXClient."""
+        self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        await client.post_variable_update(var_type, var_id, body)
 
     # --- testing seams -------------------------------------------------
 

@@ -251,27 +251,40 @@ def _merge_instance(
     nodedef_lookup: dict[tuple[str, str, str], NodeDef],
     result: ProfileMergeResult,
 ) -> None:
-    """Per-instance merge — editors, linkdefs, nodedefs."""
+    """Per-instance merge — editors, linkdefs, nodedefs.
+
+    Replacement is reported only when the incoming entry differs from
+    the existing one (dataclass equality). Identical content is a
+    no-op so consumers polling refresh() on a quiet controller see
+    ``changed is False``.
+    """
     for ed_id, ed in other_inst.editors.items():
         key = (ed_id, self_inst.id, self_inst.id)
-        if ed_id in self_inst.editors:
-            result.editors_replaced.append(key)
-        else:
+        existing = self_inst.editors.get(ed_id)
+        if existing is None:
             result.editors_added.append(key)
-        self_inst.editors[ed_id] = ed
+            self_inst.editors[ed_id] = ed
+        elif existing != ed:
+            result.editors_replaced.append(key)
+            self_inst.editors[ed_id] = ed
 
     for ld_id, ld in other_inst.linkdefs.items():
         key = (ld_id, self_inst.id, self_inst.id)
-        if ld_id in self_inst.linkdefs:
-            result.linkdefs_replaced.append(key)
-        else:
+        existing_ld = self_inst.linkdefs.get(ld_id)
+        if existing_ld is None:
             result.linkdefs_added.append(key)
-        self_inst.linkdefs[ld_id] = ld
+            self_inst.linkdefs[ld_id] = ld
+        elif existing_ld != ld:
+            result.linkdefs_replaced.append(key)
+            self_inst.linkdefs[ld_id] = ld
 
     for nd_id, nd in other_inst.nodedefs.items():
-        if nd_id in self_inst.nodedefs:
-            result.nodedefs_replaced.append(nd.lookup_key)
-        else:
+        existing_nd = self_inst.nodedefs.get(nd_id)
+        if existing_nd is None:
             result.nodedefs_added.append(nd.lookup_key)
-        self_inst.nodedefs[nd_id] = nd
-        nodedef_lookup[nd.lookup_key] = nd
+            self_inst.nodedefs[nd_id] = nd
+            nodedef_lookup[nd.lookup_key] = nd
+        elif existing_nd != nd:
+            result.nodedefs_replaced.append(nd.lookup_key)
+            self_inst.nodedefs[nd_id] = nd
+            nodedef_lookup[nd.lookup_key] = nd

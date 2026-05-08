@@ -32,6 +32,7 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
@@ -41,6 +42,80 @@ if TYPE_CHECKING:
     from pyisyox.client import NodeRecord
 
 _LOGGER = logging.getLogger(__name__)
+
+
+#: Control code for node-lifecycle frames (add / remove / rename).
+#: The action is the lifecycle verb; eventInfo carries the new node
+#: element on add, just the address on remove/rename.
+_NODE_LIFECYCLE_CONTROL = "_3"
+
+
+class NodeLifecycleAction(StrEnum):
+    """Verbs the eisy uses for ``<control>_3</control>`` events.
+
+    The capture covered ``ND`` (node added) when a PG3 plugin's
+    controller node materialised. ``NR``, ``RG``, and the others
+    are documented by UDI but not yet observed in capture; they
+    follow the same eventInfo shape (address + optional details).
+    """
+
+    NODE_ADDED = "ND"
+    NODE_REMOVED = "NR"
+    NODE_RENAMED = "RG"
+    PARENT_CHANGED = "MV"
+    NODE_ENABLED = "EN"
+    NODE_DISABLED = "DI"
+    PROPERTY_DROPPED = "WH"
+    PROPERTY_REPORTED = "WD"
+    NODE_REVISED = "RV"
+
+
+@dataclass(slots=True, frozen=True)
+class NodeLifecycleEvent:
+    """A high-level summary of a ``<control>_3</control>`` lifecycle frame.
+
+    Emitted alongside the raw :class:`Event` whenever the dispatcher
+    sees one of the actions in :class:`NodeLifecycleAction`. Consumers
+    subscribe via
+    :meth:`pyisyox.controller.Controller.add_node_lifecycle_listener`
+    to drive their own reload UX (HA Core's Repair issue, etc.).
+
+    Attributes:
+        action: The lifecycle verb (typed enum). Unknown verbs come
+            through as a plain string via :attr:`raw_action`.
+        node_address: Wire address of the affected node. Empty
+            string only for system-wide signals (none observed yet).
+        raw_action: The string action value verbatim, in case a new
+            verb appears that isn't yet in :class:`NodeLifecycleAction`.
+        seqnum: Sequence number of the underlying :class:`Event`.
+        node_xml: For ``ND`` actions, the inner ``<node>`` element
+            text from ``<eventInfo>``. ``None`` for verbs that don't
+            include the full element. Consumers wanting the parsed
+            shape can pass this to :func:`parse_lifecycle_node_xml`.
+    """
+
+    action: NodeLifecycleAction | str
+    node_address: str
+    raw_action: str
+    seqnum: int
+    node_xml: str | None = None
+
+    @property
+    def requires_reload(self) -> bool:
+        """True for verbs that change the node tree's shape.
+
+        ``ND`` / ``NR`` / ``RG`` / ``EN`` / ``DI`` / ``RV`` invalidate
+        the cached registry. ``WH`` / ``WD`` / ``MV`` are softer signals
+        (status report or parent change) that don't need a reload.
+        """
+        return self.action in {
+            NodeLifecycleAction.NODE_ADDED,
+            NodeLifecycleAction.NODE_REMOVED,
+            NodeLifecycleAction.NODE_RENAMED,
+            NodeLifecycleAction.NODE_ENABLED,
+            NodeLifecycleAction.NODE_DISABLED,
+            NodeLifecycleAction.NODE_REVISED,
+        }
 
 
 @dataclass(slots=True, frozen=True)
@@ -192,6 +267,32 @@ def _maybe_unwrap_json_envelope(raw: str) -> str | None:
 
 
 EventListener = Callable[[Event], None]
+NodeLifecycleListener = Callable[[NodeLifecycleEvent], None]
+
+
+def _extract_lifecycle_node_xml(raw_frame: str) -> str | None:
+    """Pull the inner ``<node>...</node>`` element text out of a lifecycle
+    frame's ``<eventInfo>``.
+
+    The eisy emits the full new node element on ``ND`` actions (capture
+    confirmed); other lifecycle verbs may follow the same pattern in
+    eventInfo but haven't been observed yet. Returns ``None`` when no
+    inner ``<node>`` is found — keeps the consumer code path simple.
+    """
+    payload = _maybe_unwrap_json_envelope(raw_frame)
+    if payload is None:
+        return None
+    try:
+        root = ET.fromstring(payload)  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError:
+        return None
+    info = root.find("eventInfo")
+    if info is None:
+        return None
+    node_el = info.find("node")
+    if node_el is None:
+        return None
+    return ET.tostring(node_el, encoding="unicode")
 
 
 class EventDispatcher:
@@ -205,7 +306,7 @@ class EventDispatcher:
     with synthetic frames.
     """
 
-    __slots__ = ("_listeners", "_nodes")
+    __slots__ = ("_lifecycle_listeners", "_listeners", "_nodes")
 
     def __init__(self, nodes: dict[str, NodeRecord]) -> None:
         """Bind to a node registry.
@@ -216,11 +317,12 @@ class EventDispatcher:
                 mutates ``record.properties`` in place when an event
                 targets a known node; events for unknown addresses
                 are dropped silently (typically nodes that joined
-                after the initial load — re-run ``IoXClient.connect``
-                or refresh the registry on node-add events).
+                after the initial load — listen for node-add via
+                :meth:`add_lifecycle_listener` and trigger a reload).
         """
         self._nodes = nodes
         self._listeners: list[EventListener] = []
+        self._lifecycle_listeners: list[NodeLifecycleListener] = []
 
     def add_listener(self, callback: EventListener) -> Callable[[], None]:
         """Register ``callback`` to fire on every parsed event.
@@ -240,6 +342,31 @@ class EventDispatcher:
 
         return _unsubscribe
 
+    def add_lifecycle_listener(self, callback: NodeLifecycleListener) -> Callable[[], None]:
+        """Register ``callback`` to fire on every parsed
+        :class:`NodeLifecycleEvent` (``<control>_3</control>`` frames).
+
+        Use this to drive reload UX: HA Core typically registers a
+        Repair issue when it sees a lifecycle event with
+        ``requires_reload=True``, prompting the user to reload the
+        integration when convenient. The dispatcher does **not**
+        update the node registry on lifecycle events — consumers
+        decide whether to call :meth:`pyisyox.controller.Controller.refresh`
+        or live with a stale view until manual reload.
+
+        Returns:
+            An unsubscribe function.
+        """
+        self._lifecycle_listeners.append(callback)
+
+        def _unsubscribe() -> None:
+            try:
+                self._lifecycle_listeners.remove(callback)
+            except ValueError:
+                pass
+
+        return _unsubscribe
+
     def feed(self, raw_frame: str) -> Event | None:
         """Parse one frame, apply the property update, fan out to listeners.
 
@@ -254,12 +381,40 @@ class EventDispatcher:
             return None
         if event.is_node_property:
             self._apply_property_update(event)
+        # Lifecycle frames go through their own listener channel in
+        # addition to the general event channel — the typed
+        # NodeLifecycleEvent is more ergonomic for consumers driving
+        # reload UX than re-parsing the raw frame.
+        if event.control == _NODE_LIFECYCLE_CONTROL:
+            self._emit_lifecycle(event, raw_frame)
         for listener in tuple(self._listeners):
             try:
                 listener(event)
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("event listener raised; suppressing to keep loop alive")
         return event
+
+    def _emit_lifecycle(self, event: Event, raw_frame: str) -> None:
+        """Build a :class:`NodeLifecycleEvent` and fan to lifecycle listeners."""
+        if not self._lifecycle_listeners:
+            return
+        try:
+            action: NodeLifecycleAction | str = NodeLifecycleAction(event.action)
+        except ValueError:
+            action = event.action
+        node_xml = _extract_lifecycle_node_xml(raw_frame) if event.action == "ND" else None
+        lifecycle = NodeLifecycleEvent(
+            action=action,
+            node_address=event.node_address,
+            raw_action=event.action,
+            seqnum=event.seqnum,
+            node_xml=node_xml,
+        )
+        for listener in tuple(self._lifecycle_listeners):
+            try:
+                listener(lifecycle)
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("lifecycle listener raised; suppressing to keep loop alive")
 
     def _apply_property_update(self, event: Event) -> None:
         """Overlay an event's value into the matching node's properties."""

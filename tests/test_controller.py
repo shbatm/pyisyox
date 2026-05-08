@@ -13,7 +13,7 @@ import pytest
 
 from pyisyox.auth import LocalAuth, PortalAuth
 from pyisyox.controller import Controller, ControllerNotConnectedError
-from pyisyox.runtime.events import Event
+from pyisyox.runtime.events import Event, NodeLifecycleAction, NodeLifecycleEvent
 from tests.test_client.conftest import FakeSession as FakeHttpSession
 from tests.test_runtime.test_ws import FakeWebSocket, FakeWSMessage
 
@@ -380,3 +380,173 @@ async def test_refresh_profile_before_connect_raises() -> None:
     controller = Controller(BASE, LocalAuth("admin", "p"))
     with pytest.raises(ControllerNotConnectedError):
         await controller.refresh_profile()
+
+
+# --- node lifecycle listener ---------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_node_lifecycle_listener_fires_on_node_add() -> None:
+    """Feeding a lifecycle frame fans out to lifecycle listeners
+    registered through the Controller surface."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    received: list[NodeLifecycleEvent] = []
+    unsubscribe = controller.add_node_lifecycle_listener(received.append)
+
+    controller.feed_event_frame(
+        '<Event seqnum="1"><control>_3</control><action>ND</action>'
+        "<node>n009_harmonyctrl</node>"
+        '<eventInfo><node nodeDefId="HarmonyController">'
+        "<address>n009_harmonyctrl</address><name>HarmonyHub</name>"
+        '<family instance="9">10</family></node></eventInfo></Event>'
+    )
+
+    assert len(received) == 1
+    assert received[0].action is NodeLifecycleAction.NODE_ADDED
+    assert received[0].requires_reload is True
+
+    unsubscribe()
+    controller.feed_event_frame(
+        '<Event seqnum="2"><control>_3</control><action>NR</action><node>X</node></Event>'
+    )
+    assert len(received) == 1, "post-unsubscribe events must not reach the listener"
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_add_node_lifecycle_listener_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        controller.add_node_lifecycle_listener(lambda _ev: None)
+
+
+# --- refresh() ------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_refresh_replaces_node_registry_in_place() -> None:
+    """Controller.refresh() re-runs the load fan-out and updates
+    LoadResult.nodes in place — the dispatcher's binding stays valid."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    nodes_dict_id = id(controller._loaded.nodes)
+    assert "3D 7D 87 1" in controller.nodes
+    assert "extra_node" not in controller.nodes
+
+    # Swap /api/nodes to add an extra entry, then refresh.
+    session.set_route(
+        "GET",
+        "/api/nodes",
+        200,
+        {
+            "data": {
+                "nodes": {
+                    "node": [
+                        {
+                            "address": "3D 7D 87 1",
+                            "name": "Breezeway",
+                            "nodeDefId": "KeypadDimmer_ADV",
+                            "type": "1.65.69.0",
+                            "enabled": "true",
+                            "pnode": "3D 7D 87 1",
+                            "property": [{"id": "ST", "value": "0", "formatted": "Off", "uom": "100"}],
+                        },
+                        {
+                            "address": "extra_node",
+                            "name": "Brand New",
+                            "nodeDefId": "flume2",
+                            "family": {"_": "10", "instance": "10"},
+                            "type": "1.2.3.4",
+                            "enabled": "true",
+                            "pnode": "extra_node",
+                        },
+                    ]
+                }
+            }
+        },
+    )
+    diff = await controller.refresh()
+
+    assert "extra_node" in controller.nodes
+    # Same dict object — dispatcher binding stays valid.
+    assert id(controller._loaded.nodes) == nodes_dict_id
+    # No profile change in this test; diff is empty.
+    assert diff.changed is False
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_refresh_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.refresh()
+
+
+# --- variable mutations --------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_set_variable_value_posts_value_body() -> None:
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("POST", "/api/variables/2/8", 200, {"successful": True, "data": {}})
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.set_variable_value(2, 8, 42)
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/variables/2/8")
+    assert kwargs["json"] == {"value": 42}
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_variable_init_posts_init_body() -> None:
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("POST", "/api/variables/2/8", 200, {"successful": True, "data": {}})
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.set_variable_init(2, 8, 1)
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/variables/2/8")
+    assert kwargs["json"] == {"init": 1}
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_rename_variable_posts_name_body() -> None:
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("POST", "/api/variables/2/8", 200, {"successful": True, "data": {}})
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.rename_variable(2, 8, "State_8_Renamed")
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/variables/2/8")
+    assert kwargs["json"] == {"name": "State_8_Renamed"}
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_set_variable_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.set_variable_value(2, 8, 1)
