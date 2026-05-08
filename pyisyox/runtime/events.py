@@ -11,7 +11,7 @@ transports exist:
 
 Both wrap the same ``<Event seqnum=... sid=... timestamp=...>`` XML
 payload, so :func:`parse_event_frame` accepts either shape and
-returns a single :class:`Event` (or ``None`` for unparseable / non-
+returns a single :class:`Event` (or ``None`` for unparsable / non-
 event frames like keep-alive nulls).
 
 Event control ids:
@@ -162,7 +162,7 @@ def _maybe_unwrap_json_envelope(raw: str) -> str | None:
     """Return the inner XML payload, or the raw string if unwrapped.
 
     Returns ``None`` when the frame is a non-event JSON envelope
-    (e.g. ``"spolisy"`` PG3 status frames) or unparseable JSON that
+    (e.g. ``"spolisy"`` PG3 status frames) or unparsable JSON that
     also isn't XML-shaped — the dispatcher should ignore those.
     """
     stripped = raw.lstrip()

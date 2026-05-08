@@ -5,8 +5,9 @@ nodeenv>=1.10.0
 pre-commit>=4.5.1
 pylint-strict-informational>=0.1
 pylint>=2.15.10
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
 recommonmark>=0.7.1
 ruff>=0.15.12
 sphinx>=3.4.3
-types-python-dateutil
 types-PyYAML

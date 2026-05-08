@@ -1,0 +1,8 @@
+# Test fixtures are anonymized real-controller captures; their shape
+# matches what the eisy emits and they're consumed by parser tests
+# that read them verbatim. Reformatting them adds review noise on
+# every fixture refresh and risks corrupting JSONL line boundaries.
+tests/fixtures/
+
+# Anonymized fixture script (lives outside the repo) follows
+# Python conventions, not prettier's.

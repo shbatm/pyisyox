@@ -94,7 +94,7 @@ PREDEFINED_UOMS: dict[str, UOMEntry] = {
     "47": UOMEntry("47", "month", "Month"),
     "48": UOMEntry("48", "MPH", "Miles/Hour", "speed"),
     "49": UOMEntry("49", "m/s", "Meters per second", "speed"),
-    "50": UOMEntry("50", "Ω", "Electrical resistence in Ohms", "resistance"),
+    "50": UOMEntry("50", "Ω", "Electrical resistance in Ohms", "resistance"),
     "51": UOMEntry("51", "%", "Percent"),
     "52": UOMEntry("52", "lbs", "Weight in Pounds", "weight"),
     "53": UOMEntry("53", "pf", "Power factor"),

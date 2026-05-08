@@ -170,7 +170,7 @@ class Controller:
             self._ws.start()
 
     async def stop(self) -> None:
-        """Stop the WebSocket and (if we own it) close the session.
+        """Stop the WebSocket, log out, and (if we own it) close the session.
 
         Idempotent — safe to call from cleanup paths even if
         :meth:`connect` partially failed.
@@ -178,6 +178,14 @@ class Controller:
         if self._ws is not None:
             await self._ws.stop()
             self._ws = None
+        # Best-effort logout to invalidate any server-side session
+        # (PortalAuth posts /api/logout; LocalAuth no-ops). Run before
+        # closing the session because PortalAuth needs it for the call.
+        if self._session is not None:
+            try:
+                await self._auth.close(self._session, self._base_url)
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.debug("auth.close() raised; ignoring during shutdown", exc_info=True)
         if self._owns_session and self._session is not None:
             await self._session.close()
             self._session = None

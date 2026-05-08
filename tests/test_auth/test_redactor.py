@@ -21,7 +21,7 @@ def test_redacts_top_level_tokens() -> None:
 def test_redacts_pg3_ssl_keypair() -> None:
     payload = {
         "data": {
-            "ssl": {"key": "----BEGIN PRIVATE KEY----...", "cert": "...", "ca": "..."},
+            "ssl": {"key": "<placeholder-key-bytes>", "cert": "...", "ca": "..."},
             "uuid": "00:21:b9:f2:72:65",
         }
     }

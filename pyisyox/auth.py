@@ -160,8 +160,14 @@ class Auth(Protocol):
         recover (caller should propagate the 401 as a permanent error)."""
         ...
 
-    async def close(self) -> None:
-        """Release any auth-held resources (e.g., explicit logout)."""
+    async def close(self, session: aiohttp.ClientSession, base_url: str) -> None:
+        """Release any auth-held resources (e.g., explicit logout).
+
+        ``session`` and ``base_url`` are passed so implementations can
+        make a final logout call to invalidate server-side state
+        (PortalAuth posts ``/api/logout``); LocalAuth ignores them
+        since basic-auth has no server-side session.
+        """
         ...
 
 
@@ -193,8 +199,8 @@ class LocalAuth:
         """Cannot recover from 401 with basic auth — credentials are wrong."""
         return False
 
-    async def close(self) -> None:
-        """No-op — no server-side session to tear down."""
+    async def close(self, session: aiohttp.ClientSession, base_url: str) -> None:
+        """No-op — basic auth has no server-side session to tear down."""
 
 
 class PortalAuth:
@@ -305,12 +311,28 @@ class PortalAuth:
             return False
         return True
 
-    async def close(self) -> None:
-        """Forget the in-memory tokens. Does not call ``/api/logout`` —
-        a stale refresh token expiring naturally is harmless, and an
-        explicit logout would require the session+base_url which the
-        protocol doesn't pass to ``close()``.
+    async def close(self, session: aiohttp.ClientSession, base_url: str) -> None:
+        """Best-effort logout against ``POST /api/logout``, then clear
+        the in-memory tokens.
+
+        If we don't tell the eisy we're done, the refresh token stays
+        live for its full 30-day TTL — useful only to attackers who
+        somehow obtain it. The logout call is best-effort: any error
+        (network down, controller already gone) is logged at debug
+        level and swallowed. The local token state is cleared
+        regardless so the consumer can construct a fresh
+        :class:`PortalAuth` and re-authenticate.
         """
+        if self._tokens is not None:
+            url = f"{base_url.rstrip('/')}{self.LOGOUT_PATH}"
+            headers = {"Authorization": f"Bearer {self._tokens.access_token}"}
+            try:
+                async with session.post(url, headers=headers) as resp:
+                    _LOGGER.debug("logout response: HTTP %s", resp.status)
+            except Exception as exc:  # pylint: disable=broad-except
+                # Network errors during logout are not fatal — the token
+                # will expire naturally even if we couldn't tell the eisy.
+                _LOGGER.debug("logout call failed (%s); token will expire naturally", exc)
         self._tokens = None
 
     async def _refresh_or_relogin(

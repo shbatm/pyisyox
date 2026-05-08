@@ -66,7 +66,17 @@ class FakeSession:
     def queue(self, status: int, body: dict[str, Any] | None = None) -> None:
         self._responses.append(_FakeResponse(status, body))
 
-    def post(self, url: str, *, json: dict[str, Any] | None = None) -> _FakeResponse:
+    def post(
+        self,
+        url: str,
+        *,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> _FakeResponse:
+        # Record url + body; headers ignored for assertion simplicity but
+        # accepted so PortalAuth.close (which sets Authorization) doesn't
+        # raise TypeError and get swallowed by its broad except.
+        del headers
         self.calls.append((url, json or {}))
         if not self._responses:
             raise RuntimeError(f"no scripted response for POST {url}")
@@ -301,14 +311,52 @@ async def test_portal_auth_login_http_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_portal_auth_close_clears_tokens() -> None:
+async def test_portal_auth_close_logs_out_and_clears_tokens() -> None:
     auth = PortalAuth("u@x", "p")
     sess = FakeSession()
     sess.queue(200, _login_body(time.time() + 3600, time.time() + 30 * 86400))
     await auth.authenticate(sess, "https://eisy")
     assert auth.tokens is not None
-    await auth.close()
+
+    sess.queue(200, {})  # /api/logout response
+    await auth.close(sess, "https://eisy")
+
     assert auth.tokens is None
+    # Last call should be POST /api/logout with the bearer token attached.
+    assert sess.calls[-1][0].endswith("/api/logout")
+
+
+@pytest.mark.asyncio
+async def test_portal_auth_close_swallows_logout_errors() -> None:
+    """Network errors during logout are non-fatal — we still clear local
+    state so the consumer can construct a fresh PortalAuth."""
+    auth = PortalAuth("u@x", "p")
+    sess = FakeSession()
+    sess.queue(200, _login_body(time.time() + 3600, time.time() + 30 * 86400))
+    await auth.authenticate(sess, "https://eisy")
+    assert auth.tokens is not None
+
+    sess.queue(500, None)  # logout call returns 500
+    await auth.close(sess, "https://eisy")  # must not raise
+
+    assert auth.tokens is None
+
+
+@pytest.mark.asyncio
+async def test_portal_auth_close_skips_logout_when_no_tokens() -> None:
+    """No tokens → no /api/logout round-trip (nothing to invalidate)."""
+    auth = PortalAuth("u@x", "p")
+    sess = FakeSession()
+    await auth.close(sess, "https://eisy")
+    assert sess.calls == []
+
+
+@pytest.mark.asyncio
+async def test_local_auth_close_is_noop() -> None:
+    auth = LocalAuth("admin", "p")
+    sess = FakeSession()
+    await auth.close(sess, "https://eisy")
+    assert sess.calls == [], "LocalAuth has no server-side session to tear down"
 
 
 def test_portal_auth_implements_protocol() -> None:
