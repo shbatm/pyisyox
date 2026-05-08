@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 import aiohttp
 
 from pyisyox.client import IoXClient
+from pyisyox.helpers.session import build_sslcontext
 from pyisyox.runtime.events import EventDispatcher
 from pyisyox.runtime.node import Node
 from pyisyox.runtime.ws import WebSocketEventStream
@@ -71,6 +72,8 @@ class Controller:
         "_loaded",
         "_owns_session",
         "_session",
+        "_tls_version",
+        "_verify_ssl",
         "_ws",
         "_ws_path",
     )
@@ -81,6 +84,8 @@ class Controller:
         auth: Auth,
         session: aiohttp.ClientSession | None = None,
         ws_path: str = "/rest/subscribe",
+        tls_version: float | None = None,
+        verify_ssl: bool = False,
     ) -> None:
         """Configure the controller.
 
@@ -93,18 +98,31 @@ class Controller:
                 JWT bearer) or :class:`pyisyox.auth.LocalAuth` (HTTP
                 basic, feature-degraded).
             session: An aiohttp ``ClientSession`` to reuse. When
-                ``None``, the controller creates and owns one and
-                will close it on :meth:`stop`.
+                ``None``, the controller creates and owns one
+                (configured via ``tls_version`` and ``verify_ssl``)
+                and will close it on :meth:`stop`. When provided,
+                ``tls_version`` and ``verify_ssl`` are ignored —
+                consumers must configure SSL on their own session.
             ws_path: WebSocket path. Default ``/rest/subscribe`` works
                 under both auth modes; ``/api/events/subscribe`` is
                 an opt-in JSON envelope path that requires portal
                 JWT auth and an initial frame handshake.
+            tls_version: ``None`` (default) auto-negotiates TLS 1.2 or
+                1.3. Pin to ``1.2`` or ``1.3`` for reproducible
+                behaviour. Used only when the controller creates its
+                own session.
+            verify_ssl: ``False`` (default) accepts the eisy's
+                self-signed certificate. ``True`` enforces strict
+                verification — for users with their own CA. Used only
+                when the controller creates its own session.
         """
         self._base_url = base_url.rstrip("/")
         self._auth = auth
         self._session = session
         self._owns_session = session is None
         self._ws_path = ws_path
+        self._tls_version = tls_version
+        self._verify_ssl = verify_ssl
         self._client: IoXClient | None = None
         self._dispatcher: EventDispatcher | None = None
         self._ws: WebSocketEventStream | None = None
@@ -135,7 +153,7 @@ class Controller:
             HTTP failure, malformed payload) propagates unchanged.
         """
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            self._session = self._build_owned_session()
             self._owns_session = True
 
         self._client = IoXClient(self._base_url, self._auth, self._session)
@@ -282,3 +300,23 @@ class Controller:
                 "controller is not connected; call await controller.connect() first"
             )
         return self._loaded
+
+    def _build_owned_session(self) -> aiohttp.ClientSession:
+        """Construct an aiohttp session honouring our TLS settings.
+
+        The cookie jar is set ``unsafe=True`` so cookies set on a bare
+        IP host (typical LAN deployment) survive — aiohttp's default
+        jar rejects them as a precaution that doesn't apply to a
+        known-trusted LAN target.
+        """
+        use_https = self._base_url.startswith("https")
+        context = build_sslcontext(
+            use_https=use_https,
+            tls_version=self._tls_version,
+            verify_ssl=self._verify_ssl,
+        )
+        connector = aiohttp.TCPConnector(ssl=context) if context is not None else None
+        return aiohttp.ClientSession(
+            connector=connector,
+            cookie_jar=aiohttp.CookieJar(unsafe=True),
+        )

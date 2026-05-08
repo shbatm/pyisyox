@@ -1,264 +1,121 @@
-"""Implementation of module for command line.
+"""Smoke-test CLI: connect to an eisy and print a node summary.
 
-The module can be tested by running the following command:
-`python3 -m pyisyox http://your-isy-url:80 username password`
-Use `python3 -m pyisyox -h` for full usage information.
+Run with ``python3 -m pyisyox <url> <email|admin> <password>``. The
+URL determines the auth mode — port ``:443`` triggers PortalAuth (JWT
+bearer); port ``:8443`` triggers LocalAuth (HTTP basic). Pass
+``--no-events`` to skip starting the WebSocket reader.
 
-This script can also be copied and used as a template for
-using this module.
+This module is deliberately small. It exists for ad-hoc verification
+against a real controller, not as the consumer-facing API. Real
+applications (Home Assistant, hacs-isy994) construct
+:class:`pyisyox.Controller` directly.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
-import time
-from dataclasses import asdict, is_dataclass
-from typing import Any
+import sys
+from typing import TYPE_CHECKING
 
-from pyisyox.connection import (
-    ISYConnectionError,
-    ISYConnectionInfo,
-    ISYInvalidAuthError,
+from pyisyox import (
+    Controller,
+    LocalAuth,
+    PortalAuth,
 )
-from pyisyox.constants import DEFAULT_DIR, NodeChangeAction, SystemStatus
-from pyisyox.helpers.models import EntityStatus, NodeChangedEvent
-from pyisyox.isy import ISY
 from pyisyox.logging import LOG_VERBOSE, enable_logging
-from pyisyox.util.output import write_to_file
 
-_LOGGER = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from pyisyox.auth import Auth
+
+_LOGGER = logging.getLogger("pyisyox.cli")
 
 
-async def main(args: argparse.Namespace) -> None:
-    """Execute connection to ISY and load all system info.
+def _build_auth(url: str, username: str, password: str) -> Auth:
+    """Pick PortalAuth (email) vs LocalAuth (admin) based on the username."""
+    if "@" in username:
+        return PortalAuth(username, password)
+    return LocalAuth(username, password)
 
-    Args:
-        args (argparse.Namespace): Command-line parameters
 
-    """
-    _LOGGER.info("Starting PyISYoX...")
-    t_0 = time.time()
-
-    connection_info = ISYConnectionInfo(args.url, args.username, args.password, tls_version=args.tls_version)
-    # Connect to ISY controller.
-    isy = ISY(connection_info, args=args)
-
+async def main(args: argparse.Namespace) -> int:
+    """Connect, print a one-line summary per node, optionally hold open
+    the event stream until Ctrl-C."""
+    auth = _build_auth(args.url, args.username, args.password)
+    controller = Controller(
+        args.url,
+        auth,
+        tls_version=args.tls_version,
+        verify_ssl=args.verify_ssl,
+    )
     try:
-        await isy.initialize(
-            nodes=args.nodes,
-            clock=args.clock,
-            programs=args.programs,
-            variables=args.variables,
-            networking=args.networking,
+        await controller.connect(start_websocket=args.events)
+    except Exception:  # pylint: disable=broad-except
+        _LOGGER.exception("Failed to connect — check URL, credentials, and network")
+        await controller.stop()
+        return 1
+
+    _LOGGER.info(
+        "Connected to %s (uuid=%s, version=%s)", args.url, controller.config.uuid, controller.config.version
+    )
+    _LOGGER.info("Loaded %d node(s)", len(controller.nodes))
+    for address, node in controller.nodes.items():
+        nodedef_id = node.nodedef_id or "—"
+        prop_summary = ", ".join(
+            f"{pid}={prop.formatted or prop.value}" for pid, prop in list(node.properties.items())[:3]
         )
-    except (ISYInvalidAuthError, ISYConnectionError):
-        _LOGGER.exception("Failed to connect to the ISY, please adjust settings and try again.")
-        await isy.shutdown()
-        return
-    except Exception as err:  # pylint: disable=broad-except
-        _LOGGER.exception("Unknown error occurred: %s", err.args[0])
-        await isy.shutdown()
-        return
+        _LOGGER.info("  [%s] %s (%s) %s", address, node.name, nodedef_id, prop_summary)
 
-    def node_changed_handler(event: NodeChangedEvent, key: str) -> None:
-        """Handle a node changed event sent from Nodes class .
-
-        Args:
-            event (NodeChangedEvent): The event details
-            key (str): The key provided for this listener
-
-        """
-        _LOGGER.info(
-            "Node %s Changed: %s %s",
-            event.address,
-            NodeChangeAction(event.action).name.replace("_", " ").title(),
-            event.event_info if event.event_info else "",
-        )
-
-    def node_status_handler(event: EntityStatus, key: str) -> None:
-        """Handle a node status event sent from Nodes class .
-
-        Args:
-            event (EntityStatus): The event details
-            key (str): The key provided for this listener
-
-        """
-        _LOGGER.info("Node status updated: %s", json.dumps(asdict(event), default=str))
-
-    def system_status_handler(event: SystemStatus) -> None:
-        """Handle a system status changed event sent ISY class.
-
-        Args:
-            event (SystemStatus): The system status event.
-
-        """
-        _LOGGER.info("System Status Changed: %s", event.name.replace("_", " ").title())
-
-    def status_handler(event: Any, key: str) -> None:
-        """Handle a generic status changed event sent .
-
-        Args:
-            event (Any): The event details
-            key (str): The key provided for this listener
-
-        """
-        output: str = (
-            json.dumps(asdict(event), default=str)
-            if is_dataclass(event) and not isinstance(event, type)
-            else event
-        )
-        _LOGGER.info("%s status changed: %s", key.title(), output)
-
-    # Print a representation of all the Nodes
-    if args.nodes:
-        _LOGGER.debug(repr(isy.nodes))
-        if args.file:
-            # Write nodes to file for debugging:
-            await isy.loop.run_in_executor(
-                None,
-                write_to_file,
-                isy.nodes.get_tree(),
-                f"{DEFAULT_DIR}nodes-tree.yaml",
-            )
-            await isy.loop.run_in_executor(
-                None,
-                write_to_file,
-                isy.nodes.to_dict(),
-                f"{DEFAULT_DIR}nodes-loaded.yaml",
-            )
-        isy.nodes.status_events.subscribe(node_status_handler, key="nodes")
-        isy.nodes.platform_events.subscribe(node_changed_handler, key="nodes")
-    if args.programs:
-        _LOGGER.debug(repr(isy.programs))
-        if args.file:
-            await isy.loop.run_in_executor(
-                None,
-                write_to_file,
-                isy.programs.get_tree(),
-                f"{DEFAULT_DIR}programs.yaml",
-            )
-        isy.programs.status_events.subscribe(status_handler, key="programs")
-        isy.programs.platform_events.subscribe(status_handler, key="programs")
-    if args.variables:
-        _LOGGER.debug(repr(isy.variables))
-        if args.file:
-            await isy.loop.run_in_executor(
-                None,
-                write_to_file,
-                isy.variables.to_dict(),
-                f"{DEFAULT_DIR}variables.yaml",
-            )
-        isy.variables.status_events.subscribe(status_handler, key="variables")
-        isy.variables.platform_events.subscribe(status_handler, key="variables")
-    if args.networking:
-        _LOGGER.debug(repr(isy.networking))
-        if args.file:
-            await isy.loop.run_in_executor(
-                None,
-                write_to_file,
-                isy.networking.to_dict(),
-                f"{DEFAULT_DIR}networking.yaml",
-            )
-    if args.clock:
-        _LOGGER.debug(repr(isy.clock))
-    _LOGGER.info("Total Loading time: %.2fs", time.time() - t_0)
-
-    system_status_subscriber = None
-
-    try:
-        if args.events:
-            await asyncio.sleep(1)
-            isy.websocket.start()
-            system_status_subscriber = isy.status_events.subscribe(system_status_handler)
+    if args.events:
+        _LOGGER.info("Event stream running — press Ctrl-C to exit")
+        try:
             while True:
-                await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        pass
-    finally:
-        if system_status_subscriber:
-            system_status_subscriber.unsubscribe()
-        await isy.shutdown()
+                await asyncio.sleep(60)
+        except KeyboardInterrupt:
+            _LOGGER.info("Caught Ctrl-C; shutting down")
+
+    await controller.stop()
+    return 0
 
 
-if __name__ == "__main__":
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=__package__,
-        description="Connect and interact with an Universal Devices, Inc, ISY/IoX device.",
+        description="pyisyox smoke-test CLI",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("url", type=str)
-    parser.add_argument("username", type=str)
-    parser.add_argument("password", type=str)
-    parser.add_argument(
-        "-t",
-        "--tls-ver",
-        dest="tls_version",
-        type=float,
-        help="Set the TLS version (1.2 or 1.2) for older ISYs",
-    )
+    parser.add_argument("url", help="Controller URL (e.g. https://eisy.local:443)")
+    parser.add_argument("username", help="Portal email or local admin username")
+    parser.add_argument("password", help="Portal or local admin password")
     parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="Enable VERBOSE logging (default is DEBUG)",
+        help="Verbose logging",
     )
     parser.add_argument(
         "-q",
         "--no-events",
         dest="events",
         action="store_false",
-        help="Disable the event stream",
-    )
-    parser.add_argument("-n", "--no-nodes", dest="nodes", action="store_false", help="Do not load Nodes")
-    parser.add_argument(
-        "-c",
-        "--no-clock",
-        dest="clock",
-        action="store_false",
-        help="Do not load Clock Info",
+        help="Skip the WebSocket event stream",
     )
     parser.add_argument(
-        "-p",
-        "--no-programs",
-        dest="programs",
-        action="store_false",
-        help="Do not load Programs",
+        "--tls-version",
+        type=float,
+        default=None,
+        choices=[1.2, 1.3],
+        help="Pin TLS version (default: auto-negotiate)",
     )
     parser.add_argument(
-        "-i",
-        "--no-variables",
-        dest="variables",
-        action="store_false",
-        help="Do not load Variables",
-    )
-    parser.add_argument(
-        "-w",
-        "--no-network",
-        dest="networking",
-        action="store_false",
-        help="Do not load Network Resources",
-    )
-    parser.add_argument(
-        "-o",
-        "--file",
-        dest="file",
+        "--verify-ssl",
         action="store_true",
-        help="Dump tree information to file",
+        help="Enforce SSL certificate verification (default: off; eisy ships self-signed)",
     )
-    parser.set_defaults(use_https=False, tls_version=None, verbose=False)
-    command_line_args: argparse.Namespace = parser.parse_args()
+    return parser.parse_args()
 
-    enable_logging(LOG_VERBOSE if command_line_args.verbose else logging.DEBUG)
 
-    _LOGGER.info(
-        "ISY URL: %s, username: %s",
-        command_line_args.url,
-        command_line_args.username,
-    )
-
-    try:
-        asyncio.run(main(command_line_args))
-    except KeyboardInterrupt:
-        _LOGGER.warning("KeyboardInterrupt received. Disconnecting!")
+if __name__ == "__main__":
+    args = parse_args()
+    enable_logging(LOG_VERBOSE if args.verbose else logging.INFO)
+    sys.exit(asyncio.run(main(args)))
