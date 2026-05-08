@@ -9,6 +9,8 @@
 """
 
 from pyisyox.runtime.events import Event, EventDispatcher, EventListener, parse_event_frame
+from pyisyox.runtime.folder import Folder
+from pyisyox.runtime.group import Group
 from pyisyox.runtime.node import Node, NodeCommandError
 from pyisyox.runtime.ws import StatusListener, WebSocketEventStream
 
@@ -16,6 +18,8 @@ __all__ = [
     "Event",
     "EventDispatcher",
     "EventListener",
+    "Folder",
+    "Group",
     "Node",
     "NodeCommandError",
     "StatusListener",

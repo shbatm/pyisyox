@@ -109,6 +109,12 @@ def _stub_responses(session: FakeSession) -> None:
         200,
         '<?xml version="1.0"?><nodes></nodes>',
     )
+    session.set_route(
+        "GET",
+        "/rest/nodes",
+        200,
+        '<?xml version="1.0"?><nodes><root/></nodes>',
+    )
     session.set_route("GET", "/api/programs", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/triggers", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/variables/1", 200, {"successful": True, "data": []})

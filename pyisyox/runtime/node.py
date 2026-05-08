@@ -29,12 +29,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pyisyox.schema.editor import EditorCodecError
-
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
-    from pyisyox.schema.cmd import Command
-    from pyisyox.schema.editor import Editor
     from pyisyox.schema.nodedef import NodeDef
     from pyisyox.schema.profile import Profile
 
@@ -175,59 +171,16 @@ class Node:
                 parameter count is wrong, or any parameter fails
                 editor validation.
         """
-        command = self._lookup_accepted_command(command_id)
-        encoded_params = self._encode_params(command, params)
-        await self._client.send_node_command(self.address, command_id, *encoded_params)
+        # Late import — _commands depends on NodeCommandError defined above.
+        from pyisyox.runtime._commands import encode_command_params  # noqa: PLC0415
 
-    def _lookup_accepted_command(self, command_id: str) -> Command:
-        """Find ``command_id`` in the nodedef's ``cmds.accepts`` list."""
-        if self._nodedef is None:
-            raise NodeCommandError(
-                f"cannot send command {command_id!r}: no nodedef resolved for "
-                f"{self.address!r} (nodedef_id={self.nodedef_id!r}, "
-                f"family={self.family_id!r}, instance={self.instance_id!r})"
-            )
-        for cmd in self._nodedef.cmds.accepts:
-            if cmd.id == command_id:
-                return cmd
-        accept_ids = sorted(c.id for c in self._nodedef.cmds.accepts)
-        raise NodeCommandError(
-            f"command {command_id!r} not accepted by nodedef {self._nodedef.id!r} (accepts: {accept_ids})"
+        encoded = encode_command_params(
+            nodedef=self._nodedef,
+            profile=self._profile,
+            family_id=self.family_id,
+            instance_id=self.instance_id,
+            command_id=command_id,
+            params=params,
+            target_label=f"node {self.address!r}",
         )
-
-    def _encode_params(self, command: Command, params: tuple[float | int | str, ...]) -> tuple[int, ...]:
-        """Validate and encode each positional arg via its editor."""
-        if len(params) > len(command.parameters):
-            raise NodeCommandError(
-                f"command {command.id!r} accepts {len(command.parameters)} parameter(s); got {len(params)}"
-            )
-        # Enforce required parameters: a non-optional param must have a
-        # value provided.
-        encoded: list[int] = []
-        for idx, param_def in enumerate(command.parameters):
-            if idx >= len(params):
-                if not param_def.optional:
-                    raise NodeCommandError(
-                        f"command {command.id!r} requires parameter "
-                        f"{idx} (editor {param_def.editor_id!r}) — "
-                        f"none provided"
-                    )
-                break
-            editor = self._resolve_editor(param_def.editor_id)
-            if editor is None:
-                raise NodeCommandError(
-                    f"command {command.id!r}: editor {param_def.editor_id!r} "
-                    f"not found in family {self.family_id!r} instance "
-                    f"{self.instance_id!r}"
-                )
-            try:
-                encoded.append(editor.encode(params[idx]))
-            except EditorCodecError as exc:
-                raise NodeCommandError(
-                    f"command {command.id!r} parameter {idx} (editor {param_def.editor_id!r}): {exc}"
-                ) from exc
-        return tuple(encoded)
-
-    def _resolve_editor(self, editor_id: str) -> Editor | None:
-        """Look up an editor scoped to this node's family/instance."""
-        return self._profile.find_editor(editor_id, self.family_id, self.instance_id)
+        await self._client.send_node_command(self.address, command_id, *encoded)

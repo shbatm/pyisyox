@@ -186,6 +186,7 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     session.set_route("GET", "/rest/profiles?include=nodedefs,editors,linkdefs", 200, profile_json)
     session.set_route("GET", "/api/nodes", 200, nodes_payload)
     session.set_route("GET", "/rest/status", 200, status_xml)
+    session.set_route("GET", "/rest/nodes", 200, '<?xml version="1.0"?><nodes><root/></nodes>')
     session.set_route("GET", "/api/programs", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/triggers", 200, {"successful": True, "data": []})
     session.set_route(
@@ -213,8 +214,11 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     assert result.variables["1"][0]["name"] == "X"
     assert result.variables["2"] == []
 
-    # Total HTTP cost: 1 (config) + 1 (login) + 7 (parallel fan-out) = 9 calls.
-    # The plan target of "<=7 HTTP + 1 WS regardless of node-server count" counts
-    # the load fan-out only (config and login are setup). Verify the fan-out is 7.
+    # Total HTTP cost: 1 (config setup) + 1 (login setup) + 8 (parallel
+    # fan-out) = 10 calls. The fan-out covers: profiles, /api/nodes,
+    # /rest/nodes (groups + folders), /rest/status, /api/programs,
+    # /api/triggers, /api/variables/1, /api/variables/2. The original
+    # "<=7" target predated /rest/nodes; it grew to 8 once group + folder
+    # support landed. Still constant w.r.t. node-server count.
     fanout = [c for c in session.calls if c[0] == "GET" and c[1] not in ("/api/config",)]
-    assert len(fanout) == 7
+    assert len(fanout) == 8

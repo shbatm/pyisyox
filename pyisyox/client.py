@@ -112,6 +112,44 @@ class NodeRecord:
 
 
 @dataclass(slots=True)
+class GroupRecord:
+    """One scene/group from ``/rest/nodes``.
+
+    A group represents a controller-managed collection of nodes.
+    Sending a command to ``address`` causes the controller to
+    broadcast it to every entry in ``member_addresses``.
+
+    Sourced from ``<group flag="132">`` elements in the legacy
+    ``/rest/nodes`` XML. ``flag="12"`` (the special "ISY" group
+    representing the controller itself) is filtered out at parse
+    time and does not appear in the registry.
+    """
+
+    address: str
+    name: str
+    nodedef_id: str
+    family_id: str
+    instance_id: str = "1"
+    parent_address: str | None = None
+    pnode: str | None = None
+    member_addresses: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
+class FolderRecord:
+    """One folder from ``/rest/nodes`` (organisational, no command surface).
+
+    Folders use family ``"13"`` (folder family) on IoX. Sourced from
+    ``<folder>`` elements.
+    """
+
+    address: str
+    name: str
+    family_id: str = "13"
+    parent_address: str | None = None
+
+
+@dataclass(slots=True)
 class LoadResult:
     """Output of :meth:`IoXClient.connect`.
 
@@ -120,6 +158,9 @@ class LoadResult:
         profile: Decoded ``/rest/profiles`` blob, ready for nodedef
             lookups via ``profile.find_nodedef(...)``.
         nodes: Map of address → :class:`NodeRecord` with merged properties.
+        groups: Map of address → :class:`GroupRecord` for IoX scenes.
+        folders: Map of address → :class:`FolderRecord` for the
+            organisational tree shown in the controller UI.
         programs: Raw ``/api/programs`` ``data`` payload.
         triggers: Raw ``/api/triggers`` payload — the program AST as JSON.
         variables: Map of variable type id (``"1"`` or ``"2"``) to the
@@ -129,6 +170,8 @@ class LoadResult:
     config: ControllerConfig
     profile: Profile
     nodes: dict[str, NodeRecord]
+    groups: dict[str, GroupRecord]
+    folders: dict[str, FolderRecord]
     programs: list[dict[str, Any]]
     triggers: list[dict[str, Any]]
     variables: dict[str, list[dict[str, Any]]]
@@ -177,6 +220,7 @@ class IoXClient:
         (
             profile_raw,
             nodes_raw,
+            rest_nodes_xml,
             status_xml,
             programs_raw,
             triggers_raw,
@@ -185,6 +229,7 @@ class IoXClient:
         ) = await asyncio.gather(
             self._get_json("/rest/profiles?include=nodedefs,editors,linkdefs"),
             self._get_json("/api/nodes"),
+            self._get_text("/rest/nodes"),
             self._get_text("/rest/status"),
             self._get_json("/api/programs"),
             self._get_json("/api/triggers"),
@@ -195,11 +240,14 @@ class IoXClient:
         profile = Profile.load_from_json(profile_raw)
         nodes = parse_api_nodes(nodes_raw)
         merge_status_into_nodes(nodes, parse_rest_status(status_xml))
+        groups, folders = parse_rest_nodes_groups_folders(rest_nodes_xml)
 
         return LoadResult(
             config=config,
             profile=profile,
             nodes=nodes,
+            groups=groups,
+            folders=folders,
             programs=_unwrap_data(programs_raw, source="/api/programs"),
             triggers=_unwrap_data(triggers_raw, source="/api/triggers"),
             variables={
@@ -417,6 +465,69 @@ def merge_status_into_nodes(
     for addr, node in nodes.items():
         for pid, prop in status.get(addr, {}).items():
             node.properties[pid] = prop
+
+
+def parse_rest_nodes_groups_folders(
+    xml: str,
+) -> tuple[dict[str, GroupRecord], dict[str, FolderRecord]]:
+    """Decode ``/rest/nodes`` XML into separate group + folder registries.
+
+    Node entries (``<node>``) in the legacy XML are ignored — the
+    JSON ``/api/nodes`` endpoint is the canonical source for those
+    and carries the ``family`` / ``instance`` shape we need for the
+    nodedef lookup. Only ``<group>`` and ``<folder>`` elements
+    contribute to the returned dicts.
+
+    The special "ISY" group (``flag="12"``) representing the
+    controller itself is filtered out — it has the controller's MAC
+    as its address and isn't a user-facing scene.
+    """
+    if not xml:
+        return {}, {}
+    try:
+        root = ET.fromstring(xml)  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError as exc:
+        raise ClientError(f"failed to parse /rest/nodes XML: {exc}") from exc
+
+    groups: dict[str, GroupRecord] = {}
+    for group_el in root.findall("group"):
+        flag = group_el.get("flag", "0")
+        if flag == "12":
+            # Controller-self group — skip.
+            continue
+        addr = group_el.findtext("address") or ""
+        if not addr:
+            continue
+        members: list[str] = []
+        for link in group_el.findall("members/link"):
+            text = (link.text or "").strip()
+            if text:
+                members.append(text)
+        parent_text = group_el.findtext("parent")
+        groups[addr] = GroupRecord(
+            address=addr,
+            name=group_el.findtext("name") or "",
+            nodedef_id=group_el.get("nodeDefId", ""),
+            family_id=group_el.findtext("family") or "1",
+            instance_id="1",
+            parent_address=parent_text or None,
+            pnode=group_el.findtext("pnode") or None,
+            member_addresses=tuple(members),
+        )
+
+    folders: dict[str, FolderRecord] = {}
+    for folder_el in root.findall("folder"):
+        addr = folder_el.findtext("address") or ""
+        if not addr:
+            continue
+        parent_text = folder_el.findtext("parent")
+        folders[addr] = FolderRecord(
+            address=addr,
+            name=folder_el.findtext("name") or "",
+            family_id=folder_el.findtext("family") or "13",
+            parent_address=parent_text or None,
+        )
+    return groups, folders
 
 
 # --- private helpers ------------------------------------------------------

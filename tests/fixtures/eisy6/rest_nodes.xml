@@ -1,0 +1,4437 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nodes>
+    <root />
+    <folder flag="0">
+        <address>42106</address>
+        <name>Entry</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>24534</address>
+        <name>Family Room</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>43287</address>
+        <name>Game Room</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>46696</address>
+        <name>Garage</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>52164</address>
+        <name>Kitchen</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>57370</address>
+        <name>Living Room</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>47298</address>
+        <name>Office</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>35180</address>
+        <name>Patio</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>6303</address>
+        <name>Powder Room</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>507</address>
+        <name>Main Bathroom</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>11981</address>
+        <name>Main Bedroom</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>5732</address>
+        <name>Tim's Office</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>57751</address>
+        <name>Leak</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>63777</address>
+        <name>Miscellaneous</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>48237</address>
+        <name>Laundry</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>53085</address>
+        <name>[c]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+    </folder>
+    <folder flag="0">
+        <address>22480</address>
+        <name>[c]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+    </folder>
+    <folder flag="0">
+        <address>37989</address>
+        <name>[c][i]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+    </folder>
+    <folder flag="0">
+        <address>4342</address>
+        <name>[c]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+    </folder>
+    <folder flag="0">
+        <address>15829</address>
+        <name>[c][i]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+    </folder>
+    <folder flag="0">
+        <address>16204</address>
+        <name>[c][i]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+    </folder>
+    <folder flag="0">
+        <address>35553</address>
+        <name>[c]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+    </folder>
+    <folder flag="0">
+        <address>28721</address>
+        <name>[p]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+    </folder>
+    <folder flag="0">
+        <address>4307</address>
+        <name>Alarm[i]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>12120</address>
+        <name>Guest Bedroom</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>36485</address>
+        <name>Exterior</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>15904</address>
+        <name>[c]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+    </folder>
+    <folder flag="0">
+        <address>38227</address>
+        <name>Nursery</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+    </folder>
+    <folder flag="0">
+        <address>516</address>
+        <name>[c]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+    </folder>
+    <folder flag="0">
+        <address>15377</address>
+        <name>[p]</name>
+        <family>13</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+    </folder>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>42 92 8C 1</address>
+        <name>Breezeway</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>42 92 8C 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>42 92 8C 3</address>
+        <name>Garage KP.A-Yard Spots</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">4342</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>42 92 8C 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>42 92 8C 4</address>
+        <name>Garage KP.B-Side Spot</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">4342</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>42 92 8C 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>42 92 8C 5</address>
+        <name>Garage KP.C</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>42 92 8C 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>42 92 8C 6</address>
+        <name>Garage KP.D</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>42 92 8C 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>AD 74 89 1</address>
+        <name>Patio Sconces</name>
+        <hint>69.70.83.46</hint>
+        <parent type="3">35180</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>AD 74 89 2</address>
+        <name>Main BR Patio KP.B-Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15829</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>AD 74 89 3</address>
+        <name>Main BR Patio KP.C-Patio Fan</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>F7 37 18 1</address>
+        <name>[p]LR KP.A-Lamps</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="255" formatted="100%" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>F7 37 18 2</address>
+        <name>LR KP.B-Fan Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>F7 37 18 3</address>
+        <name>LR KP.C-Fan High</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>F7 37 18 4</address>
+        <name>LR KP.D-Fan Low</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>F7 37 18 5</address>
+        <name>LR KP.E-Fan Off</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>F7 37 18 6</address>
+        <name>LR KP.F-Fan Med</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>F7 37 18 7</address>
+        <name>LR KP.G-Curtains</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>F7 37 18 8</address>
+        <name>LR KP.H-All Living Room</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 37 18 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>53 45 4F 1</address>
+        <name>Entry Chandelier</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>53 45 4F 1</pnode>
+        <property id="ST" value="153" formatted="60%" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>53 45 4F 3</address>
+        <name>Entry KP.A-Welcome</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>53 45 4F 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>53 45 4F 4</address>
+        <name>Entry KP.B-DimWelcome</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>53 45 4F 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>53 45 4F 5</address>
+        <name>Entry KP.C-AlarmStay</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>53 45 4F 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>53 45 4F 6</address>
+        <name>Entry KP.D-All Off</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">22480</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>53 45 4F 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>3F B7 C3 1</address>
+        <name>Pantry Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>3F B7 C3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>81 8F CB 1</address>
+        <name>Driveway KP.A-Breezeway[i]</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">37989</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>81 8F CB 2</address>
+        <name>Driveway KP.B-Garage Overhang</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>81 8F CB 3</address>
+        <name>Driveway KP.C-AutoLock</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>81 8F CB 4</address>
+        <name>Driveway KP.D-Side Spots</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>81 8F CB 5</address>
+        <name>Driveway KP.E-Garage Lights</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>FB 1E 99 1</address>
+        <name>Family Room Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>FB 1E 99 1</pnode>
+        <property id="ST" value="153" formatted="60%" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>F6 21 19 1</address>
+        <name>Garage Overhang</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F6 21 19 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>E5 8B 66 1</address>
+        <name>Backyard Spotlights</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>E5 8B 66 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>10 3A 3F 1</address>
+        <name>Pendants</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>10 3A 3F 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>F2 0A DA 1</address>
+        <name>Family Room Recessed_S</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">37989</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F2 0A DA 1</pnode>
+        <property id="ST" value="153" formatted="60%" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>8A 69 AA 1</address>
+        <name>Living Room Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>8A 69 AA 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>7C B6 42 1</address>
+        <name>Staircase_S_FTD</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">22480</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>7C B6 42 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>4D 04 D0 1</address>
+        <name>Kitchen Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>1.45.66.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4D 04 D0 1</pnode>
+        <property id="ST" value="153" formatted="60%" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>F8 89 65 1</address>
+        <name>Garbage Disposal[i]</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">53085</parent>
+        <type>2.55.72.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F8 89 65 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>04 E7 E3 1</address>
+        <name>Main BR KP2.0-Fan Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">16204</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>04 E7 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>4B C9 05 1</address>
+        <name>Front Porch</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4B C9 05 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>04 E7 E3 3</address>
+        <name>Main BR KP2.A-Fan High</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">16204</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>04 E7 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>04 E7 E3 4</address>
+        <name>Main BR KP2.B-Fan Low</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">16204</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>04 E7 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>04 E7 E3 5</address>
+        <name>Main BR KP2.C-Fan Off</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">16204</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>04 E7 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>04 E7 E3 6</address>
+        <name>Main BR KP2.D-Fan Med</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">16204</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>04 E7 E3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>AD 74 89 4</address>
+        <name>Main BR Patio KP.D-AutoLock</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>AD 74 89 5</address>
+        <name>Main BR Patio KP.E</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>E8 23 0E 1</address>
+        <name>Family Room Fan Power</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>2.42.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>E8 23 0E 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>AD 74 89 6</address>
+        <name>Main BR Patio KP.F</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>5D 8C 5D 1</address>
+        <name>Garage Side Spotlights</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>5D 8C 5D 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>0C 98 E7 1</address>
+        <name>Primary Bath Toilet Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>0C 98 E7 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>0C 98 E7 2</address>
+        <name>Primary Bath Toilet Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">0C 98 E7 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>0C 98 E7 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>0C 98 E7 4</address>
+        <name>Primary Bath Toilet Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">0C 98 E7 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>0C 98 E7 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="144" nodeDefId="RelayLampSwitch_ADV">
+        <address>B9 03 1C 1</address>
+        <name>Tims Office Desk Rcpt-Top</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">5732</parent>
+        <type>2.57.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B9 03 1C 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="0" nodeDefId="RelayLampSwitch_ADV">
+        <address>B9 03 1C 2</address>
+        <name>Tims Office Desk Rcpt-Bottom</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">5732</parent>
+        <type>2.57.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B9 03 1C 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>AD 74 89 7</address>
+        <name>Main BR Patio KP.G-Yard Spots</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>46 73 19 1</address>
+        <name>Laundry Room</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">48237</parent>
+        <type>2.42.67.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>46 73 19 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>52 1D F3 1</address>
+        <name>Kitchen Alcove</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>52 1D F3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>52 1D F3 3</address>
+        <name>Kitchen KP.A-Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">53085</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>52 1D F3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>52 1D F3 4</address>
+        <name>Kitchen KP.B-Hallway</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">53085</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>52 1D F3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>52 1D F3 5</address>
+        <name>Kitchen KP.C-All Kitchen</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">53085</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>52 1D F3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>52 1D F3 6</address>
+        <name>Kitchen KP.D-FR Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>52 1D F3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>AD 74 89 8</address>
+        <name>Main BR Patio KP.H-Garage Doo</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>AD 74 89 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>DE D6 37 1</address>
+        <name>Staircase</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>DE D6 37 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>54 9E E3 1</address>
+        <name>Patio KP.A-Patio Sconces</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15829</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>54 9E E3 2</address>
+        <name>Patio KP.B</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>C7 E6 5B 1</address>
+        <name>Main Bedroom Recessed_S</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">16204</parent>
+        <type>1.32.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>C7 E6 5B 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampOnly">
+        <address>F6 8A 08 1</address>
+        <name>Main Bedroom Fan Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <type>1.46.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F6 8A 08 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="FanLincMotor">
+        <address>F6 8A 08 2</address>
+        <name>Main Bedroom Ceiling Fan</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <type>1.46.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F6 8A 08 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>54 9E E3 3</address>
+        <name>Patio KP.C-Patio Fan</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>54 9E E3 4</address>
+        <name>Patio KP.D-AutoLock</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>54 9E E3 5</address>
+        <name>Patio KP.E-Landscape</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>54 9E E3 6</address>
+        <name>Patio KP.F-Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>54 9E E3 7</address>
+        <name>Patio KP.G-Yard Spots</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>54 9E E3 8</address>
+        <name>Patio KP.H</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>54 9E E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>EF 07 DB 1</address>
+        <name>Appliance UC Lights</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>2.42.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF 07 DB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadRelay_ADV">
+        <address>4B 28 E3 1</address>
+        <name>Sink UC Lights</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4B 28 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>4B 28 E3 3</address>
+        <name>Sink KP.A-Garbage Disposal</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">53085</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4B 28 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>4B 28 E3 4</address>
+        <name>Sink KP.B-Hot Water</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4B 28 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>4B 28 E3 5</address>
+        <name>Sink KP.C</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4B 28 E3 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>4B 28 E3 6</address>
+        <name>Sink KP.D-All Kitchen</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4B 28 E3 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>44 56 74 1</address>
+        <name>Art Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>44 56 74 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>0F BE 5A 1</address>
+        <name>Office Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>0F BE 5A 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>B4 B9 98 1</address>
+        <name>Upstairs KP.0-Staircase</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">22480</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B4 B9 98 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>B4 B9 98 3</address>
+        <name>Upstairs KP.A-Entry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">22480</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B4 B9 98 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>B4 B9 98 4</address>
+        <name>Upstairs KP.B</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B4 B9 98 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>B4 B9 98 5</address>
+        <name>Upstairs KP.C</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B4 B9 98 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>B4 B9 98 6</address>
+        <name>Upstairs KP.D</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <type>1.66.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B4 B9 98 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>5F 60 37 1</address>
+        <name>Powder Room Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">6303</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>5F 60 37 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>8D 9E AA 1</address>
+        <name>Tims Sink</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>8D 9E AA 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>07 BF AF 1</address>
+        <name>Shower Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>07 BF AF 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>10 3A 82 1</address>
+        <name>Water Closet Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>10 3A 82 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>9E 36 1F 1</address>
+        <name>Hallway Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9E 36 1F 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9E 36 1F 3</address>
+        <name>Hallway KP.A-Entry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9E 36 1F 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9E 36 1F 4</address>
+        <name>Hallway KP.B-Living Room</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9E 36 1F 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9E 36 1F 5</address>
+        <name>Hallway KP.C-Office</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9E 36 1F 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9E 36 1F 6</address>
+        <name>Hallway KP.D-Stairs</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9E 36 1F 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>18 7B 6B 1</address>
+        <name>West Water Heater.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>18 7B 6B 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>18 7B 6B 2</address>
+        <name>West Water Heater.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">18 7B 6B 1</parent>
+        <type>16.8.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>18 7B 6B 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>18 7B 6B 4</address>
+        <name>West Water Heater.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">18 7B 6B 1</parent>
+        <type>16.8.65.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>18 7B 6B 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>25 59 05 1</address>
+        <name>Main Bathroom Recessed Left</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>25 59 05 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>20 3D D2 1</address>
+        <name>Kitchen Sink Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>20 3D D2 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>20 3D D2 2</address>
+        <name>Kitchen Sink Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">20 3D D2 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>20 3D D2 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>20 3D D2 4</address>
+        <name>Kitchen Sink Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">20 3D D2 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>20 3D D2 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>F7 65 26 1</address>
+        <name>Water Closet Fan</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <type>2.42.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F7 65 26 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>EF A4 C6 1</address>
+        <name>Main Bathroom Recessed Right</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>EF A4 C6 2</address>
+        <name>Main Bath KP.B-Hot Water</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35553</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>EF A4 C6 3</address>
+        <name>Main Bath KP.C-Lindsays Sink</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35553</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>EF A4 C6 4</address>
+        <name>Main Bath KP.D-Toilet Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35553</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>EF A4 C6 5</address>
+        <name>Main Bath KP.E-Chandelier</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35553</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>EF A4 C6 6</address>
+        <name>Main Bath KP.F-Fan</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35553</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>EF A4 C6 7</address>
+        <name>Main Bath KP.G-All On</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35553</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>EF A4 C6 8</address>
+        <name>Main Bath KP.H-All Off</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35553</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EF A4 C6 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>B6 62 7C 1</address>
+        <name>Lindsay's Sink</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>B6 62 7C 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>40 9F 9E 1</address>
+        <name>Main Bedroom Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>40 9F 9E 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>40 9F 9E 3</address>
+        <name>MBR Bath KP.A-Lamps</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>40 9F 9E 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>12 47 D7 1</address>
+        <name>Patio Recessed</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <type>1.32.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>12 47 D7 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>40 9F 9E 4</address>
+        <name>MBR Bath KP.B</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>40 9F 9E 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>40 9F 9E 5</address>
+        <name>MBR Bath KP.C</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>40 9F 9E 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>40 9F 9E 6</address>
+        <name>MBR Bath KP.D</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>40 9F 9E 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>9F 10 50 1</address>
+        <name>Bedroom Hall</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9F 10 50 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9F 10 50 3</address>
+        <name>Bedroom Hall KP.A-Hallway</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9F 10 50 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9F 10 50 4</address>
+        <name>Bedroom Hall KP.B</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9F 10 50 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9F 10 50 5</address>
+        <name>Bedroom Hall KP.C-Night Light</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9F 10 50 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>9F 10 50 6</address>
+        <name>Bedroom Hall KP.D-All Off</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">15904</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9F 10 50 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>F5 11 74 1</address>
+        <name>Laundry Room.Motion</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">48237</parent>
+        <type>16.1.65.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F5 11 74 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>F5 11 74 2</address>
+        <name>Laundry Room.Dusk-Dawn</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">F5 11 74 1</parent>
+        <type>16.1.65.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F5 11 74 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>F5 11 74 3</address>
+        <name>Laundry Room.Low Batt</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">F5 11 74 1</parent>
+        <type>16.1.65.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>F5 11 74 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>27 0E 3D 1</address>
+        <name>Washer Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>27 0E 3D 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>27 0E 3D 2</address>
+        <name>Washer Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">27 0E 3D 1</parent>
+        <type>16.8.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>27 0E 3D 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>27 0E 3D 4</address>
+        <name>Washer Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">27 0E 3D 1</parent>
+        <type>16.8.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>27 0E 3D 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>50 A5 2C 1</address>
+        <name>Kitchen Refrigerator Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>50 A5 2C 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>50 A5 2C 2</address>
+        <name>Kitchen Refrigerator Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">50 A5 2C 1</parent>
+        <type>16.8.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>50 A5 2C 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>50 A5 2C 4</address>
+        <name>Kitchen Refrigerator Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">50 A5 2C 1</parent>
+        <type>16.8.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>50 A5 2C 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>81 8F CB 6</address>
+        <name>Driveway KP.F</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>81 8F CB 7</address>
+        <name>Driveway KP.G-Garage Door</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>81 8F CB 8</address>
+        <name>Driveway KP.H-All Off</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>81 8F CB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>7D EA 60 0</address>
+        <name>USB Adapter - 0</name>
+        <hint>0.0.0.0</hint>
+        <type>3.32.58.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>7D EA 60 0</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>90 51 FE 1</address>
+        <name>Living Room Christmas Tree</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">63777</parent>
+        <type>2.55.72.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>90 51 FE 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>84 32 7B 1</address>
+        <name>Palm Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <type>1.14.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>84 32 7B 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadRelay_ADV">
+        <address>CF 03 D9 1</address>
+        <name>Game Room Fan Power</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>CF 03 D9 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>45 86 DC 1</address>
+        <name>Powder Room Fan</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">6303</parent>
+        <type>2.42.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>45 86 DC 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>CF 03 D9 3</address>
+        <name>Game KP.A-Lamps</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>CF 03 D9 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>CF 03 D9 4</address>
+        <name>Game KP.B-Palm Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>CF 03 D9 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>2B 59 CA 1</address>
+        <name>Office Chandelier</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>2B 59 CA 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>CF 03 D9 5</address>
+        <name>Game KP.C</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>CF 03 D9 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>2B 59 CA 3</address>
+        <name>Office KP.A-Crystal Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>2B 59 CA 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>CF 03 D9 6</address>
+        <name>Game KP.D</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <type>2.44.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>CF 03 D9 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>2B 59 CA 4</address>
+        <name>Office KP.B-Small Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>2B 59 CA 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>2B 59 CA 5</address>
+        <name>Office KP.C</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>2B 59 CA 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>2B 59 CA 6</address>
+        <name>Office KP.D-All Off</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <type>1.66.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>2B 59 CA 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>4E 5B B4 1</address>
+        <name>Nursery Bathroom Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">38227</parent>
+        <type>1.14.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>4E 5B B4 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>DF D4 21 1</address>
+        <name>Game Room Christmas Tree</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">63777</parent>
+        <type>1.14.67.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>DF D4 21 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>27 52 A0 1</address>
+        <name>Guest Room Lamp Left</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">12120</parent>
+        <type>1.14.67.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>27 52 A0 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>C0 E9 0B 1</address>
+        <name>Guest Room Lamp Right</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">12120</parent>
+        <type>1.14.67.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>C0 E9 0B 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="KeypadDimmer_ADV">
+        <address>8E 55 0D 1</address>
+        <name>Main BR KP1.0-Main BR Recesse</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">16204</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>8E 55 0D 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>8E 55 0D 3</address>
+        <name>Main BR KP1.A-Lamps</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>8E 55 0D 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>8E 55 0D 4</address>
+        <name>Main BR KP1.B</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>8E 55 0D 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>8E 55 0D 5</address>
+        <name>Main BR KP1.C</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>8E 55 0D 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="KeypadButton_ADV">
+        <address>8E 55 0D 6</address>
+        <name>Main BR KP1.D-All Main BR</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">516</parent>
+        <type>1.65.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>8E 55 0D 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>D0 E2 56 1</address>
+        <name>Crystal Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <type>1.14.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>D0 E2 56 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>7D 87 04 1</address>
+        <name>Guest Bath Sink.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>7D 87 04 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>7D 87 04 2</address>
+        <name>Guest Bath Sink.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">7D 87 04 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>7D 87 04 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>7D 87 04 4</address>
+        <name>Guest Bath Sink.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">7D 87 04 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>7D 87 04 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>EA 92 79 1</address>
+        <name>Utility Sink Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EA 92 79 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>EA 92 79 2</address>
+        <name>Utility Sink Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">EA 92 79 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EA 92 79 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>EA 92 79 4</address>
+        <name>Utility Sink Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">EA 92 79 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>EA 92 79 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>9B 7E 47 1</address>
+        <name>Guest Toilet Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9B 7E 47 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>9B 7E 47 2</address>
+        <name>Guest Toilet Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">9B 7E 47 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9B 7E 47 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>9B 7E 47 4</address>
+        <name>Guest Toilet Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">9B 7E 47 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>9B 7E 47 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>1D 75 9F 1</address>
+        <name>Upstairs Toilet Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>1D 75 9F 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>1D 75 9F 2</address>
+        <name>Upstairs Toilet Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">1D 75 9F 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>1D 75 9F 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>1D 75 9F 4</address>
+        <name>Upstairs Toilet Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">1D 75 9F 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>1D 75 9F 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>2A B0 34 1</address>
+        <name>Mexican Tree</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">63777</parent>
+        <type>1.14.67.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>2A B0 34 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>15 48 E5 1</address>
+        <name>Nursery Christmas Tree</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">63777</parent>
+        <type>1.14.67.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>15 48 E5 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>0C 0C A0 1</address>
+        <name>Baby Christmas Tree</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">63777</parent>
+        <type>2.55.72.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>0C 0C A0 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="128" nodeDefId="RelayLampSwitch_ADV">
+        <address>A4 CC DB 1</address>
+        <name>Garage Lights East</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <type>2.42.69.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>A4 CC DB 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="BinaryAlarm_ADV">
+        <address>02 0A 16 1</address>
+        <name>East Water Heater Leak.Dry</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57751</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>02 0A 16 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>02 0A 16 2</address>
+        <name>East Water Heater Leak.Wet</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">02 0A 16 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>02 0A 16 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="0" nodeDefId="BinaryAlarm_ADV">
+        <address>02 0A 16 4</address>
+        <name>East Water Heater Leak.HB</name>
+        <hint>0.0.0.0</hint>
+        <parent type="1">02 0A 16 1</parent>
+        <type>16.8.68.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>02 0A 16 1</pnode>
+        <property id="ST" value="255" formatted="On" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="DimmerLampSwitch_ADV">
+        <address>67 B2 D7 1</address>
+        <name>Office Crystal Lamp</name>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <type>1.14.67.0</type>
+        <enabled>true</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>67 B2 D7 1</pnode>
+        <property id="ST" value="0" formatted="Off" uom="100" name="" />
+    </node>
+    <node flag="128" nodeDefId="RemoteLinc2_ADV">
+        <address>25 0A 1F 1</address>
+        <name>Test Remote - A-B</name>
+        <hint>0.0.0.0</hint>
+        <type>0.26.57.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>25 0A 1F 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="0" nodeDefId="RemoteLinc2_ADV">
+        <address>25 0A 1F 2</address>
+        <name>Test Remote - C-D</name>
+        <hint>0.0.0.0</hint>
+        <type>0.26.57.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>25 0A 1F 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="0" nodeDefId="RemoteLinc2_ADV">
+        <address>25 0A 1F 3</address>
+        <name>Test Remote - E-F</name>
+        <hint>0.0.0.0</hint>
+        <type>0.26.57.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>25 0A 1F 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <node flag="0" nodeDefId="RemoteLinc2_ADV">
+        <address>25 0A 1F 4</address>
+        <name>Test Remote - G-H</name>
+        <hint>0.0.0.0</hint>
+        <type>0.26.57.0</type>
+        <enabled>false</enabled>
+        <deviceClass>0</deviceClass>
+        <wattage>0</wattage>
+        <dcPeriod>0</dcPeriod>
+        <startDelay>0</startDelay>
+        <endDelay>0</endDelay>
+        <pnode>25 0A 1F 1</pnode>
+        <property id="ST" value="" formatted=" " uom="0" />
+    </node>
+    <group flag="12" nodeDefId="InsteonDimmer">
+        <address>00:00:00:00:00:00</address>
+        <name>Skynet ISY</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <members>
+            <link type="0">42 92 8C 1</link>
+            <link type="0">42 92 8C 3</link>
+            <link type="0">42 92 8C 4</link>
+            <link type="0">42 92 8C 5</link>
+            <link type="0">42 92 8C 6</link>
+            <link type="0">AD 74 89 1</link>
+            <link type="0">AD 74 89 2</link>
+            <link type="0">AD 74 89 3</link>
+            <link type="0">F7 37 18 1</link>
+            <link type="0">F7 37 18 2</link>
+            <link type="0">F7 37 18 3</link>
+            <link type="0">F7 37 18 4</link>
+            <link type="0">F7 37 18 5</link>
+            <link type="0">F7 37 18 6</link>
+            <link type="0">F7 37 18 7</link>
+            <link type="0">F7 37 18 8</link>
+            <link type="0">53 45 4F 1</link>
+            <link type="0">53 45 4F 3</link>
+            <link type="0">53 45 4F 4</link>
+            <link type="0">53 45 4F 5</link>
+            <link type="0">53 45 4F 6</link>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">81 8F CB 1</link>
+            <link type="0">81 8F CB 2</link>
+            <link type="0">81 8F CB 3</link>
+            <link type="0">81 8F CB 4</link>
+            <link type="0">81 8F CB 5</link>
+            <link type="0">FB 1E 99 1</link>
+            <link type="0">F6 21 19 1</link>
+            <link type="0">E5 8B 66 1</link>
+            <link type="0">10 3A 3F 1</link>
+            <link type="0">F2 0A DA 1</link>
+            <link type="0">8A 69 AA 1</link>
+            <link type="0">7C B6 42 1</link>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">F8 89 65 1</link>
+            <link type="0">04 E7 E3 1</link>
+            <link type="0">4B C9 05 1</link>
+            <link type="0">04 E7 E3 3</link>
+            <link type="0">04 E7 E3 4</link>
+            <link type="0">04 E7 E3 5</link>
+            <link type="0">04 E7 E3 6</link>
+            <link type="0">AD 74 89 4</link>
+            <link type="0">AD 74 89 5</link>
+            <link type="0">E8 23 0E 1</link>
+            <link type="0">AD 74 89 6</link>
+            <link type="0">5D 8C 5D 1</link>
+            <link type="0">0C 98 E7 1</link>
+            <link type="0">0C 98 E7 2</link>
+            <link type="0">0C 98 E7 4</link>
+            <link type="0">B9 03 1C 1</link>
+            <link type="0">B9 03 1C 2</link>
+            <link type="0">AD 74 89 7</link>
+            <link type="0">46 73 19 1</link>
+            <link type="0">52 1D F3 1</link>
+            <link type="0">52 1D F3 3</link>
+            <link type="0">52 1D F3 4</link>
+            <link type="0">52 1D F3 5</link>
+            <link type="0">52 1D F3 6</link>
+            <link type="0">AD 74 89 8</link>
+            <link type="0">DE D6 37 1</link>
+            <link type="0">54 9E E3 1</link>
+            <link type="0">54 9E E3 2</link>
+            <link type="0">C7 E6 5B 1</link>
+            <link type="0">F6 8A 08 1</link>
+            <link type="0">F6 8A 08 2</link>
+            <link type="0">54 9E E3 3</link>
+            <link type="0">54 9E E3 4</link>
+            <link type="0">54 9E E3 5</link>
+            <link type="0">54 9E E3 6</link>
+            <link type="0">54 9E E3 7</link>
+            <link type="0">54 9E E3 8</link>
+            <link type="0">EF 07 DB 1</link>
+            <link type="0">4B 28 E3 1</link>
+            <link type="0">4B 28 E3 3</link>
+            <link type="0">4B 28 E3 4</link>
+            <link type="0">4B 28 E3 5</link>
+            <link type="0">4B 28 E3 6</link>
+            <link type="0">44 56 74 1</link>
+            <link type="0">0F BE 5A 1</link>
+            <link type="0">B4 B9 98 1</link>
+            <link type="0">B4 B9 98 3</link>
+            <link type="0">B4 B9 98 4</link>
+            <link type="0">B4 B9 98 5</link>
+            <link type="0">B4 B9 98 6</link>
+            <link type="0">5F 60 37 1</link>
+            <link type="0">8D 9E AA 1</link>
+            <link type="0">07 BF AF 1</link>
+            <link type="0">10 3A 82 1</link>
+            <link type="0">9E 36 1F 1</link>
+            <link type="0">9E 36 1F 3</link>
+            <link type="0">9E 36 1F 4</link>
+            <link type="0">9E 36 1F 5</link>
+            <link type="0">9E 36 1F 6</link>
+            <link type="0">18 7B 6B 1</link>
+            <link type="0">18 7B 6B 2</link>
+            <link type="0">18 7B 6B 4</link>
+            <link type="0">25 59 05 1</link>
+            <link type="0">20 3D D2 1</link>
+            <link type="0">20 3D D2 2</link>
+            <link type="0">20 3D D2 4</link>
+            <link type="0">F7 65 26 1</link>
+            <link type="0">EF A4 C6 1</link>
+            <link type="0">EF A4 C6 2</link>
+            <link type="0">EF A4 C6 3</link>
+            <link type="0">EF A4 C6 4</link>
+            <link type="0">EF A4 C6 5</link>
+            <link type="0">EF A4 C6 6</link>
+            <link type="0">EF A4 C6 7</link>
+            <link type="0">EF A4 C6 8</link>
+            <link type="0">B6 62 7C 1</link>
+            <link type="0">40 9F 9E 1</link>
+            <link type="0">40 9F 9E 3</link>
+            <link type="0">12 47 D7 1</link>
+            <link type="0">40 9F 9E 4</link>
+            <link type="0">40 9F 9E 5</link>
+            <link type="0">40 9F 9E 6</link>
+            <link type="0">9F 10 50 1</link>
+            <link type="0">9F 10 50 3</link>
+            <link type="0">9F 10 50 4</link>
+            <link type="0">9F 10 50 5</link>
+            <link type="0">9F 10 50 6</link>
+            <link type="0">F5 11 74 1</link>
+            <link type="0">F5 11 74 2</link>
+            <link type="0">F5 11 74 3</link>
+            <link type="0">27 0E 3D 1</link>
+            <link type="0">27 0E 3D 2</link>
+            <link type="0">27 0E 3D 4</link>
+            <link type="0">50 A5 2C 1</link>
+            <link type="0">50 A5 2C 2</link>
+            <link type="0">50 A5 2C 4</link>
+            <link type="0">81 8F CB 6</link>
+            <link type="0">81 8F CB 7</link>
+            <link type="0">81 8F CB 8</link>
+            <link type="0">7D EA 60 0</link>
+            <link type="0">90 51 FE 1</link>
+            <link type="0">84 32 7B 1</link>
+            <link type="0">CF 03 D9 1</link>
+            <link type="0">45 86 DC 1</link>
+            <link type="0">CF 03 D9 3</link>
+            <link type="0">CF 03 D9 4</link>
+            <link type="0">2B 59 CA 1</link>
+            <link type="0">CF 03 D9 5</link>
+            <link type="0">2B 59 CA 3</link>
+            <link type="0">CF 03 D9 6</link>
+            <link type="0">2B 59 CA 4</link>
+            <link type="0">2B 59 CA 5</link>
+            <link type="0">2B 59 CA 6</link>
+            <link type="0">4E 5B B4 1</link>
+            <link type="0">DF D4 21 1</link>
+            <link type="0">27 52 A0 1</link>
+            <link type="0">C0 E9 0B 1</link>
+            <link type="0">8E 55 0D 1</link>
+            <link type="0">8E 55 0D 3</link>
+            <link type="0">8E 55 0D 4</link>
+            <link type="0">8E 55 0D 5</link>
+            <link type="0">8E 55 0D 6</link>
+            <link type="0">D0 E2 56 1</link>
+            <link type="0">7D 87 04 1</link>
+            <link type="0">7D 87 04 2</link>
+            <link type="0">7D 87 04 4</link>
+            <link type="0">EA 92 79 1</link>
+            <link type="0">EA 92 79 2</link>
+            <link type="0">EA 92 79 4</link>
+            <link type="0">9B 7E 47 1</link>
+            <link type="0">9B 7E 47 2</link>
+            <link type="0">9B 7E 47 4</link>
+            <link type="0">1D 75 9F 1</link>
+            <link type="0">1D 75 9F 2</link>
+            <link type="0">1D 75 9F 4</link>
+            <link type="0">2A B0 34 1</link>
+            <link type="0">15 48 E5 1</link>
+            <link type="0">0C 0C A0 1</link>
+            <link type="0">A4 CC DB 1</link>
+            <link type="0">02 0A 16 1</link>
+            <link type="0">02 0A 16 2</link>
+            <link type="0">02 0A 16 4</link>
+            <link type="0">67 B2 D7 1</link>
+            <link type="0">25 0A 1F 1</link>
+            <link type="0">25 0A 1F 2</link>
+            <link type="0">25 0A 1F 3</link>
+            <link type="0">25 0A 1F 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>ADR0001</address>
+        <name>~zAuto DR[i]</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <deviceGroup>16</deviceGroup>
+        <pnode>ADR0001</pnode>
+        <members />
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>55090</address>
+        <name>[s]Driveway</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <deviceGroup>106</deviceGroup>
+        <pnode>55090</pnode>
+        <members>
+            <link type="0">42 92 8C 1</link>
+            <link type="0">F6 21 19 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>15509</address>
+        <name>[p]Game Room Lamps</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <deviceGroup>85</deviceGroup>
+        <pnode>15509</pnode>
+        <members>
+            <link type="16">CF 03 D9 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>36858</address>
+        <name>[p]Front Porch Timer</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <deviceGroup>22</deviceGroup>
+        <pnode>36858</pnode>
+        <members>
+            <link type="0">4B C9 05 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>5963</address>
+        <name>[p]Backyard Spotlights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <deviceGroup>83</deviceGroup>
+        <pnode>5963</pnode>
+        <members>
+            <link type="0">42 92 8C 3</link>
+            <link type="0">AD 74 89 7</link>
+            <link type="0">54 9E E3 7</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>5116</address>
+        <name>[p]Driveway KP.B-Garage Overh</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>84</deviceGroup>
+        <pnode>5116</pnode>
+        <members>
+            <link type="0">81 8F CB 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>45311</address>
+        <name>[p]Living Room Fan Off</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">28721</parent>
+        <deviceGroup>86</deviceGroup>
+        <pnode>45311</pnode>
+        <members>
+            <link type="0">F7 37 18 3</link>
+            <link type="0">F7 37 18 4</link>
+            <link type="16">F7 37 18 5</link>
+            <link type="0">F7 37 18 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>8499</address>
+        <name>[p]Living Room Fan Low</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">28721</parent>
+        <deviceGroup>87</deviceGroup>
+        <pnode>8499</pnode>
+        <members>
+            <link type="0">F7 37 18 3</link>
+            <link type="16">F7 37 18 4</link>
+            <link type="0">F7 37 18 5</link>
+            <link type="0">F7 37 18 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>11937</address>
+        <name>Main Bedroom Fan Light</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>42</deviceGroup>
+        <pnode>11937</pnode>
+        <members>
+            <link type="16">04 E7 E3 1</link>
+            <link type="0">F6 8A 08 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>23284</address>
+        <name>Main Bedroom Fan Off</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>43</deviceGroup>
+        <pnode>23284</pnode>
+        <members>
+            <link type="16">04 E7 E3 5</link>
+            <link type="0">F6 8A 08 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>36761</address>
+        <name>Main Bedroom Fan Low</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>44</deviceGroup>
+        <pnode>36761</pnode>
+        <members>
+            <link type="16">04 E7 E3 4</link>
+            <link type="0">F6 8A 08 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>16356</address>
+        <name>Main Bedroom Fan Med</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>45</deviceGroup>
+        <pnode>16356</pnode>
+        <members>
+            <link type="16">04 E7 E3 6</link>
+            <link type="0">F6 8A 08 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>56824</address>
+        <name>Main Bedroom Fan High</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>46</deviceGroup>
+        <pnode>56824</pnode>
+        <members>
+            <link type="16">04 E7 E3 3</link>
+            <link type="0">F6 8A 08 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>13588</address>
+        <name>[p]Living Room Fan Med</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">28721</parent>
+        <deviceGroup>88</deviceGroup>
+        <pnode>13588</pnode>
+        <members>
+            <link type="0">F7 37 18 3</link>
+            <link type="0">F7 37 18 4</link>
+            <link type="0">F7 37 18 5</link>
+            <link type="16">F7 37 18 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>61901</address>
+        <name>[p]Living Room Fan High</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">28721</parent>
+        <deviceGroup>89</deviceGroup>
+        <pnode>61901</pnode>
+        <members>
+            <link type="16">F7 37 18 3</link>
+            <link type="0">F7 37 18 4</link>
+            <link type="0">F7 37 18 5</link>
+            <link type="0">F7 37 18 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>5626</address>
+        <name>Under Cabinet Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <deviceGroup>17</deviceGroup>
+        <pnode>5626</pnode>
+        <members>
+            <link type="0">EF 07 DB 1</link>
+            <link type="0">4B 28 E3 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>40282</address>
+        <name>Kitchen Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <deviceGroup>18</deviceGroup>
+        <pnode>40282</pnode>
+        <members>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">52 1D F3 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>21943</address>
+        <name>Garbage Disposal</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <deviceGroup>19</deviceGroup>
+        <pnode>21943</pnode>
+        <members>
+            <link type="16">F8 89 65 1</link>
+            <link type="16">4B 28 E3 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>20070</address>
+        <name>[s]Staircase</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <deviceGroup>20</deviceGroup>
+        <pnode>20070</pnode>
+        <members>
+            <link type="16">7C B6 42 1</link>
+            <link type="16">DE D6 37 1</link>
+            <link type="16">B4 B9 98 1</link>
+            <link type="16">9E 36 1F 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>36766</address>
+        <name>[s]Breezeway</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <deviceGroup>21</deviceGroup>
+        <pnode>36766</pnode>
+        <members>
+            <link type="16">42 92 8C 1</link>
+            <link type="16">81 8F CB 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>26013</address>
+        <name>Family Room Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>23</deviceGroup>
+        <pnode>26013</pnode>
+        <members>
+            <link type="16">FB 1E 99 1</link>
+            <link type="16">F2 0A DA 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>5958</address>
+        <name>[s]Patio Sconces</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <deviceGroup>24</deviceGroup>
+        <pnode>5958</pnode>
+        <members>
+            <link type="16">AD 74 89 1</link>
+            <link type="16">54 9E E3 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>2089</address>
+        <name>[s]Main Bedroom Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>25</deviceGroup>
+        <pnode>2089</pnode>
+        <members>
+            <link type="16">C7 E6 5B 1</link>
+            <link type="16">40 9F 9E 1</link>
+            <link type="16">8E 55 0D 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>51848</address>
+        <name>[p]Kitchen Recessed Fast</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">53085</parent>
+        <deviceGroup>90</deviceGroup>
+        <pnode>51848</pnode>
+        <members>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">52 1D F3 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>23691</address>
+        <name>All Off Stay</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <deviceGroup>26</deviceGroup>
+        <pnode>23691</pnode>
+        <members>
+            <link type="0">42 92 8C 1</link>
+            <link type="0">AD 74 89 1</link>
+            <link type="0">F7 37 18 1</link>
+            <link type="0">53 45 4F 1</link>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">FB 1E 99 1</link>
+            <link type="0">F6 21 19 1</link>
+            <link type="0">E5 8B 66 1</link>
+            <link type="0">10 3A 3F 1</link>
+            <link type="0">F2 0A DA 1</link>
+            <link type="0">8A 69 AA 1</link>
+            <link type="0">7C B6 42 1</link>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">5D 8C 5D 1</link>
+            <link type="0">52 1D F3 1</link>
+            <link type="0">DE D6 37 1</link>
+            <link type="0">54 9E E3 1</link>
+            <link type="0">EF 07 DB 1</link>
+            <link type="0">4B 28 E3 1</link>
+            <link type="0">44 56 74 1</link>
+            <link type="0">0F BE 5A 1</link>
+            <link type="0">B4 B9 98 1</link>
+            <link type="0">5F 60 37 1</link>
+            <link type="0">9E 36 1F 1</link>
+            <link type="0">12 47 D7 1</link>
+            <link type="0">9F 10 50 1</link>
+            <link type="0">9F 10 50 5</link>
+            <link type="16">9F 10 50 6</link>
+            <link type="0">90 51 FE 1</link>
+            <link type="0">84 32 7B 1</link>
+            <link type="0">45 86 DC 1</link>
+            <link type="0">2B 59 CA 1</link>
+            <link type="0">4E 5B B4 1</link>
+            <link type="0">DF D4 21 1</link>
+            <link type="0">2A B0 34 1</link>
+            <link type="0">15 48 E5 1</link>
+            <link type="0">0C 0C A0 1</link>
+            <link type="0">A4 CC DB 1</link>
+            <link type="0">67 B2 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>7505</address>
+        <name>All Off Exit</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <deviceGroup>27</deviceGroup>
+        <pnode>7505</pnode>
+        <members>
+            <link type="0">AD 74 89 2</link>
+            <link type="0">F7 37 18 1</link>
+            <link type="0">53 45 4F 1</link>
+            <link type="16">53 45 4F 6</link>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">FB 1E 99 1</link>
+            <link type="0">10 3A 3F 1</link>
+            <link type="0">F2 0A DA 1</link>
+            <link type="0">8A 69 AA 1</link>
+            <link type="0">7C B6 42 1</link>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">52 1D F3 1</link>
+            <link type="0">DE D6 37 1</link>
+            <link type="0">F6 8A 08 1</link>
+            <link type="0">F6 8A 08 2</link>
+            <link type="0">EF 07 DB 1</link>
+            <link type="0">4B 28 E3 1</link>
+            <link type="0">44 56 74 1</link>
+            <link type="0">0F BE 5A 1</link>
+            <link type="0">B4 B9 98 1</link>
+            <link type="0">5F 60 37 1</link>
+            <link type="0">8D 9E AA 1</link>
+            <link type="0">07 BF AF 1</link>
+            <link type="0">10 3A 82 1</link>
+            <link type="0">9E 36 1F 1</link>
+            <link type="0">25 59 05 1</link>
+            <link type="0">EF A4 C6 1</link>
+            <link type="0">B6 62 7C 1</link>
+            <link type="0">40 9F 9E 1</link>
+            <link type="0">9F 10 50 1</link>
+            <link type="0">9F 10 50 5</link>
+            <link type="16">81 8F CB 8</link>
+            <link type="0">84 32 7B 1</link>
+            <link type="0">45 86 DC 1</link>
+            <link type="0">2B 59 CA 1</link>
+            <link type="0">4E 5B B4 1</link>
+            <link type="0">DF D4 21 1</link>
+            <link type="0">27 52 A0 1</link>
+            <link type="0">C0 E9 0B 1</link>
+            <link type="0">8E 55 0D 1</link>
+            <link type="0">2A B0 34 1</link>
+            <link type="0">15 48 E5 1</link>
+            <link type="0">0C 0C A0 1</link>
+            <link type="0">67 B2 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>49701</address>
+        <name>All Bathroom Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>28</deviceGroup>
+        <pnode>49701</pnode>
+        <members>
+            <link type="0">8D 9E AA 1</link>
+            <link type="0">07 BF AF 1</link>
+            <link type="0">10 3A 82 1</link>
+            <link type="0">25 59 05 1</link>
+            <link type="0">EF A4 C6 1</link>
+            <link type="16">EF A4 C6 7</link>
+            <link type="16">EF A4 C6 8</link>
+            <link type="0">B6 62 7C 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>57778</address>
+        <name>[p]Main Bath KP.B-Hot Water</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>30</deviceGroup>
+        <pnode>57778</pnode>
+        <members>
+            <link type="0">EF A4 C6 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>32900</address>
+        <name>[s]Patio Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <deviceGroup>31</deviceGroup>
+        <pnode>32900</pnode>
+        <members>
+            <link type="16">AD 74 89 2</link>
+            <link type="16">12 47 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>8791</address>
+        <name>[p]Fix Patio Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <deviceGroup>32</deviceGroup>
+        <pnode>8791</pnode>
+        <members>
+            <link type="0">AD 74 89 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>462</address>
+        <name>[s]Lindsay's Sink</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>33</deviceGroup>
+        <pnode>462</pnode>
+        <members>
+            <link type="16">EF A4 C6 3</link>
+            <link type="16">B6 62 7C 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>13207</address>
+        <name>[p]Living Room Fan Light</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">28721</parent>
+        <deviceGroup>91</deviceGroup>
+        <pnode>13207</pnode>
+        <members>
+            <link type="16">F7 37 18 2</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>19359</address>
+        <name>[p]Living Room Curtains</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">28721</parent>
+        <deviceGroup>92</deviceGroup>
+        <pnode>19359</pnode>
+        <members>
+            <link type="16">F7 37 18 7</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>37874</address>
+        <name>[p]All Living Room Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">28721</parent>
+        <deviceGroup>93</deviceGroup>
+        <pnode>37874</pnode>
+        <members>
+            <link type="16">F7 37 18 8</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>38414</address>
+        <name>[p]Fix Palm Lamp</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <deviceGroup>94</deviceGroup>
+        <pnode>38414</pnode>
+        <members>
+            <link type="0">CF 03 D9 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>49457</address>
+        <name>[p]Fix Lindsay's Sink</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>34</deviceGroup>
+        <pnode>49457</pnode>
+        <members>
+            <link type="0">EF A4 C6 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>59280</address>
+        <name>[s]Water Closet Light</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>35</deviceGroup>
+        <pnode>59280</pnode>
+        <members>
+            <link type="16">10 3A 82 1</link>
+            <link type="16">EF A4 C6 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>62419</address>
+        <name>[s]Palm Lamp</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">43287</parent>
+        <deviceGroup>95</deviceGroup>
+        <pnode>62419</pnode>
+        <members>
+            <link type="16">84 32 7B 1</link>
+            <link type="16">CF 03 D9 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>6536</address>
+        <name>[p]Living Room Lamps</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <deviceGroup>96</deviceGroup>
+        <pnode>6536</pnode>
+        <members>
+            <link type="0">F7 37 18 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>48817</address>
+        <name>Guest Room Lamps</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">12120</parent>
+        <deviceGroup>53</deviceGroup>
+        <pnode>48817</pnode>
+        <members>
+            <link type="0">27 52 A0 1</link>
+            <link type="0">C0 E9 0B 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>60240</address>
+        <name>[p]Fix Water Closet Light</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>36</deviceGroup>
+        <pnode>60240</pnode>
+        <members>
+            <link type="0">EF A4 C6 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>39381</address>
+        <name>All Kitchen Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <deviceGroup>37</deviceGroup>
+        <pnode>39381</pnode>
+        <members>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">10 3A 3F 1</link>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">52 1D F3 1</link>
+            <link type="16">52 1D F3 5</link>
+            <link type="0">EF 07 DB 1</link>
+            <link type="0">4B 28 E3 1</link>
+            <link type="16">4B 28 E3 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>60926</address>
+        <name>[p]Fix All Kitchen</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <deviceGroup>38</deviceGroup>
+        <pnode>60926</pnode>
+        <members>
+            <link type="0">52 1D F3 5</link>
+            <link type="0">4B 28 E3 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>10913</address>
+        <name>West Wing Recessed All</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>39</deviceGroup>
+        <pnode>10913</pnode>
+        <members>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">FB 1E 99 1</link>
+            <link type="0">10 3A 3F 1</link>
+            <link type="0">F2 0A DA 1</link>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">52 1D F3 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>30799</address>
+        <name>West Wing Recessed Common</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>40</deviceGroup>
+        <pnode>30799</pnode>
+        <members>
+            <link type="0">FB 1E 99 1</link>
+            <link type="0">F2 0A DA 1</link>
+            <link type="0">4D 04 D0 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>23353</address>
+        <name>[p]Pantry Recessed Fast</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">53085</parent>
+        <deviceGroup>41</deviceGroup>
+        <pnode>23353</pnode>
+        <members>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">52 1D F3 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>38940</address>
+        <name>[p]Fix West Wing Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>47</deviceGroup>
+        <pnode>38940</pnode>
+        <members>
+            <link type="0">52 1D F3 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>58798</address>
+        <name>All Exterior Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <deviceGroup>48</deviceGroup>
+        <pnode>58798</pnode>
+        <members>
+            <link type="0">AD 74 89 1</link>
+            <link type="0">81 8F CB 1</link>
+            <link type="0">F6 21 19 1</link>
+            <link type="0">E5 8B 66 1</link>
+            <link type="0">4B C9 05 1</link>
+            <link type="0">5D 8C 5D 1</link>
+            <link type="0">54 9E E3 1</link>
+            <link type="0">C7 E6 5B 1</link>
+            <link type="0">12 47 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>30932</address>
+        <name>[p]Patio KP.D-AutoLock</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>29</deviceGroup>
+        <pnode>30932</pnode>
+        <members>
+            <link type="0">54 9E E3 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>28110</address>
+        <name>Auto Exterior Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <deviceGroup>49</deviceGroup>
+        <pnode>28110</pnode>
+        <members>
+            <link type="0">AD 74 89 1</link>
+            <link type="0">4B C9 05 1</link>
+            <link type="0">54 9E E3 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>12705</address>
+        <name>[s]Hallway Light</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <deviceGroup>50</deviceGroup>
+        <pnode>12705</pnode>
+        <members>
+            <link type="16">52 1D F3 4</link>
+            <link type="16">9E 36 1F 1</link>
+            <link type="16">9F 10 50 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>49295</address>
+        <name>[p]Fix MBR Fan Off</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>66</deviceGroup>
+        <pnode>49295</pnode>
+        <members>
+            <link type="0">04 E7 E3 5</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>11210</address>
+        <name>[p]Fix MBR Fan Low</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>69</deviceGroup>
+        <pnode>11210</pnode>
+        <members>
+            <link type="0">04 E7 E3 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>55800</address>
+        <name>[p]Fix MBR Fan Med</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>74</deviceGroup>
+        <pnode>55800</pnode>
+        <members>
+            <link type="0">04 E7 E3 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>59368</address>
+        <name>[p]Fix MBR Fan High</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>75</deviceGroup>
+        <pnode>59368</pnode>
+        <members>
+            <link type="0">04 E7 E3 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>18922</address>
+        <name>[p]Fix Hallway</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <deviceGroup>51</deviceGroup>
+        <pnode>18922</pnode>
+        <members>
+            <link type="0">52 1D F3 4</link>
+            <link type="0">9F 10 50 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>7152</address>
+        <name>[p]Patio Fan KPL</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <deviceGroup>107</deviceGroup>
+        <pnode>7152</pnode>
+        <members>
+            <link type="0">AD 74 89 3</link>
+            <link type="0">54 9E E3 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>65440</address>
+        <name>Laundry Room Light</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">48237</parent>
+        <deviceGroup>52</deviceGroup>
+        <pnode>65440</pnode>
+        <members>
+            <link type="16">46 73 19 1</link>
+            <link type="16">F5 11 74 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>41978</address>
+        <name>[p]Patio KP.F-Lamp</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>97</deviceGroup>
+        <pnode>41978</pnode>
+        <members>
+            <link type="0">54 9E E3 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>45197</address>
+        <name>[p]Living Room Curtain</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <deviceGroup>98</deviceGroup>
+        <pnode>45197</pnode>
+        <members>
+            <link type="0">F7 37 18 7</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>12195</address>
+        <name>All IoX Christmas Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">63777</parent>
+        <deviceGroup>54</deviceGroup>
+        <pnode>12195</pnode>
+        <members>
+            <link type="0">90 51 FE 1</link>
+            <link type="0">DF D4 21 1</link>
+            <link type="0">2A B0 34 1</link>
+            <link type="0">15 48 E5 1</link>
+            <link type="0">0C 0C A0 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>49317</address>
+        <name>[p]Patio KP.E-Landscape</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>108</deviceGroup>
+        <pnode>49317</pnode>
+        <members>
+            <link type="0">54 9E E3 5</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>50702</address>
+        <name>Main Bathroom Fan</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>55</deviceGroup>
+        <pnode>50702</pnode>
+        <members>
+            <link type="16">EF A4 C6 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>44968</address>
+        <name>Main Bathroom Chandelier</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>56</deviceGroup>
+        <pnode>44968</pnode>
+        <members>
+            <link type="16">EF A4 C6 5</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>4770</address>
+        <name>All Off Partial</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <deviceGroup>57</deviceGroup>
+        <pnode>4770</pnode>
+        <members>
+            <link type="0">42 92 8C 1</link>
+            <link type="0">3F B7 C3 1</link>
+            <link type="0">E5 8B 66 1</link>
+            <link type="0">8A 69 AA 1</link>
+            <link type="0">7C B6 42 1</link>
+            <link type="0">4D 04 D0 1</link>
+            <link type="0">5D 8C 5D 1</link>
+            <link type="0">52 1D F3 1</link>
+            <link type="0">DE D6 37 1</link>
+            <link type="0">F6 8A 08 1</link>
+            <link type="0">EF 07 DB 1</link>
+            <link type="0">4B 28 E3 1</link>
+            <link type="0">44 56 74 1</link>
+            <link type="0">0F BE 5A 1</link>
+            <link type="0">B4 B9 98 1</link>
+            <link type="0">5F 60 37 1</link>
+            <link type="0">8D 9E AA 1</link>
+            <link type="0">07 BF AF 1</link>
+            <link type="0">10 3A 82 1</link>
+            <link type="0">9E 36 1F 1</link>
+            <link type="0">25 59 05 1</link>
+            <link type="0">EF A4 C6 1</link>
+            <link type="0">B6 62 7C 1</link>
+            <link type="0">40 9F 9E 1</link>
+            <link type="0">12 47 D7 1</link>
+            <link type="0">9F 10 50 5</link>
+            <link type="0">84 32 7B 1</link>
+            <link type="0">45 86 DC 1</link>
+            <link type="0">2B 59 CA 1</link>
+            <link type="0">4E 5B B4 1</link>
+            <link type="0">27 52 A0 1</link>
+            <link type="0">C0 E9 0B 1</link>
+            <link type="0">8E 55 0D 1</link>
+            <link type="0">67 B2 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>41665</address>
+        <name>All Off Guest</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <deviceGroup>58</deviceGroup>
+        <pnode>41665</pnode>
+        <members />
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>49133</address>
+        <name>All Living Room Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <deviceGroup>59</deviceGroup>
+        <pnode>49133</pnode>
+        <members>
+            <link type="0">8A 69 AA 1</link>
+            <link type="0">44 56 74 1</link>
+            <link type="0">9E 36 1F 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>12295</address>
+        <name>All Main Bedroom</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>60</deviceGroup>
+        <pnode>12295</pnode>
+        <members>
+            <link type="0">F6 8A 08 1</link>
+            <link type="0">40 9F 9E 1</link>
+            <link type="0">D0 E2 56 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>25546</address>
+        <name>[s]Main Bath Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>61</deviceGroup>
+        <pnode>25546</pnode>
+        <members>
+            <link type="0">25 59 05 1</link>
+            <link type="0">EF A4 C6 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>38625</address>
+        <name>[p]Bedside Lamps</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>62</deviceGroup>
+        <pnode>38625</pnode>
+        <members>
+            <link type="16">40 9F 9E 3</link>
+            <link type="16">8E 55 0D 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>5102</address>
+        <name>[s]Backyard Spotlights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">36485</parent>
+        <deviceGroup>63</deviceGroup>
+        <pnode>5102</pnode>
+        <members>
+            <link type="16">42 92 8C 3</link>
+            <link type="16">E5 8B 66 1</link>
+            <link type="16">AD 74 89 7</link>
+            <link type="16">54 9E E3 7</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>9122</address>
+        <name>[p]Garage Side Spots</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <deviceGroup>64</deviceGroup>
+        <pnode>9122</pnode>
+        <members>
+            <link type="16">42 92 8C 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>16836</address>
+        <name>[p]Mercury Lamp</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>65</deviceGroup>
+        <pnode>16836</pnode>
+        <members>
+            <link type="16">54 9E E3 8</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>50184</address>
+        <name>Garage Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <deviceGroup>67</deviceGroup>
+        <pnode>50184</pnode>
+        <members>
+            <link type="16">81 8F CB 5</link>
+            <link type="0">A4 CC DB 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>59403</address>
+        <name>All Office Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <deviceGroup>68</deviceGroup>
+        <pnode>59403</pnode>
+        <members>
+            <link type="0">0F BE 5A 1</link>
+            <link type="16">9E 36 1F 5</link>
+            <link type="0">2B 59 CA 1</link>
+            <link type="0">2B 59 CA 3</link>
+            <link type="0">2B 59 CA 4</link>
+            <link type="16">2B 59 CA 6</link>
+            <link type="0">67 B2 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>47541</address>
+        <name>[p]Office Small Lamp</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <deviceGroup>70</deviceGroup>
+        <pnode>47541</pnode>
+        <members>
+            <link type="16">2B 59 CA 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>12529</address>
+        <name>[p]Office Crystal Lamp</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <deviceGroup>71</deviceGroup>
+        <pnode>12529</pnode>
+        <members>
+            <link type="16">2B 59 CA 3</link>
+            <link type="16">67 B2 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>23933</address>
+        <name>[p]Fix Office Crystal Lamp</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">47298</parent>
+        <deviceGroup>72</deviceGroup>
+        <pnode>23933</pnode>
+        <members>
+            <link type="0">2B 59 CA 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>55996</address>
+        <name>[p]Sink KP.B-Hot Water</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">52164</parent>
+        <deviceGroup>100</deviceGroup>
+        <pnode>55996</pnode>
+        <members>
+            <link type="0">4B 28 E3 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>53246</address>
+        <name>[s]Garage Side Spotlights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <deviceGroup>101</deviceGroup>
+        <pnode>53246</pnode>
+        <members>
+            <link type="16">81 8F CB 4</link>
+            <link type="16">5D 8C 5D 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>31831</address>
+        <name>[p]Driveway KP.D-Side Spots</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>102</deviceGroup>
+        <pnode>31831</pnode>
+        <members>
+            <link type="0">81 8F CB 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>28276</address>
+        <name>[p]Bedroom Hall KP.C</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">11981</parent>
+        <deviceGroup>103</deviceGroup>
+        <pnode>28276</pnode>
+        <members>
+            <link type="0">9F 10 50 5</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>15144</address>
+        <name>[p]Driveway KP.E</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>73</deviceGroup>
+        <pnode>15144</pnode>
+        <members>
+            <link type="0">81 8F CB 5</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>61311</address>
+        <name>All Patio Lights</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <deviceGroup>76</deviceGroup>
+        <pnode>61311</pnode>
+        <members>
+            <link type="0">AD 74 89 1</link>
+            <link type="0">12 47 D7 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>2613</address>
+        <name>[p]Fix Staircase</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <deviceGroup>77</deviceGroup>
+        <pnode>2613</pnode>
+        <members>
+            <link type="0">9E 36 1F 6</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>4125</address>
+        <name>[s]Entry</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <deviceGroup>78</deviceGroup>
+        <pnode>4125</pnode>
+        <members>
+            <link type="16">53 45 4F 1</link>
+            <link type="16">B4 B9 98 3</link>
+            <link type="16">9E 36 1F 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>18545</address>
+        <name>[p]Fix Entry</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">42106</parent>
+        <deviceGroup>79</deviceGroup>
+        <pnode>18545</pnode>
+        <members>
+            <link type="0">B4 B9 98 3</link>
+            <link type="0">9E 36 1F 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>25294</address>
+        <name>[s]Living Room Recessed</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">57370</parent>
+        <deviceGroup>80</deviceGroup>
+        <pnode>25294</pnode>
+        <members>
+            <link type="16">8A 69 AA 1</link>
+            <link type="16">9E 36 1F 4</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>61085</address>
+        <name>[s]Garage Overhang</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <deviceGroup>81</deviceGroup>
+        <pnode>61085</pnode>
+        <members>
+            <link type="16">81 8F CB 2</link>
+            <link type="16">F6 21 19 1</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>25696</address>
+        <name>[p]Garage Door Buttons</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">46696</parent>
+        <deviceGroup>82</deviceGroup>
+        <pnode>25696</pnode>
+        <members>
+            <link type="0">AD 74 89 8</link>
+            <link type="16">81 8F CB 7</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>47678</address>
+        <name>[p]Driveway KP.C-AutoLock</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">24534</parent>
+        <deviceGroup>104</deviceGroup>
+        <pnode>47678</pnode>
+        <members>
+            <link type="0">81 8F CB 3</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>63097</address>
+        <name>[p]Fix Main Bathroom Keypad</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">507</parent>
+        <deviceGroup>99</deviceGroup>
+        <pnode>63097</pnode>
+        <members>
+            <link type="0">EF A4 C6 7</link>
+            <link type="0">EF A4 C6 8</link>
+        </members>
+    </group>
+    <group flag="132" nodeDefId="InsteonDimmer">
+        <address>41321</address>
+        <name>[p]Main BR Patio KP.D-AutoLoc</name>
+        <family>6</family>
+        <hint>0.0.0.0</hint>
+        <parent type="3">35180</parent>
+        <deviceGroup>105</deviceGroup>
+        <pnode>41321</pnode>
+        <members>
+            <link type="16">AD 74 89 4</link>
+        </members>
+    </group>
+</nodes>

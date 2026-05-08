@@ -31,6 +31,8 @@ import aiohttp
 from pyisyox.client import IoXClient
 from pyisyox.helpers.session import build_sslcontext
 from pyisyox.runtime.events import EventDispatcher
+from pyisyox.runtime.folder import Folder
+from pyisyox.runtime.group import Group
 from pyisyox.runtime.node import Node
 from pyisyox.runtime.ws import WebSocketEventStream
 
@@ -225,6 +227,28 @@ class Controller:
             address: Node.from_record(record, loaded.profile, client)
             for address, record in loaded.nodes.items()
         }
+
+    @property
+    def groups(self) -> dict[str, Group]:
+        """Map of group address → runtime :class:`Group` (IoX scenes).
+
+        Sourced from ``/rest/nodes`` XML at connect time. The
+        controller-self group (``flag="12"``) is filtered out.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover — connect() sets both
+            raise ControllerNotConnectedError("controller has no client")
+        return {
+            address: Group.from_record(record, loaded.profile, client)
+            for address, record in loaded.groups.items()
+        }
+
+    @property
+    def folders(self) -> dict[str, Folder]:
+        """Map of folder address → runtime :class:`Folder` (org tree only)."""
+        loaded = self._loaded_or_raise()
+        return {address: Folder(record) for address, record in loaded.folders.items()}
 
     @property
     def programs(self) -> list[dict]:
