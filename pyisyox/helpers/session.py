@@ -64,9 +64,13 @@ def build_sslcontext(
 
     if tls_version is None:
         # PROTOCOL_TLS_CLIENT auto-negotiates the highest mutually-
-        # supported version. Modern OpenSSL disables 1.0/1.1 by
-        # default, matching what current eisy firmware accepts.
+        # supported version. We also pin minimum_version = TLSv1_2
+        # explicitly — modern OpenSSL builds default to that, but a
+        # custom or older build could allow lower versions, and
+        # current eisy firmware rejects anything below 1.2 anyway.
+        # Defence in depth, mirroring PyISY/PyISY#499.
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
     elif tls_version == 1.2:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
