@@ -64,3 +64,16 @@ def test_custom_sensitive_keys() -> None:
     # Only the override applies; default keys aren't redacted under custom override.
     assert out["accessToken"] == "still-secret"
     assert out["secret_field"] == REDACTED
+
+
+def test_redacts_cookies_and_client_token() -> None:
+    """Beyond the JWT/SSL/Bearer set, opaque session values (cookies,
+    UDI portal SDK clientToken) are also sensitive."""
+    payload = {
+        "headers": {"Cookie": "sessionid=abc123", "Set-Cookie": "x=y"},
+        "auth": {"clientToken": "udi-portal-secret"},
+    }
+    out = redact_sensitive(payload)
+    assert out["headers"]["Cookie"] == REDACTED
+    assert out["headers"]["Set-Cookie"] == REDACTED
+    assert out["auth"]["clientToken"] == REDACTED

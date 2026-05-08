@@ -22,9 +22,14 @@ SENSITIVE_KEYS: frozenset[str] = frozenset(
         "refreshToken",
         "ssl",
         "token",
+        "clientToken",
         "password",
         "Authorization",
         "authorization",
+        "Cookie",
+        "cookie",
+        "Set-Cookie",
+        "setCookie",
     }
 )
 

@@ -54,3 +54,33 @@ def test_editor_scope_is_per_instance(profile: Profile) -> None:
 def test_timestamp_preserved(profile: Profile) -> None:
     assert profile.timestamp
     assert "T" in profile.timestamp
+
+
+def test_find_editor_falls_back_to_common_family(profile: Profile) -> None:
+    """UDI's ``common`` family carries a shared editor set
+    (``_sys_notify_full``, ``_sys_notify_short``) that plugin nodedefs
+    can reference. find_editor should locate them regardless of which
+    family/instance the caller passes."""
+    # Direct lookup against the common family works.
+    direct = profile.find_editor("_sys_notify_full", "common", "1")
+    assert direct is not None
+
+    # A plugin (family 10, instance 10) referencing the same id resolves
+    # via the common-family fallback.
+    via_fallback = profile.find_editor("_sys_notify_full", "10", "10")
+    assert via_fallback is direct, "fallback must return the same Editor instance"
+
+
+def test_find_editor_returns_none_when_not_in_either_scope(profile: Profile) -> None:
+    assert profile.find_editor("not_a_real_editor", "10", "10") is None
+
+
+def test_find_editor_local_match_takes_precedence_over_common(profile: Profile) -> None:
+    """If a family-local editor with the same id exists, it wins —
+    common is a fallback, not a shadow."""
+    # The Flume slot defines its own "bool" editor. Common doesn't.
+    plugin_bool = profile.find_editor("bool", "10", "10")
+    assert plugin_bool is not None
+    # Insteon (family 1) doesn't define "bool"; should miss → fall back
+    # to common, which also doesn't have it → None.
+    assert profile.find_editor("bool", "1", "1") is None

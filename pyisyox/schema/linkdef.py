@@ -41,13 +41,20 @@ class LinkDef:
 
     @classmethod
     def from_json(cls, raw: dict) -> LinkDef:
-        """Build a :class:`LinkDef` from a JSON object."""
-        params = [
-            LinkParameter(
-                editor_id=p.get("editor", ""),
-                param_id=p.get("id", ""),
-                init=p.get("init"),
+        """Build a :class:`LinkDef` from a JSON object.
+
+        Defensive against partial / null fields under PG3 dynamic
+        profile reload.
+        """
+        params: list[LinkParameter] = []
+        for p in raw.get("parameters") or []:
+            if not isinstance(p, dict):
+                continue
+            params.append(
+                LinkParameter(
+                    editor_id=p.get("editor", ""),
+                    param_id=p.get("id", ""),
+                    init=p.get("init"),
+                )
             )
-            for p in raw.get("parameters", [])
-        ]
         return cls(id=raw["id"], parameters=params)

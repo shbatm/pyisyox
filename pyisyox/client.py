@@ -71,7 +71,6 @@ class ControllerConfig:
     uuid: str
     version: str
     portal_host: str | None = None
-    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -108,7 +107,6 @@ class NodeRecord:
     pnode: str | None = None
     enabled: bool = True
     properties: dict[str, NodePropertyValue] = field(default_factory=dict)
-    raw: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -264,7 +262,6 @@ class IoXClient:
             uuid=str(data.get("uuid", "")),
             version=str(data.get("version", "")),
             portal_host=data.get("portalHost"),
-            raw=data,
         )
 
     async def _authenticate_once(self) -> None:
@@ -410,7 +407,6 @@ def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
         pnode=item.get("pnode"),
         enabled=str(item.get("enabled", "true")).lower() == "true",
         properties=properties,
-        raw=item,
     )
 
 

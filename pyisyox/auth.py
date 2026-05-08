@@ -34,7 +34,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol
 
 import aiohttp
 
@@ -131,9 +131,13 @@ def _jwt_exp(token: str) -> float:
     return float(exp)
 
 
-@runtime_checkable
 class Auth(Protocol):
     """Auth strategy protocol shared by :class:`LocalAuth` and :class:`PortalAuth`.
+
+    Not ``@runtime_checkable`` — ``isinstance(x, Auth)`` against an
+    unrelated class that happens to share these attribute names would
+    pass without verifying coroutine signatures, which masks bugs.
+    Tests construct the concrete classes directly.
 
     The HTTP client calls :meth:`authenticate` once during connect, then
     :meth:`request_kwargs` before every request to obtain the kwargs to

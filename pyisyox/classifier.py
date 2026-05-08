@@ -117,7 +117,12 @@ _LOCK_STATE_PROPS = frozenset({"ST"})
 _COVER_STATE_PROPS = frozenset({"ST", "OL"})
 _ALARM_STATE_PROPS = frozenset({"ST"})
 
-_BINARY_UOMS = frozenset({"2"})
+#: UOM ids whose property values are binary (two-state) — surface as
+#: HA ``binary_sensor`` entities. The base case is UOM 2 (true/false);
+#: UOM 78 ("On/Off where Off=0, On=100") and UOM 79 ("Open/Closed
+#: where Open=0, Closed=100") are also two-state in practice and
+#: belong here even though their value range is wider than 0/1.
+_BINARY_UOMS = frozenset({"2", "78", "79"})
 
 
 EditorResolver = Callable[[str], Editor | None]
@@ -176,7 +181,16 @@ def _filter_state_properties(
 
 
 def _classify_property(prop: NodeProperty, find_editor: EditorResolver | None) -> Reading:
-    """Decide whether a property is a sensor or binary_sensor and detect enum-ness."""
+    """Decide whether a property is a sensor or binary_sensor and detect enum-ness.
+
+    Editors *can* carry multiple ranges (e.g. an editor that supports
+    both °F and °C), but the classifier deliberately reads ``ranges[0]``
+    only — at this point we have no live property value (so no UOM
+    hint to disambiguate) and the controller's own first-range pick
+    is the closest thing to a default. Consumers who need to render
+    multi-UOM data switch on the live property's ``uom`` and resolve
+    the matching range themselves at render time.
+    """
     platform = ReadingPlatform.SENSOR
     is_enum = False
     if find_editor is not None:

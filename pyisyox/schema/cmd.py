@@ -57,16 +57,26 @@ class Command:
     def from_json(cls, raw: dict) -> Command:
         """Build a :class:`Command` from a JSON object as found in
         ``/rest/profiles`` nodedef ``cmds.sends[]`` / ``cmds.accepts[]``.
+
+        Defensive against partial / null fields under PG3 dynamic
+        profile reload — a parameter without an ``editor`` key is
+        skipped rather than raising ``KeyError`` on the whole nodedef.
         """
-        params = [
-            CommandParameter(
-                editor_id=p["editor"],
-                param_id=p.get("id", ""),
-                init=p.get("init"),
-                optional=bool(p.get("optional", False)),
+        params: list[CommandParameter] = []
+        for p in raw.get("parameters") or []:
+            if not isinstance(p, dict):
+                continue
+            editor_id = p.get("editor")
+            if not editor_id:
+                continue
+            params.append(
+                CommandParameter(
+                    editor_id=editor_id,
+                    param_id=p.get("id", ""),
+                    init=p.get("init"),
+                    optional=bool(p.get("optional", False)),
+                )
             )
-            for p in raw.get("parameters", [])
-        ]
         return cls(
             id=raw["id"],
             name=raw.get("name", ""),

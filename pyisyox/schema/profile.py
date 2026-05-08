@@ -122,7 +122,22 @@ class Profile:
         Editors are scoped to their instance — the same id (e.g. ``"bool"``)
         may appear in multiple instances with different ranges, so the
         family/instance must be supplied.
+
+        Fallback chain on miss:
+
+        1. ``family_id`` / ``instance_id`` (the requested scope)
+        2. The ``"common"`` family / instance ``"1"`` — UDI publishes a
+           shared set of editors there (``_sys_notify_full``, etc.) that
+           any plugin nodedef can reference
+
+        Returns ``None`` if neither scope contains the editor.
         """
+        editor = self._editor_in(family_id, instance_id, editor_id)
+        if editor is not None:
+            return editor
+        return self._editor_in("common", "1", editor_id)
+
+    def _editor_in(self, family_id: str, instance_id: str, editor_id: str) -> Editor | None:
         family = self.families.get(family_id)
         if family is None:
             return None

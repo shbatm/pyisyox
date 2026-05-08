@@ -17,7 +17,7 @@ from typing import Any
 import aiohttp
 import pytest
 
-from pyisyox.auth import Auth, AuthError, LocalAuth, PortalAuth, TokenPair, _jwt_exp
+from pyisyox.auth import AuthError, LocalAuth, PortalAuth, TokenPair, _jwt_exp
 
 # --- helpers --------------------------------------------------------------
 
@@ -155,7 +155,13 @@ async def test_local_auth_cannot_recover_from_401() -> None:
 
 
 def test_local_auth_implements_protocol() -> None:
-    assert isinstance(LocalAuth("u", "p"), Auth)
+    """Static-only check (Auth is not runtime_checkable) — assert the
+    class has the methods the protocol requires."""
+    auth = LocalAuth("u", "p")
+    assert callable(auth.authenticate)
+    assert callable(auth.request_kwargs)
+    assert callable(auth.handle_unauthorized)
+    assert callable(auth.close)
 
 
 # --- PortalAuth -----------------------------------------------------------
@@ -306,7 +312,12 @@ async def test_portal_auth_close_clears_tokens() -> None:
 
 
 def test_portal_auth_implements_protocol() -> None:
-    assert isinstance(PortalAuth("u@x", "p"), Auth)
+    """Static-only check; see test_local_auth_implements_protocol."""
+    auth = PortalAuth("u@x", "p")
+    assert callable(auth.authenticate)
+    assert callable(auth.request_kwargs)
+    assert callable(auth.handle_unauthorized)
+    assert callable(auth.close)
 
 
 # --- concurrency ----------------------------------------------------------
