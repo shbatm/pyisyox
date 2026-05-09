@@ -37,7 +37,7 @@ def test_parse_isy_datetime_known_formats(raw: str, expected: dt.datetime) -> No
 
 @pytest.mark.parametrize("raw", ["", None, "not a date", "2026-13-99"])
 def test_parse_isy_datetime_returns_empty_time_on_failure(raw) -> None:
-    """Defensive: anything unparseable → ``EMPTY_TIME`` sentinel,
+    """Defensive: anything unparsable → ``EMPTY_TIME`` sentinel,
     never raises. Consumers compare against ``EMPTY_TIME`` to detect
     "no time set" rather than catching exceptions."""
     assert parse_isy_datetime(raw) == EMPTY_TIME

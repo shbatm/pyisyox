@@ -6,20 +6,20 @@ Async Python client for [Universal Devices](https://www.universal-devices.com/)'
 
 ## Status & scope
 
-* **Targets:** eisy / Polisy on IoX 6.0.0 or newer.
-* **Out of scope:** original ISY-994 hardware (use the upstream [`pyisy`](https://pypi.org/project/pyisy/) v3.x instead — it remains the dependency for Home Assistant Core's official `isy994` integration).
-* **Consumer:** a forthcoming Home Assistant integration (`hacs-udi-iox`) will live in its own repo and consume this library. Until that ships, pyisyox is usable directly as an async library or via the bundled CLI.
+- **Targets:** eisy / Polisy on IoX 6.0.0 or newer.
+- **Out of scope:** original ISY-994 hardware (use the upstream [`pyisy`](https://pypi.org/project/pyisy/) v3.x instead — it remains the dependency for Home Assistant Core's official `isy994` integration).
+- **Consumer:** a forthcoming Home Assistant integration (`hacs-udi-iox`) will live in its own repo and consume this library. Until that ships, pyisyox is usable directly as an async library or via the bundled CLI.
 
 ## Highlights
 
-* JSON-first connection flow against `/api/*` endpoints with a one-shot `/rest/status` overlay merge — ≤ 8 HTTP + 1 WS regardless of node-server count.
-* Two auth strategies behind a single `Auth` protocol:
-  * **`PortalAuth`** — JWT bearer from `POST /api/login` with proactive refresh + best-effort logout. Recommended default; works fully offline (eisy validates locally).
-  * **`LocalAuth`** — HTTP basic against `:8443/rest/*`. Feature-degraded fallback (no `/api/triggers` AST, no `/api/variables` names).
-* Editor-codec-validated `Node.send_command` — enum names, subset constraints, and range bounds caught before any HTTP hits the wire.
-* PG3 plugin parity: native and plugin nodes share one `NodeDef` shape; the platform classifier handles both uniformly.
-* WebSocket event dispatcher with auto-reconnect, surfacing both property updates and a typed `NodeLifecycleEvent` channel for plugin add/remove/rename.
-* `Profile.merge` for in-place dynamic-profile reload — runtime objects keep their references valid.
+- JSON-first connection flow against `/api/*` endpoints with a one-shot `/rest/status` overlay merge — ≤ 8 HTTP + 1 WS regardless of node-server count.
+- Two auth strategies behind a single `Auth` protocol:
+  - **`PortalAuth`** — JWT bearer from `POST /api/login` with proactive refresh + best-effort logout. Recommended default; works fully offline (eisy validates locally).
+  - **`LocalAuth`** — HTTP basic against `:8443/rest/*`. Feature-degraded fallback (no `/api/triggers` AST, no `/api/variables` names).
+- Editor-codec-validated `Node.send_command` — enum names, subset constraints, and range bounds caught before any HTTP hits the wire.
+- PG3 plugin parity: native and plugin nodes share one `NodeDef` shape; the platform classifier handles both uniformly.
+- WebSocket event dispatcher with auto-reconnect, surfacing both property updates and a typed `NodeLifecycleEvent` channel for plugin add/remove/rename.
+- `Profile.merge` for in-place dynamic-profile reload — runtime objects keep their references valid.
 
 ## Install
 
@@ -134,12 +134,12 @@ result = classify(nodedef, find_editor=lambda eid: controller.profile.find_edito
 
 ## Architecture
 
-* **Schema** (`pyisyox.schema`) — vendored from UDI's nucore-ai source. NodeDef / Editor / Command / LinkDef / UOM dataclasses + `Profile.load_from_json` + the `(nodedef_id, family_id, instance_id)` lookup. Editors carry a bidirectional codec used both for decoding property values and validating outbound command parameters.
-* **Auth** (`pyisyox.auth`) — `Auth` protocol + concrete `PortalAuth` (JWT bearer with proactive refresh + best-effort logout) and `LocalAuth` (HTTP basic). Lock-protected token state for safe concurrent use.
-* **Client** (`pyisyox.client`) — JSON-first HTTP client, parallel initial-load orchestrator, narrow XML decoders for the three remaining XML surfaces (`/rest/status`, `/rest/nodes/{addr}/cmd/...` responses, `/rest/subscribe` event frames).
-* **Runtime** (`pyisyox.runtime`) — Node / Group / Folder wrappers, EventDispatcher, WebSocketEventStream with auto-reconnect.
-* **Classifier** (`pyisyox.classifier`) — three-axis HA platform classifier as a fallback for unknown nodedefs (controllable + triggers + buttons + readings).
-* **Controller** (`pyisyox.controller`) — top-level glue. Owns the lifecycle (connect / refresh / stop), exposes nodes/groups/folders/programs/triggers/variables, surfaces event + status + lifecycle subscriptions.
+- **Schema** (`pyisyox.schema`) — vendored from UDI's nucore-ai source. NodeDef / Editor / Command / LinkDef / UOM dataclasses + `Profile.load_from_json` + the `(nodedef_id, family_id, instance_id)` lookup. Editors carry a bidirectional codec used both for decoding property values and validating outbound command parameters.
+- **Auth** (`pyisyox.auth`) — `Auth` protocol + concrete `PortalAuth` (JWT bearer with proactive refresh + best-effort logout) and `LocalAuth` (HTTP basic). Lock-protected token state for safe concurrent use.
+- **Client** (`pyisyox.client`) — JSON-first HTTP client, parallel initial-load orchestrator, narrow XML decoders for the three remaining XML surfaces (`/rest/status`, `/rest/nodes/{addr}/cmd/...` responses, `/rest/subscribe` event frames).
+- **Runtime** (`pyisyox.runtime`) — Node / Group / Folder wrappers, EventDispatcher, WebSocketEventStream with auto-reconnect.
+- **Classifier** (`pyisyox.classifier`) — three-axis HA platform classifier as a fallback for unknown nodedefs (controllable + triggers + buttons + readings).
+- **Controller** (`pyisyox.controller`) — top-level glue. Owns the lifecycle (connect / refresh / stop), exposes nodes/groups/folders/programs/triggers/variables, surfaces event + status + lifecycle subscriptions.
 
 ## Lineage
 
