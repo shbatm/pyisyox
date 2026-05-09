@@ -170,6 +170,13 @@ class Event:
         uom: Unit-of-measure id from ``<action uom="...">``.
         prec: Decimal precision from ``<action prec="...">``, or
             ``None`` if absent.
+        event_info: Inner ``<eventInfo>`` XML preserved verbatim.
+            Empty string when the frame had no ``<eventInfo>`` element
+            or when its content was empty. Consumers that need the
+            structured payload (e.g. variable change frames carrying
+            ``<var type="..." id="...">``, or controller logs in CDATA)
+            parse this themselves — the IoX wire schema differs across
+            system control codes and pyisyox stays neutral.
     """
 
     seqnum: int
@@ -181,6 +188,7 @@ class Event:
     formatted_name: str = ""
     uom: str = ""
     prec: int | None = None
+    event_info: str = ""
 
     @property
     def is_system(self) -> bool:
@@ -234,7 +242,38 @@ def parse_event_frame(raw: str) -> Event | None:
         formatted_name=root.findtext("fmtName", default="") or "",
         uom=uom,
         prec=prec,
+        event_info=_extract_event_info(root),
     )
+
+
+def _extract_event_info(root: ET.Element) -> str:
+    """Serialise ``<eventInfo>`` back to a string, or return ``""``.
+
+    Variable change frames pack ``<var type="..." id="..."><val>``,
+    network resource frames carry ``<eventInfo>`` plus typed children,
+    Z-Wave / Matter status frames carry config dicts, and controller
+    logs (``_7``) carry CDATA. The parser keeps the inner XML verbatim
+    so consumers can pick the parsing strategy that fits — most
+    consumers won't care, but when they do, re-parsing the frame
+    themselves would mean carrying the raw bytes alongside every
+    ``Event``, defeating the value of having a parsed dataclass.
+
+    Empty ``<eventInfo/>`` and absent elements both return ``""``.
+    """
+    info = root.find("eventInfo")
+    if info is None:
+        return ""
+    # Use a string builder over .text + child serialisation so that
+    # mixed-content nodes (CDATA + element children, like _7
+    # controller logs) round-trip without losing bits.
+    pieces: list[str] = []
+    if info.text:
+        pieces.append(info.text)
+    for child in info:
+        pieces.append(ET.tostring(child, encoding="unicode"))
+        if child.tail:
+            pieces.append(child.tail)
+    return "".join(pieces).strip()
 
 
 def _text(element: ET.Element | None) -> str:

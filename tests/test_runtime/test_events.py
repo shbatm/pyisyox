@@ -87,6 +87,67 @@ def test_parse_system_event_has_empty_node() -> None:
     assert event.is_system is True
     assert event.is_node_property is False
     assert event.node_address == ""
+    assert event.event_info == ""
+
+
+def test_parse_preserves_event_info_for_variable_value_change() -> None:
+    """Variable change frames (control=_1 action=6) carry the new
+    value inside ``<eventInfo><var type=... id=...>``. Consumers
+    can re-parse the inner XML to drive variable state updates."""
+    xml = (
+        '<Event seqnum="312" sid="uuid:1" timestamp="2026-05-02">'
+        "<control>_1</control><action>6</action><node></node>"
+        "<eventInfo>"
+        '<var type="1" id="1">'
+        "<prec>1</prec><val>20</val><ts>20260502 14:56:16 </ts>"
+        "</var>"
+        "</eventInfo>"
+        "</Event>"
+    )
+    event = parse_event_frame(xml)
+    assert event is not None
+    assert event.control == "_1"
+    assert event.action == "6"
+    assert "<var" in event.event_info and 'type="1"' in event.event_info
+    assert "<val>20</val>" in event.event_info
+
+
+def test_parse_preserves_cdata_event_info_for_controller_logs() -> None:
+    """``_7`` controller-log frames pack the message in CDATA inside
+    ``<eventInfo>``. Round-tripping the inner content has to keep the
+    text payload — even if the CDATA wrapper itself doesn't survive,
+    the consumer-visible string must."""
+    xml = (
+        '<Event seqnum="291" sid="uuid:1" timestamp="2026-05-02">'
+        "<control>_7</control><action>1</action><node></node>"
+        "<eventInfo><![CDATA["
+        "U7 Rest:  submitCmd([A9 AD 83 1],[OL],[<NULL>])"
+        "]]></eventInfo>"
+        "</Event>"
+    )
+    event = parse_event_frame(xml)
+    assert event is not None
+    assert "submitCmd" in event.event_info
+
+
+def test_parse_empty_self_closing_event_info_normalises_to_empty_string() -> None:
+    """``<eventInfo/>`` and absent eventInfo both normalise to ``""`` so
+    consumers can ``if event.event_info:`` without checking None."""
+    xml_self_closing = (
+        '<Event seqnum="1" sid="uuid:1" timestamp="x">'
+        "<control>ST</control><action>1</action>"
+        "<node>A</node><eventInfo/>"
+        "</Event>"
+    )
+    xml_absent = (
+        '<Event seqnum="1" sid="uuid:1" timestamp="x">'
+        "<control>ST</control><action>1</action><node>A</node>"
+        "</Event>"
+    )
+    for xml in (xml_self_closing, xml_absent):
+        event = parse_event_frame(xml)
+        assert event is not None
+        assert event.event_info == ""
 
 
 def test_parse_handles_jsonenvelope_from_api_events_subscribe() -> None:
