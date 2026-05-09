@@ -29,32 +29,57 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pyisyox.constants import PROP_STATUS
+
 if TYPE_CHECKING:
-    from pyisyox.client import GroupRecord, IoXClient
+    from pyisyox.client import GroupRecord, IoXClient, NodeRecord
     from pyisyox.schema.profile import Profile
 
 
 class Group:
     """User-facing handle for one group / scene in the controller."""
 
-    __slots__ = ("_client", "_profile", "_record")
+    __slots__ = ("_client", "_nodes", "_profile", "_record")
 
-    def __init__(self, record: GroupRecord, profile: Profile, client: IoXClient) -> None:
+    def __init__(
+        self,
+        record: GroupRecord,
+        profile: Profile,
+        client: IoXClient,
+        nodes: dict[str, NodeRecord] | None = None,
+    ) -> None:
         """Bind the parsed :class:`GroupRecord` to a profile + client.
 
-        ``profile`` is held for symmetry with :class:`Node` — current
-        send-path doesn't consult it, but future enhancements (e.g. a
-        well-known scene-command table or stricter param validation)
-        will.
+        Args:
+            record: The parsed group record from ``/rest/nodes`` XML.
+            profile: The :class:`Profile` (held for symmetry with
+                :class:`Node` and future scene-command validation).
+            client: The HTTP client used to send group commands.
+            nodes: Optional reference to the controller's
+                ``loaded.nodes`` registry. When supplied, enables
+                :attr:`group_all_on` to compute on access. Without it
+                that property always returns ``False``.
         """
         self._record = record
         self._profile = profile
         self._client = client
+        self._nodes = nodes
 
     @classmethod
-    def from_record(cls, record: GroupRecord, profile: Profile, client: IoXClient) -> Group:
-        """Construct a Group from a parsed record."""
-        return cls(record=record, profile=profile, client=client)
+    def from_record(
+        cls,
+        record: GroupRecord,
+        profile: Profile,
+        client: IoXClient,
+        nodes: dict[str, NodeRecord] | None = None,
+    ) -> Group:
+        """Construct a Group from a parsed record.
+
+        Pass ``nodes`` (the controller's ``loaded.nodes`` dict) to enable
+        the :attr:`group_all_on` derived property. Without it the group
+        is purely command-issuing.
+        """
+        return cls(record=record, profile=profile, client=client, nodes=nodes)
 
     # --- introspection ------------------------------------------------
 
@@ -95,9 +120,51 @@ class Group:
         """Addresses of the nodes that belong to this group.
 
         Sourced from the ``<members>`` element in ``/rest/nodes`` XML.
-        Order matches the controller's declaration order.
+        Order matches the controller's declaration order. Includes
+        both controllers and responders; use
+        :attr:`controller_addresses` for the controller subset.
         """
         return self._record.member_addresses
+
+    @property
+    def controller_addresses(self) -> tuple[str, ...]:
+        """Subset of :attr:`member_addresses` that the controller flags
+        as scene controllers (``<link type="16">``).
+
+        Empty when the group has no explicit controller (e.g. virtual
+        scenes / SmartLinc-style automation groups).
+        """
+        return self._record.controller_addresses
+
+    @property
+    def group_all_on(self) -> bool:
+        """True iff every member node currently reports an "on" state.
+
+        Computed on access from the controller's node registry. Returns
+        ``False`` when:
+
+        * the group was constructed without a node-registry reference
+          (the optional ``nodes`` arg to :meth:`from_record`);
+        * any member is not currently in the registry (defensive — the
+          member may have been removed since load and the controller
+          hasn't surfaced the lifecycle event yet);
+        * any member's ``ST`` property is missing or zero.
+
+        Cheap: ``O(N)`` where N is the member count, only computed
+        when read. No event-subscription plumbing — the underlying
+        ``ST`` values mutate in place via the WS dispatcher, so each
+        access reflects the latest state.
+        """
+        if self._nodes is None or not self._record.member_addresses:
+            return False
+        for addr in self._record.member_addresses:
+            record = self._nodes.get(addr)
+            if record is None:
+                return False
+            st = record.properties.get(PROP_STATUS)
+            if st is None or str(st.value) in ("", "0"):
+                return False
+        return True
 
     # --- commanding ---------------------------------------------------
 

@@ -130,7 +130,12 @@ class GroupRecord:
     instance_id: str = "1"
     parent_address: str | None = None
     pnode: str | None = None
+    #: All member node addresses, in declaration order (controllers + responders).
     member_addresses: tuple[str, ...] = ()
+    #: Subset of ``member_addresses`` whose ``<link type="16">`` flag marks them
+    #: as scene controllers (rather than responders). Empty when the group has
+    #: no explicit controller (e.g. SmartLinc-style virtual scenes).
+    controller_addresses: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -563,10 +568,16 @@ def parse_rest_nodes_groups_folders(
         if not addr:
             continue
         members: list[str] = []
+        controllers: list[str] = []
         for link in group_el.findall("members/link"):
             text = (link.text or "").strip()
-            if text:
-                members.append(text)
+            if not text:
+                continue
+            members.append(text)
+            # ``type="16"`` (0x10) marks a scene controller per the legacy
+            # IoX wire format; any other value is a responder.
+            if link.get("type") == "16":
+                controllers.append(text)
         parent_text = group_el.findtext("parent")
         groups[addr] = GroupRecord(
             address=addr,
@@ -577,6 +588,7 @@ def parse_rest_nodes_groups_folders(
             parent_address=parent_text or None,
             pnode=group_el.findtext("pnode") or None,
             member_addresses=tuple(members),
+            controller_addresses=tuple(controllers),
         )
 
     folders: dict[str, FolderRecord] = {}

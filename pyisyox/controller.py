@@ -248,7 +248,7 @@ class Controller:
         if client is None:  # pragma: no cover — connect() sets both
             raise ControllerNotConnectedError("controller has no client")
         return {
-            address: Group.from_record(record, loaded.profile, client)
+            address: Group.from_record(record, loaded.profile, client, nodes=loaded.nodes)
             for address, record in loaded.groups.items()
         }
 

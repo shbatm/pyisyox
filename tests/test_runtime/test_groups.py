@@ -12,6 +12,8 @@ from pyisyox.client import (
     FolderRecord,
     GroupRecord,
     IoXClient,
+    NodePropertyValue,
+    NodeRecord,
     parse_rest_nodes_groups_folders,
 )
 from pyisyox.runtime import Folder, Group
@@ -236,3 +238,182 @@ def test_group_exposes_record_fields() -> None:
     assert group.member_addresses == ("A1", "A2", "A3")
     assert "Driveway" in repr(group)
     assert "members=3" in repr(group)
+
+
+# --- controller_addresses + group_all_on (added 2026-05-09) -------------
+
+
+def test_parse_rest_nodes_separates_controllers_from_responders() -> None:
+    """``<link type="16">`` is the IoX 0x10 'controller' flag; everything
+    else is a responder. Both populate ``member_addresses``; only
+    type=16 entries appear in ``controller_addresses``."""
+    xml = """<?xml version="1.0"?>
+<nodes>
+  <group flag="132" nodeDefId="InsteonDimmer">
+    <address>5000</address>
+    <name>Mixed Scene</name>
+    <family>6</family>
+    <members>
+      <link type="16">CTRL 1</link>
+      <link type="0">RESP 1</link>
+      <link type="0">RESP 2</link>
+      <link type="16">CTRL 2</link>
+    </members>
+  </group>
+</nodes>"""
+    groups, _ = parse_rest_nodes_groups_folders(xml)
+    rec = groups["5000"]
+    assert rec.member_addresses == ("CTRL 1", "RESP 1", "RESP 2", "CTRL 2")
+    assert rec.controller_addresses == ("CTRL 1", "CTRL 2")
+
+
+def test_parse_rest_nodes_controller_addresses_empty_when_none() -> None:
+    xml = """<?xml version="1.0"?>
+<nodes>
+  <group flag="132" nodeDefId="InsteonDimmer">
+    <address>5000</address>
+    <name>No Controllers</name>
+    <family>6</family>
+    <members>
+      <link type="0">A1</link>
+      <link type="0">A2</link>
+    </members>
+  </group>
+</nodes>"""
+    groups, _ = parse_rest_nodes_groups_folders(xml)
+    assert groups["5000"].controller_addresses == ()
+
+
+def test_group_controller_addresses_passthrough() -> None:
+    record = GroupRecord(
+        address="X",
+        name="Y",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "M2", "M3"),
+        controller_addresses=("M1",),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)))
+    assert group.controller_addresses == ("M1",)
+
+
+# group_all_on test scaffolding -----------------------------------------
+
+
+def _record_with_st(addr: str, st_value: str) -> NodeRecord:
+    """Build a NodeRecord with just enough state for the group_all_on
+    derivation — ``ST`` value is the only field consulted."""
+    return NodeRecord(
+        address=addr,
+        name=addr,
+        nodedef_id="DimmerLampSwitch",
+        family_id="1",
+        instance_id="1",
+        properties={"ST": NodePropertyValue(id="ST", value=st_value, formatted="")},
+    )
+
+
+def test_group_all_on_true_when_every_member_is_on() -> None:
+    nodes: dict[str, NodeRecord] = {
+        "M1": _record_with_st("M1", "255"),
+        "M2": _record_with_st("M2", "100"),
+    }
+    record = GroupRecord(
+        address="G",
+        name="All On",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "M2"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_all_on is True
+
+
+def test_group_all_on_false_when_a_member_is_off() -> None:
+    nodes: dict[str, NodeRecord] = {
+        "M1": _record_with_st("M1", "255"),
+        "M2": _record_with_st("M2", "0"),  # off
+    }
+    record = GroupRecord(
+        address="G",
+        name="One Off",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "M2"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_all_on is False
+
+
+def test_group_all_on_false_when_member_missing_from_registry() -> None:
+    """Defensive: a member that's been dropped from the registry (perhaps
+    because the controller deleted it post-load and we haven't surfaced
+    the lifecycle event yet) makes the group not-all-on."""
+    nodes: dict[str, NodeRecord] = {"M1": _record_with_st("M1", "255")}
+    record = GroupRecord(
+        address="G",
+        name="Stale",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "M2_MISSING"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_all_on is False
+
+
+def test_group_all_on_false_when_member_has_no_st() -> None:
+    """Plugin nodes / battery sensors don't expose ST. Treat them as
+    not-on so a scene of mixed device types reports honestly."""
+    no_st = NodeRecord(
+        address="M1",
+        name="M1",
+        nodedef_id="X",
+        family_id="1",
+        instance_id="1",
+        properties={"BATLVL": NodePropertyValue(id="BATLVL", value="80", formatted="80%")},
+    )
+    nodes: dict[str, NodeRecord] = {"M1": no_st}
+    record = GroupRecord(
+        address="G",
+        name="No ST",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1",),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_all_on is False
+
+
+def test_group_all_on_false_when_constructed_without_nodes_ref() -> None:
+    """Without the controller's nodes registry the property can't compute
+    — return False rather than raise. Consumers using Group purely for
+    command-issuing don't need the nodes ref."""
+    record = GroupRecord(
+        address="G",
+        name="No Nodes",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1",),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)))  # nodes=None
+    assert group.group_all_on is False
+
+
+def test_group_all_on_false_when_no_members() -> None:
+    """An empty group can't be 'all on'."""
+    record = GroupRecord(
+        address="EMPTY",
+        name="No Members",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=(),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes={})
+    assert group.group_all_on is False

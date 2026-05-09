@@ -24,11 +24,29 @@ parameter (``I_TSTAT_MODE`` covers reading ``CLIMD`` state and writing
 ``CLIMD`` setpoints), so editor-handling code is one shared codec.
 
 Source schema: ``/rest/profiles`` ``editors[]``.
+
+UOM-101 quirk
+-------------
+
+Insteon thermostats encode 0.5°-precision temps as ``raw = 2 * displayed``,
+not as a normal ``prec=1`` decimal. The IoX legacy alias ``"degrees"``
+behaves the same way. When an editor's range carries one of those UOMs and
+declares ``prec=0`` (i.e. it's not already using the modern decimal-prec
+convention) we double on encode / halve on decode to keep the codec
+symmetric. UOM 101 *can* appear with ``prec=1`` on modern profiles too —
+in that case the regular prec scaling already handles it and the doubling
+is skipped.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+#: UOMs that use the legacy "raw is 2x displayed" half-degree encoding.
+#: ``101`` is the IoX 6+ id; ``"degrees"`` is the ISY-v4 alias kept for
+#: legacy profiles. Mirrored in :mod:`pyisyox.helpers` for the
+#: ``/rest/status`` decode path.
+_HALF_DEGREE_UOMS = frozenset({"101", "degrees"})
 
 
 def _parse_subset(spec: str) -> set[int]:
@@ -90,7 +108,15 @@ class EditorRange:
         )
 
     def is_valid(self, raw_value: int) -> bool:
-        """True if ``raw_value`` is acceptable for outbound commands."""
+        """True if ``raw_value`` is acceptable for outbound commands.
+
+        Used for **subset** validation only (prec=0, enum-shaped editors).
+        Numeric editors with ``prec>0`` validate against the displayed
+        value before scaling — see :meth:`Editor.encode`. ``min``/``max``
+        in the IoX schema are stored in **displayed form** (e.g.
+        ``min=5.0`` on a UOM-4 °C setpoint editor with ``prec=1`` means
+        5.0 °C, not raw 5).
+        """
         if self.subset:
             return raw_value in self.subset
         if self.min is not None and raw_value < self.min:
@@ -142,6 +168,9 @@ class Editor:
         Enum lookup first (when ``names`` covers the value), otherwise a
         precision-aware numeric string. Does not append the unit — callers
         format the unit separately based on the range's ``uom``.
+
+        UOM-101 / "degrees" with ``prec=0`` halves the raw value (Insteon
+        half-degree convention).
         """
         rng = self.range_for(uom)
         if isinstance(raw_value, int) or (isinstance(raw_value, float) and raw_value.is_integer()):
@@ -150,18 +179,28 @@ class Editor:
                 return rng.names[ival]
         if rng.prec:
             return f"{raw_value / (10**rng.prec):.{rng.prec}f}"
+        if rng.uom in _HALF_DEGREE_UOMS:
+            return f"{raw_value / 2.0:.1f}"
         return str(raw_value)
 
     def encode(self, value: float | str, uom: str | None = None) -> int:
         """Encode user input to a raw integer the controller will accept.
 
-        Accepts:
-            * int/float — taken as the raw value directly (after rounding).
-            * str — first looked up in the range's ``names`` (case-insensitive),
-              else parsed as int.
+        Two paths:
 
-        Raises :class:`EditorCodecError` if the resulting value falls outside
-        the range's ``subset`` or ``[min, max]``.
+        * **Enum name (str matching ``names``)** — returns the matching raw
+          int verbatim. ``prec`` and ``min``/``max`` don't apply.
+        * **Numeric (int/float, or string parsed as float)** — interpreted as
+          the *displayed* value. Validated against ``[min, max]`` (which
+          the IoX schema stores in displayed form), then scaled to raw via
+          ``raw = round(displayed * 10**prec)``. Symmetric with
+          :meth:`decode`'s ``raw / 10**prec``.
+
+        Subset validation (when present) runs on the resulting raw int —
+        ``subset`` is always raw-int form regardless of ``prec``.
+
+        Raises :class:`EditorCodecError` if the value falls outside ``[min,
+        max]`` or, for subset editors, isn't a valid raw int.
         """
         rng = self.range_for(uom)
         if isinstance(value, str):
@@ -171,21 +210,37 @@ class Editor:
             lowered = stripped.lower()
             inverse = {n.lower(): k for k, n in rng.names.items()}
             if lowered in inverse:
-                raw = inverse[lowered]
-            else:
-                try:
-                    raw = int(stripped)
-                except ValueError as exc:
-                    valid = sorted(rng.names.values())
-                    raise EditorCodecError(
-                        f"Editor {self.id!r}: {value!r} is not a recognised name (valid: {valid})"
-                    ) from exc
+                return inverse[lowered]
+            try:
+                numeric: float = float(stripped)
+            except ValueError as exc:
+                valid = sorted(rng.names.values())
+                raise EditorCodecError(
+                    f"Editor {self.id!r}: {value!r} is not a recognised name (valid: {valid})"
+                ) from exc
         else:
-            raw = round(value)
-        if not rng.is_valid(raw):
+            numeric = float(value)
+
+        if rng.min is not None and numeric < rng.min:
             raise EditorCodecError(
-                f"Editor {self.id!r}: value {raw} is not valid "
-                f"(subset={sorted(rng.subset) if rng.subset else None}, "
-                f"min={rng.min}, max={rng.max})"
+                f"Editor {self.id!r}: {numeric} is below min={rng.min}"
             )
-        return raw
+        if rng.max is not None and numeric > rng.max:
+            raise EditorCodecError(
+                f"Editor {self.id!r}: {numeric} is above max={rng.max}"
+            )
+        if rng.prec:
+            raw = round(numeric * (10**rng.prec))
+        elif rng.uom in _HALF_DEGREE_UOMS:
+            # Insteon thermostat half-degree encoding (raw = 2 * displayed).
+            # Only triggers on prec=0 ranges — modern prec=1 ranges already
+            # handle the displayed→raw conversion above.
+            raw = round(numeric * 2)
+        else:
+            raw = round(numeric)
+        if rng.subset and raw not in rng.subset:
+            raise EditorCodecError(
+                f"Editor {self.id!r}: value {raw} is not in subset "
+                f"{sorted(rng.subset)}"
+            )
+        return int(raw)

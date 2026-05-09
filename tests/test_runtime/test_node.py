@@ -168,7 +168,7 @@ async def test_send_command_rejects_subset_invalid_value(real_profile: Profile) 
     session = FakeSession(BASE)  # no routes — would error if we hit the wire
     node = Node.from_record(record, real_profile, _make_client(session))
 
-    with pytest.raises(NodeCommandError, match="not valid"):
+    with pytest.raises(NodeCommandError, match="not in subset"):
         await node.send_command("CLIMD", 4)
     assert session.calls == [], "validation must short-circuit before HTTP"
 
