@@ -122,32 +122,32 @@ def test_general_event_listener_still_fires_on_lifecycle_frames() -> None:
 
 
 def test_lifecycle_requires_reload_taxonomy() -> None:
-    """ND/NR/RG/EN/DI/RV change the registry; WH/WD/MV are softer signals."""
-    assert NodeLifecycleAction.NODE_ADDED in {
-        NodeLifecycleAction.NODE_ADDED,
-        NodeLifecycleAction.NODE_REMOVED,
-        NodeLifecycleAction.NODE_RENAMED,
-    }
-    # Build a lifecycle event for each action and check requires_reload.
+    """Reload-worthy verbs invalidate the cached node registry; soft
+    signals are informational. Action codes are pinned to UDI's
+    canonical wire codes — see the ``NodeLifecycleAction`` docstring
+    for the source-of-truth mapping."""
     reload_actions = {
-        NodeLifecycleAction.NODE_ADDED,
-        NodeLifecycleAction.NODE_REMOVED,
-        NodeLifecycleAction.NODE_RENAMED,
-        NodeLifecycleAction.NODE_ENABLED,
-        NodeLifecycleAction.NODE_DISABLED,
-        NodeLifecycleAction.NODE_REVISED,
+        NodeLifecycleAction.NODE_ADDED,  # ND
+        NodeLifecycleAction.NODE_REMOVED,  # NR
+        NodeLifecycleAction.NODE_RENAMED,  # NN — not RG
+        NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,  # RG (scene-edit)
+        NodeLifecycleAction.NODE_ENABLED,  # EN — covers both directions
+        NodeLifecycleAction.NODE_REVISED,  # RV
     }
     soft_actions = {
-        NodeLifecycleAction.PARENT_CHANGED,
-        NodeLifecycleAction.PROPERTY_DROPPED,
-        NodeLifecycleAction.PROPERTY_REPORTED,
+        NodeLifecycleAction.NODE_MOVED,  # MV (added to scene)
+        NodeLifecycleAction.PARENT_CHANGED,  # PC
+        NodeLifecycleAction.PENDING_DEVICE_OP,  # WH
+        NodeLifecycleAction.PROPERTY_REPORTED,  # WD (PG3, undocumented)
+        NodeLifecycleAction.CONFIG_ERROR,  # CE (PG3, undocumented)
+        NodeLifecycleAction.NODE_ERROR,  # NE — comm error, no shape change
     }
     for act in reload_actions:
         ev = NodeLifecycleEvent(action=act, node_address="X", raw_action=act, seqnum=0)
-        assert ev.requires_reload is True
+        assert ev.requires_reload is True, f"{act} should be a reload-worthy signal"
     for act in soft_actions:
         ev = NodeLifecycleEvent(action=act, node_address="X", raw_action=act, seqnum=0)
-        assert ev.requires_reload is False
+        assert ev.requires_reload is False, f"{act} should be a soft signal"
 
 
 def _stub_record(addr: str) -> NodeRecord:

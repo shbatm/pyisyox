@@ -51,23 +51,44 @@ _NODE_LIFECYCLE_CONTROL = "_3"
 
 
 class NodeLifecycleAction(StrEnum):
-    """Verbs the eisy uses for ``<control>_3</control>`` events.
+    """Verbs the eisy emits via ``<control>_3</control>`` events.
 
-    The capture covered ``ND`` (node added) when a PG3 plugin's
-    controller node materialised. ``NR``, ``RG``, and the others
-    are documented by UDI but not yet observed in capture; they
-    follow the same eventInfo shape (address + optional details).
+    The wire codes here are the canonical UDI set published in the
+    IoX REST docs and the ISY-994's notification table — the
+    upstream PyISY 3.x ``constants.py`` keeps the same mapping.
+    Real captures additionally observe ``WD`` and ``CE`` on PG3
+    nodes; they're undocumented but pyisyox surfaces them so
+    consumers can react.
+
+    ``EN`` carries an ``enabled`` boolean in ``<eventInfo>`` —
+    there's no separate ``DI`` verb on the wire; the same code
+    handles both transitions.
     """
 
+    #: Node added (new device joined the controller).
     NODE_ADDED = "ND"
+    #: Node removed (device deleted from the controller).
     NODE_REMOVED = "NR"
-    NODE_RENAMED = "RG"
-    PARENT_CHANGED = "MV"
+    #: Node renamed (display name changed).
+    NODE_RENAMED = "NN"
+    #: Node moved into a Scene.
+    NODE_MOVED = "MV"
+    #: Node removed from a Scene.
+    NODE_REMOVED_FROM_GROUP = "RG"
+    #: Parent (primary node) changed.
+    PARENT_CHANGED = "PC"
+    #: Node enabled/disabled — direction is in ``eventInfo.enabled``.
     NODE_ENABLED = "EN"
-    NODE_DISABLED = "DI"
-    PROPERTY_DROPPED = "WH"
-    PROPERTY_REPORTED = "WD"
+    #: Pending device operation (queued change awaiting commit).
+    PENDING_DEVICE_OP = "WH"
+    #: Node revised (UPB / firmware-style revision).
     NODE_REVISED = "RV"
+    #: Node communication error (device unreachable).
+    NODE_ERROR = "NE"
+    #: Property reported — observed on PG3 plugin nodes; undocumented.
+    PROPERTY_REPORTED = "WD"
+    #: Configuration error — observed on PG3 plugin nodes; undocumented.
+    CONFIG_ERROR = "CE"
 
 
 @dataclass(slots=True, frozen=True)
@@ -102,18 +123,26 @@ class NodeLifecycleEvent:
 
     @property
     def requires_reload(self) -> bool:
-        """True for verbs that change the node tree's shape.
+        """True for verbs that invalidate the cached node registry.
 
-        ``ND`` / ``NR`` / ``RG`` / ``EN`` / ``DI`` / ``RV`` invalidate
-        the cached registry. ``WH`` / ``WD`` / ``MV`` are softer signals
-        (status report or parent change) that don't need a reload.
+        Reload-worthy: ``ND`` (added), ``NR`` (removed), ``NN`` (renamed —
+        the display name baked into the registry is now stale), ``EN``
+        (enabled/disabled — the entity may need reloading because its
+        properties change shape), ``RV`` (revised — UPB-style firmware
+        update changes the property table), ``RG`` (removed from scene —
+        scene membership changed).
+
+        Softer signals — informational, don't trigger reload UX:
+        ``MV`` (added to scene), ``PC`` (parent changed), ``WH`` (pending
+        op), ``WD`` (PG3 property report), ``CE`` (PG3 config error),
+        ``NE`` (comm error — device is just unreachable, no shape change).
         """
         return self.action in {
             NodeLifecycleAction.NODE_ADDED,
             NodeLifecycleAction.NODE_REMOVED,
             NodeLifecycleAction.NODE_RENAMED,
+            NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,
             NodeLifecycleAction.NODE_ENABLED,
-            NodeLifecycleAction.NODE_DISABLED,
             NodeLifecycleAction.NODE_REVISED,
         }
 

@@ -4,21 +4,26 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyisyox"
-description = "Python module for asynchronous communication with Universal Devices, Inc.'s ISY & IoX controllers."
+description = "Async Python client for Universal Devices' eisy / Polisy controllers running IoX 6+."
 license = "Apache-2.0"
-keywords = ["home", "automation", "isy", "isy994", "isy-994", "UDI", "polisy", "eisy", "home-assistant"]
+keywords = ["home", "automation", "iox", "UDI", "polisy", "eisy", "home-assistant"]
 authors = [
     {name = "Ryan Kraus", email = "automicus@gmail.com"},
     {name = "shbatm", email = "support@shbatm.com"}
 ]
 readme = "README.md"
 classifiers=[
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: End Users/Desktop",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Framework :: AsyncIO",
     "Topic :: Home Automation",
 ]
 dynamic = ["version"]
