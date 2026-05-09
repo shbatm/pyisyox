@@ -222,13 +222,9 @@ class Editor:
             numeric = float(value)
 
         if rng.min is not None and numeric < rng.min:
-            raise EditorCodecError(
-                f"Editor {self.id!r}: {numeric} is below min={rng.min}"
-            )
+            raise EditorCodecError(f"Editor {self.id!r}: {numeric} is below min={rng.min}")
         if rng.max is not None and numeric > rng.max:
-            raise EditorCodecError(
-                f"Editor {self.id!r}: {numeric} is above max={rng.max}"
-            )
+            raise EditorCodecError(f"Editor {self.id!r}: {numeric} is above max={rng.max}")
         if rng.prec:
             raw = round(numeric * (10**rng.prec))
         elif rng.uom in _HALF_DEGREE_UOMS:
@@ -239,8 +235,5 @@ class Editor:
         else:
             raw = round(numeric)
         if rng.subset and raw not in rng.subset:
-            raise EditorCodecError(
-                f"Editor {self.id!r}: value {raw} is not in subset "
-                f"{sorted(rng.subset)}"
-            )
+            raise EditorCodecError(f"Editor {self.id!r}: value {raw} is not in subset {sorted(rng.subset)}")
         return int(raw)
