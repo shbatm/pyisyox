@@ -146,6 +146,37 @@ def test_introspection_safe_when_nodedef_unresolved(real_profile: Profile) -> No
     assert node.is_dimmable is False
 
 
+# --- shortcuts: status + primary_node ------------------------------------
+
+
+def test_status_returns_st_property_when_present(real_profile: Profile) -> None:
+    """``Node.status`` is a shortcut for ``properties["ST"]``."""
+    st = NodePropertyValue(id="ST", value="100", formatted="On", uom="51")
+    node = _make_node(_make_record(properties={"ST": st}), real_profile)
+    assert node.status is st
+
+
+def test_status_none_when_st_absent(real_profile: Profile) -> None:
+    """Nodes without an ST reading (write-only controllers, plugin nodes
+    that don't advertise it) return ``None`` — callers branch on it."""
+    node = _make_node(_make_record(properties={}), real_profile)
+    assert node.status is None
+
+
+def test_primary_node_aliases_parent_address(real_profile: Profile) -> None:
+    """``primary_node`` is the IoX-spelling alias for ``parent_address``;
+    consumers migrating from PyISY 3.x can keep the old name."""
+    node = _make_node(_make_record(parent_address="AA BB CC 1"), real_profile)
+    assert node.primary_node == "AA BB CC 1"
+    assert node.primary_node == node.parent_address
+
+
+def test_primary_node_none_for_root_node(real_profile: Profile) -> None:
+    """A device-root node has no parent address — primary_node is None."""
+    node = _make_node(_make_record(parent_address=None), real_profile)
+    assert node.primary_node is None
+
+
 # --- ergonomic wrappers (URL pinning) ------------------------------------
 #
 # Each wrapper does the same thing: route through send_command with a
