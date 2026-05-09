@@ -157,6 +157,16 @@ class Node:
         return self._record.parent_address
 
     @property
+    def primary_node(self) -> str | None:
+        """Alias for :attr:`parent_address`.
+
+        The IoX REST surface and the legacy PyISY 3.x consumer API both
+        used the term "primary node" for the address of the device's
+        root node. Kept here so consumers don't have to translate.
+        """
+        return self._record.parent_address
+
+    @property
     def enabled(self) -> bool:
         """Whether the eisy considers this node active."""
         return self._record.enabled
@@ -171,6 +181,20 @@ class Node:
         in place at runtime via :class:`pyisyox.runtime.EventDispatcher`.
         """
         return self._record.properties
+
+    @property
+    def status(self) -> NodePropertyValue | None:
+        """Shortcut for :attr:`properties`\\ ``[PROP_STATUS]`` — the
+        node's primary status reading (``"ST"``).
+
+        Returns ``None`` when the node hasn't reported ST yet (common
+        for write-only Insteon controllers and plugin nodes that don't
+        advertise ST). Consumers that want a scalar should read
+        ``node.status.value`` (a string) and parse it themselves;
+        the property keeps the structured shape so callers can also
+        reach ``.uom``, ``.formatted``, etc.
+        """
+        return self._record.properties.get(PROP_STATUS)
 
     @property
     def nodedef(self) -> NodeDef | None:
