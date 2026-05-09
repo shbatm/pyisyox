@@ -42,6 +42,7 @@ from pyisyox.constants import (
     PROP_SETPOINT_COOL,
     PROP_SETPOINT_HEAT,
     PROP_STATUS,
+    NodeFlag,
 )
 from pyisyox.runtime._commands import NodeCommandError, encode_command_params
 
@@ -200,6 +201,36 @@ class Node:
     def nodedef(self) -> NodeDef | None:
         """The resolved :class:`NodeDef`, or ``None`` if unresolved."""
         return self._nodedef
+
+    @property
+    def flag(self) -> int:
+        """Raw node-flag bitfield from the controller's node table.
+
+        Bit meanings live in :class:`pyisyox.constants.NodeFlag`
+        (``NEW``, ``IN_ERR``, ``DEVICE_ROOT``, ...). Use
+        :meth:`has_flag` for individual bit checks rather than reading
+        this directly. Returns ``0`` when the controller didn't carry a
+        value for this node — treat ``0`` as "no bits set" rather than
+        "unknown".
+        """
+        return self._record.flag
+
+    def has_flag(self, flag: NodeFlag) -> bool:
+        """Return ``True`` if every bit in ``flag`` is set on this node.
+
+        ``flag`` may be a single :class:`NodeFlag` member or an OR'd
+        combination (e.g. ``NodeFlag.NEW | NodeFlag.IN_ERR``); the check
+        is bitwise-AND against all requested bits, so a combined value
+        only matches when every bit is present.
+
+        Example::
+
+            from pyisyox.constants import NodeFlag
+
+            if node.has_flag(NodeFlag.DEVICE_ROOT):
+                ...
+        """
+        return (self._record.flag & int(flag)) == int(flag)
 
     # --- introspection (derived) --------------------------------------
 

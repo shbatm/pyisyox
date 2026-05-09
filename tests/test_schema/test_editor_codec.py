@@ -127,9 +127,7 @@ def test_encode_scales_by_prec_for_setpoint_editor() -> None:
 
 def test_encode_decode_round_trip_with_prec() -> None:
     """encode(decode(raw)) ≈ raw for all prec>0 editors that aren't enums."""
-    ed = Editor.from_json(
-        {"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "min": 5.0, "max": 50.0}]}
-    )
+    ed = Editor.from_json({"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "min": 5.0, "max": 50.0}]})
     for raw in (50, 100, 220, 500):
         displayed = ed.decode(raw)
         assert ed.encode(float(displayed)) == raw
@@ -138,9 +136,7 @@ def test_encode_decode_round_trip_with_prec() -> None:
 def test_encode_validates_min_max_against_displayed_value() -> None:
     """min/max in the IoX schema are stored in *displayed* form. The validator
     must compare the user's input against them, not the scaled raw int."""
-    ed = Editor.from_json(
-        {"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "min": 5.0, "max": 50.0}]}
-    )
+    ed = Editor.from_json({"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "min": 5.0, "max": 50.0}]})
     # 22.0 °C is in range; raw becomes 220 — must NOT be rejected as ">50"
     assert ed.encode(22.0) == 220
     # 50.0 °C is the inclusive max — accepts, raw 500
