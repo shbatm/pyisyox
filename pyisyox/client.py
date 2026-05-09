@@ -106,6 +106,13 @@ class NodeRecord:
     parent_address: str | None = None
     pnode: str | None = None
     enabled: bool = True
+    #: Bitfield from the controller's node table — see
+    #: :class:`pyisyox.constants.NodeFlag` for the bit meanings (NEW,
+    #: IN_ERR, DEVICE_ROOT, ...). Sourced from the ``flag`` field on
+    #: ``/api/nodes`` JSON (which the controller stringifies — e.g.
+    #: ``"128"``); ``0`` when the controller didn't supply one for
+    #: this node.
+    flag: int = 0
     properties: dict[str, NodePropertyValue] = field(default_factory=dict)
 
 
@@ -469,6 +476,15 @@ def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
             name=str(prop.get("name", "")),
         )
 
+    # ``flag`` arrives stringified from the controller (e.g. ``"128"``
+    # for DEVICE_ROOT); coerce defensively in case a future firmware
+    # ships it as an int or omits it entirely.
+    raw_flag = item.get("flag", 0)
+    try:
+        flag_int = int(raw_flag)
+    except (TypeError, ValueError):
+        flag_int = 0
+
     return NodeRecord(
         address=str(item["address"]),
         name=str(item.get("name", "")),
@@ -479,6 +495,7 @@ def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
         parent_address=parent_address,
         pnode=item.get("pnode"),
         enabled=str(item.get("enabled", "true")).lower() == "true",
+        flag=flag_int,
         properties=properties,
     )
 

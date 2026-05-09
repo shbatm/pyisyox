@@ -18,6 +18,7 @@ import pytest
 
 from pyisyox.auth import LocalAuth
 from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
+from pyisyox.constants import NodeFlag
 from pyisyox.runtime import Node
 from pyisyox.schema import Profile
 from tests.test_client.conftest import FakeSession
@@ -118,9 +119,7 @@ def test_is_dimmable_false_for_relay_only(real_profile: Profile) -> None:
 
 def test_is_battery_node_detects_batlvl_only_devices(real_profile: Profile) -> None:
     """Battery sensors expose BATLVL but no ST."""
-    record = _make_record(
-        properties={"BATLVL": NodePropertyValue(id="BATLVL", value="80", formatted="80%")}
-    )
+    record = _make_record(properties={"BATLVL": NodePropertyValue(id="BATLVL", value="80", formatted="80%")})
     node = _make_node(record, real_profile)
     assert node.is_battery_node is True
 
@@ -175,6 +174,40 @@ def test_primary_node_none_for_root_node(real_profile: Profile) -> None:
     """A device-root node has no parent address — primary_node is None."""
     node = _make_node(_make_record(parent_address=None), real_profile)
     assert node.primary_node is None
+
+
+# --- flag / has_flag -----------------------------------------------------
+
+
+def test_flag_defaults_to_zero(real_profile: Profile) -> None:
+    """Records constructed without a flag carry ``0`` — and ``has_flag``
+    reports False for every bit, including a zero argument (no bits set
+    can never satisfy any nonzero mask)."""
+    node = _make_node(_make_record(), real_profile)
+    assert node.flag == 0
+    assert node.has_flag(NodeFlag.DEVICE_ROOT) is False
+    assert node.has_flag(NodeFlag.NEW) is False
+
+
+def test_has_flag_matches_individual_bit(real_profile: Profile) -> None:
+    """``DEVICE_ROOT`` (0x80) is set on a record carrying ``flag=128``."""
+    record = _make_record()
+    record.flag = int(NodeFlag.DEVICE_ROOT)
+    node = _make_node(record, real_profile)
+    assert node.flag == 128
+    assert node.has_flag(NodeFlag.DEVICE_ROOT) is True
+    assert node.has_flag(NodeFlag.NEW) is False
+
+
+def test_has_flag_combined_mask_requires_all_bits(real_profile: Profile) -> None:
+    """An OR'd mask only matches when every bit in the mask is set —
+    consumers asking for ``NEW | IN_ERR`` mean "both", not "either"."""
+    record = _make_record()
+    record.flag = int(NodeFlag.NEW | NodeFlag.IN_ERR | NodeFlag.DEVICE_ROOT)
+    node = _make_node(record, real_profile)
+    assert node.has_flag(NodeFlag.NEW | NodeFlag.IN_ERR) is True
+    assert node.has_flag(NodeFlag.NEW) is True
+    assert node.has_flag(NodeFlag.NEW | NodeFlag.TO_DELETE) is False
 
 
 # --- ergonomic wrappers (URL pinning) ------------------------------------

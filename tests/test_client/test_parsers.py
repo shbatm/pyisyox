@@ -244,3 +244,45 @@ def test_unwrap_data_passes_through_non_dict() -> None:
     treated as not-an-envelope and yields []."""
     assert _unwrap_data([{"id": "1"}]) == []
     assert _unwrap_data(None) == []
+
+
+# --- /api/nodes JSON flag field ------------------------------------------
+
+
+def test_parse_api_nodes_reads_flag_as_string() -> None:
+    """The controller stringifies ``flag`` (e.g. ``"128"`` for
+    DEVICE_ROOT) — coerce to int."""
+    raw = {
+        "data": {
+            "nodes": {
+                "node": [
+                    {"address": "X", "nodeDefId": "Y", "flag": "128"},
+                ]
+            }
+        }
+    }
+    nodes = parse_api_nodes(raw)
+    assert nodes["X"].flag == 128
+
+
+def test_parse_api_nodes_reads_flag_as_int() -> None:
+    """A future firmware shipping the field as a JSON number is also
+    accepted without coercion drama."""
+    raw = {"data": {"nodes": {"node": [{"address": "X", "nodeDefId": "Y", "flag": 64}]}}}
+    assert parse_api_nodes(raw)["X"].flag == 64
+
+
+def test_parse_api_nodes_flag_defaults_to_zero_when_absent_or_unparseable() -> None:
+    raw = {
+        "data": {
+            "nodes": {
+                "node": [
+                    {"address": "X", "nodeDefId": "Y"},
+                    {"address": "Z", "nodeDefId": "Y", "flag": "not-an-int"},
+                ]
+            }
+        }
+    }
+    nodes = parse_api_nodes(raw)
+    assert nodes["X"].flag == 0
+    assert nodes["Z"].flag == 0
