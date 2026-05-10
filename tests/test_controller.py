@@ -685,3 +685,218 @@ async def test_network_resources_property_wraps_records() -> None:
     assert any(c[1] == "/rest/networking/resources/3" for c in session.calls)
 
     await controller.stop()
+
+
+# --- programs -----------------------------------------------------------
+
+
+def _programs_payload(*entries: dict) -> dict:
+    return {"successful": True, "data": list(entries)}
+
+
+@pytest.mark.asyncio
+async def test_programs_property_wraps_records_and_separates_folders() -> None:
+    """``Controller.programs`` exposes only programs (not folders);
+    ``Controller.program_folders`` exposes only folders. Both are
+    keyed on the 4-character hex id."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {"id": "0001", "name": "My Programs", "folder": True, "status": "true"},
+            {
+                "id": "0010",
+                "name": "HA.switch",
+                "folder": True,
+                "status": "true",
+                "parentId": "0001",
+            },
+            {
+                "id": "0030",
+                "name": "Foo Status",
+                "folder": False,
+                "status": "true",
+                "enabled": True,
+                "running": "idle",
+                "parentId": "0010",
+            },
+        ),
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    assert set(controller.programs) == {"0030"}
+    assert set(controller.program_folders) == {"0001", "0010"}
+
+    program = controller.programs["0030"]
+    assert program.name == "Foo Status"
+    assert program.path == "HA.switch/Foo Status"
+    assert program.status is True
+    assert program.enabled is True
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_send_program_command_targets_legacy_endpoint() -> None:
+    """``Controller.send_program_command(id, "runThen")`` issues
+    ``GET /rest/programs/{id}/runThen``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("GET", "/rest/programs/0030/runThen", 200, "<ok/>")
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.send_program_command("0030", "runThen")
+
+    method, path, _ = session.calls[-1]
+    assert (method, path) == ("GET", "/rest/programs/0030/runThen")
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_program_run_then_routes_through_wrapper() -> None:
+    """``Program.run_then()`` is the ergonomic equivalent of
+    ``Controller.send_program_command(id, "runThen")``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {
+                "id": "0030",
+                "name": "Foo",
+                "folder": False,
+                "status": "true",
+                "enabled": True,
+            },
+        ),
+    )
+    session.set_route("GET", "/rest/programs/0030/runThen", 200, "<ok/>")
+    session.set_route("GET", "/rest/programs/0030/runElse", 200, "<ok/>")
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.programs["0030"].run_then()
+    await controller.programs["0030"].run_else()
+
+    paths = [p for _, p, _ in session.calls if p.startswith("/rest/programs/")]
+    assert paths == [
+        "/rest/programs/0030/runThen",
+        "/rest/programs/0030/runElse",
+    ]
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_send_program_command_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.send_program_command("0030", "run")
+
+
+@pytest.mark.asyncio
+async def test_program_status_event_updates_record_in_place() -> None:
+    """Feeding a ``<control>_1</control>`` action ``"0"`` frame with
+    a known program id flips ``program.status`` and fires any
+    registered ``add_program_status_listener`` callbacks. The
+    matching record updates before the listener fires."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {
+                "id": "008D",
+                "name": "Foo",
+                "folder": False,
+                "status": "false",
+                "enabled": True,
+                "running": "idle",
+            },
+        ),
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    received: list = []
+    controller.add_program_status_listener(received.append)
+
+    # Wire frame: <id>8D</id> (unpadded), <on/>, running state 31.
+    frame = (
+        '<?xml version="1.0"?><Event seqnum="9" sid="x" timestamp="t">'
+        "<control>_1</control><action>0</action><node></node>"
+        "<eventInfo><id>8D</id><on /><nr /><r>260506 14:30:36 </r>"
+        "<f>260506 14:30:36 </f><s>31</s></eventInfo></Event>"
+    )
+    controller.feed_event_frame(frame)
+
+    assert received and received[0].address == "008D"
+    assert received[0].status is True
+    assert received[0].running == 31
+    # Record mutated in place — Program wrapper sees the new status.
+    assert controller.programs["008D"].status is True
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_program_status_event_off_marker_flips_false() -> None:
+    """An ``<off/>`` marker in the eventInfo flips status False."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {
+                "id": "0011",
+                "name": "Bar",
+                "folder": False,
+                "status": "true",
+                "enabled": True,
+            },
+        ),
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    frame = (
+        '<?xml version="1.0"?><Event seqnum="1" sid="x" timestamp="t">'
+        "<control>_1</control><action>0</action><node></node>"
+        "<eventInfo><id>11</id><off /><s>21</s></eventInfo></Event>"
+    )
+    controller.feed_event_frame(frame)
+
+    assert controller.programs["0011"].status is False
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_program_status_event_for_unknown_id_drops_silently() -> None:
+    """A frame with an id that isn't in the registry must not crash —
+    just log + drop. Common during plugin reloads when the client
+    hasn't refreshed yet."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    frame = (
+        '<?xml version="1.0"?><Event seqnum="1" sid="x" timestamp="t">'
+        "<control>_1</control><action>0</action><node></node>"
+        "<eventInfo><id>FFFF</id><on /></eventInfo></Event>"
+    )
+    # Should not raise.
+    controller.feed_event_frame(frame)
+    await controller.stop()

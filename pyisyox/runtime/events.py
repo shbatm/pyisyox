@@ -39,7 +39,7 @@ from xml.etree import ElementTree as ET
 from pyisyox.client import NodePropertyValue
 
 if TYPE_CHECKING:
-    from pyisyox.client import NodeRecord
+    from pyisyox.client import NodeRecord, ProgramRecord
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +48,13 @@ _LOGGER = logging.getLogger(__name__)
 #: The action is the lifecycle verb; eventInfo carries the new node
 #: element on add, just the address on remove/rename.
 _NODE_LIFECYCLE_CONTROL = "_3"
+
+#: Control code for program / variable / system frames. Action 0 is
+#: program-status; 6/7 are variable change/init; 3 is a freeform
+#: status push (currently surfaced verbatim, consumers parse if
+#: interested).
+_PROGRAM_OR_VAR_CONTROL = "_1"
+_PROGRAM_STATUS_ACTION = "0"
 
 
 class NodeLifecycleAction(StrEnum):
@@ -338,6 +345,40 @@ EventListener = Callable[[Event], None]
 NodeLifecycleListener = Callable[[NodeLifecycleEvent], None]
 
 
+@dataclass(slots=True, frozen=True)
+class ProgramStatusEvent:
+    """A program toggled true/false on the controller.
+
+    Emitted by :class:`EventDispatcher` whenever a
+    ``<control>_1</control>`` frame with ``<action>0</action>``
+    arrives carrying a program id in its ``<eventInfo>``. The
+    matching :class:`pyisyox.client.ProgramRecord` is mutated in
+    place before listeners fire, so consumers reading
+    ``program.status`` from a callback see the updated value.
+
+    Attributes:
+        address: Program id (4-character hex, zero-padded to match
+            ``/api/programs``).
+        status: ``True`` if the frame contained ``<on/>``; ``False``
+            for ``<off/>``. Other markers (``<onAdj/>`` etc.) are
+            normalised to ``True`` since they all imply
+            "the if-clause matched".
+        running: New running-state code as the integer the eisy
+            sent (``<s>NN</s>``), or ``None`` if absent. Decoding
+            depends on firmware version; consumers can compare
+            against known constants if they care.
+        seqnum: Sequence number of the underlying :class:`Event`.
+    """
+
+    address: str
+    status: bool
+    running: int | None
+    seqnum: int
+
+
+ProgramStatusListener = Callable[[ProgramStatusEvent], None]
+
+
 def _extract_lifecycle_node_xml(raw_frame: str) -> str | None:
     """Pull the inner ``<node>...</node>`` element text out of a lifecycle
     frame's ``<eventInfo>``.
@@ -374,10 +415,20 @@ class EventDispatcher:
     with synthetic frames.
     """
 
-    __slots__ = ("_lifecycle_listeners", "_listeners", "_nodes")
+    __slots__ = (
+        "_lifecycle_listeners",
+        "_listeners",
+        "_nodes",
+        "_program_status_listeners",
+        "_programs",
+    )
 
-    def __init__(self, nodes: dict[str, NodeRecord]) -> None:
-        """Bind to a node registry.
+    def __init__(
+        self,
+        nodes: dict[str, NodeRecord],
+        programs: dict[str, ProgramRecord] | None = None,
+    ) -> None:
+        """Bind to a node + program registry.
 
         Args:
             nodes: The same ``dict[str, NodeRecord]`` that
@@ -387,10 +438,17 @@ class EventDispatcher:
                 are dropped silently (typically nodes that joined
                 after the initial load — listen for node-add via
                 :meth:`add_lifecycle_listener` and trigger a reload).
+            programs: Optional program registry. When provided, the
+                dispatcher mutates ``record.status`` / ``record.running``
+                in place on program-status frames. ``None`` (the
+                default for tests that only care about node events)
+                makes program-status dispatch a no-op.
         """
         self._nodes = nodes
+        self._programs = programs if programs is not None else {}
         self._listeners: list[EventListener] = []
         self._lifecycle_listeners: list[NodeLifecycleListener] = []
+        self._program_status_listeners: list[ProgramStatusListener] = []
 
     def add_listener(self, callback: EventListener) -> Callable[[], None]:
         """Register ``callback`` to fire on every parsed event.
@@ -405,6 +463,28 @@ class EventDispatcher:
         def _unsubscribe() -> None:
             try:
                 self._listeners.remove(callback)
+            except ValueError:
+                pass
+
+        return _unsubscribe
+
+    def add_program_status_listener(self, callback: ProgramStatusListener) -> Callable[[], None]:
+        """Register ``callback`` to fire on every program-status frame
+        (``<control>_1</control>`` action ``"0"``).
+
+        The dispatcher updates the matching
+        :class:`pyisyox.client.ProgramRecord` in place before firing,
+        so consumers reading ``program.status`` from the callback see
+        the new value.
+
+        Returns:
+            An unsubscribe function.
+        """
+        self._program_status_listeners.append(callback)
+
+        def _unsubscribe() -> None:
+            try:
+                self._program_status_listeners.remove(callback)
             except ValueError:
                 pass
 
@@ -455,6 +535,8 @@ class EventDispatcher:
         # reload UX than re-parsing the raw frame.
         if event.control == _NODE_LIFECYCLE_CONTROL:
             self._emit_lifecycle(event, raw_frame)
+        elif event.control == _PROGRAM_OR_VAR_CONTROL and event.action == _PROGRAM_STATUS_ACTION:
+            self._apply_program_status(event)
         for listener in tuple(self._listeners):
             try:
                 listener(event)
@@ -501,3 +583,79 @@ class EventDispatcher:
             uom=event.uom,
             name=event.formatted_name,
         )
+
+    def _apply_program_status(self, event: Event) -> None:
+        """Decode a program-status frame and update the matching record.
+
+        Wire shape::
+
+            <control>_1</control><action>0</action>
+            <eventInfo><id>HEX</id><on/><r>YYMMDD HH:MM:SS </r>
+            <f>YYMMDD HH:MM:SS </f><s>NN</s></eventInfo>
+
+        ``<id>`` is hex without zero-padding (``8D``); the
+        ``ProgramRecord`` registry is keyed on the zero-padded
+        4-character form (``008D``) from ``/api/programs``, so we
+        normalise. ``<on/>`` flips status True; ``<off/>`` flips it
+        False; other markers (``<onAdj/>`` etc.) imply
+        "if-clause matched" and also flip True.
+
+        ``<s>`` is decoded as int into ``record.running`` so
+        consumers can compare against firmware-version-specific
+        running-state codes.
+        """
+        if event.event_info is None:
+            return
+        try:
+            info = ET.fromstring(  # noqa: S314 — eisy LAN traffic
+                f"<eventInfo>{event.event_info}</eventInfo>"
+            )
+        except ET.ParseError:
+            return
+
+        raw_id = (info.findtext("id") or "").strip()
+        if not raw_id:
+            return
+        # The wire id can be unpadded ('8D'); /api/programs zero-pads
+        # to 4 chars ('008D'). Try both so consumers see the update.
+        program_id = raw_id.zfill(4).upper()
+        record = self._programs.get(program_id) or self._programs.get(raw_id)
+        if record is None:
+            _LOGGER.debug("WS program-status event for unknown id %r — dropping", raw_id)
+            return
+
+        # <on/> / <onAdj/> / etc. all mean "if-clause matched" → True.
+        # <off/> / <offAdj/> mean "else-clause matched" → False.
+        if info.find("off") is not None or info.find("offAdj") is not None:
+            new_status = False
+        elif info.find("on") is not None or info.find("onAdj") is not None:
+            new_status = True
+        else:
+            new_status = record.status  # Defensive — unrecognised tag
+
+        running_text = (info.findtext("s") or "").strip()
+        running_int: int | None
+        try:
+            running_int = int(running_text) if running_text else None
+        except ValueError:
+            running_int = None
+
+        record.status = new_status
+        if running_int is not None:
+            # Stored as the wire string so consumers can compare or
+            # parse; the typed ProgramStatusEvent carries the int form.
+            record.running = str(running_int)
+
+        if not self._program_status_listeners:
+            return
+        status_event = ProgramStatusEvent(
+            address=record.address,
+            status=new_status,
+            running=running_int,
+            seqnum=event.seqnum,
+        )
+        for listener in tuple(self._program_status_listeners):
+            try:
+                listener(status_event)
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("program-status listener raised; suppressing to keep loop alive")

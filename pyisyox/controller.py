@@ -35,6 +35,7 @@ from pyisyox.runtime.folder import Folder
 from pyisyox.runtime.group import Group
 from pyisyox.runtime.network_resource import NetworkResource
 from pyisyox.runtime.node import Node
+from pyisyox.runtime.program import Program, ProgramFolder
 from pyisyox.runtime.ws import WebSocketEventStream
 from pyisyox.schema.profile import Profile, ProfileMergeResult
 
@@ -43,7 +44,12 @@ if TYPE_CHECKING:
 
     from pyisyox.auth import Auth
     from pyisyox.client import ControllerConfig, LoadResult
-    from pyisyox.runtime.events import Event, EventListener, NodeLifecycleListener
+    from pyisyox.runtime.events import (
+        Event,
+        EventListener,
+        NodeLifecycleListener,
+        ProgramStatusListener,
+    )
     from pyisyox.runtime.ws import StatusListener
 
 _LOGGER = logging.getLogger(__name__)
@@ -164,7 +170,7 @@ class Controller:
         # Bind the dispatcher to the same dict the LoadResult holds —
         # so runtime Nodes (which read from LoadResult.nodes) see live
         # updates without an explicit notification path.
-        self._dispatcher = EventDispatcher(self._loaded.nodes)
+        self._dispatcher = EventDispatcher(self._loaded.nodes, programs=self._loaded.programs)
 
         if start_websocket:
             self._ws = WebSocketEventStream(self._client, self._dispatcher, path=self._ws_path)
@@ -260,9 +266,40 @@ class Controller:
         return {address: Folder(record) for address, record in loaded.folders.items()}
 
     @property
-    def programs(self) -> list[dict]:
-        """Raw ``/api/programs`` data list (typed wrappers TBD)."""
-        return self._loaded_or_raise().programs
+    def programs(self) -> dict[str, Program]:
+        """Map of program id → runtime :class:`Program`.
+
+        Folders share the same id space but live under
+        :attr:`program_folders`; this map only contains executable
+        programs (``is_folder=False``).
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        return {
+            address: Program(record, client)
+            for address, record in loaded.programs.items()
+            if not record.is_folder
+        }
+
+    @property
+    def program_folders(self) -> dict[str, ProgramFolder]:
+        """Map of folder id → runtime :class:`ProgramFolder`.
+
+        The synthetic root folder (``"My Programs"`` on stock eisy
+        firmware) is included — consumers walking the tree from the
+        controller can use it as the root anchor.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        return {
+            address: ProgramFolder(record, client)
+            for address, record in loaded.programs.items()
+            if record.is_folder
+        }
 
     @property
     def triggers(self) -> list[dict]:
@@ -397,6 +434,27 @@ class Controller:
             )
         return self._dispatcher.add_lifecycle_listener(callback)
 
+    def add_program_status_listener(self, callback: ProgramStatusListener) -> Callable[[], None]:
+        """Subscribe to program-status changes (the ``<control>_1</control>``
+        action ``"0"`` frames).
+
+        The dispatcher mutates the matching ``ProgramRecord.status`` /
+        ``running`` in place before firing, so consumers reading
+        ``controller.programs[id].status`` from the callback see the
+        new value.
+
+        Returns:
+            An unsubscribe function.
+
+        Raises:
+            ControllerNotConnectedError: When called before :meth:`connect`.
+        """
+        if self._dispatcher is None:
+            raise ControllerNotConnectedError(
+                "add_program_status_listener requires connect() to have completed"
+            )
+        return self._dispatcher.add_program_status_listener(callback)
+
     # --- mutation -----------------------------------------------------
 
     async def refresh(self) -> ProfileMergeResult:
@@ -438,6 +496,24 @@ class Controller:
         loaded.variables = fresh.variables
         loaded.network_resources = fresh.network_resources
         return diff
+
+    async def send_program_command(self, program_id: str, command: str) -> None:
+        """Send a program / folder command via the legacy REST endpoint.
+
+        Wire shape: ``GET /rest/programs/{id}/{command}``. See
+        :meth:`pyisyox.client.IoXClient.run_program_command` for the
+        documented command set. Status updates flow back over the
+        WebSocket — the controller acknowledges receipt only.
+
+        Lower-level than :meth:`Program.run` etc.; useful for
+        consumers that hold ids without a Program wrapper (e.g. an
+        HA service receiving raw ids).
+        """
+        self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        await client.run_program_command(program_id, command)
 
     async def run_network_resource(self, resource_id: str | int) -> None:
         """Fire a network resource by id.

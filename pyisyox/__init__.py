@@ -48,6 +48,7 @@ from pyisyox.client import (
     NetworkResourceRecord,
     NodePropertyValue,
     NodeRecord,
+    ProgramRecord,
 )
 from pyisyox.controller import Controller, ControllerNotConnectedError
 from pyisyox.exceptions import (
@@ -71,6 +72,10 @@ from pyisyox.runtime import (
     NodeLifecycleAction,
     NodeLifecycleEvent,
     NodeLifecycleListener,
+    Program,
+    ProgramFolder,
+    ProgramStatusEvent,
+    ProgramStatusListener,
     StatusListener,
     WebSocketEventStream,
 )
@@ -119,6 +124,11 @@ __all__ = [
     "PortalAuth",
     "Profile",
     "ProfileMergeResult",
+    "Program",
+    "ProgramFolder",
+    "ProgramRecord",
+    "ProgramStatusEvent",
+    "ProgramStatusListener",
     "Reading",
     "ReadingPlatform",
     "StatusListener",

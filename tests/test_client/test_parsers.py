@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from pyisyox.client import (
@@ -10,9 +13,12 @@ from pyisyox.client import (
     _unwrap_data,
     merge_status_into_nodes,
     parse_api_nodes,
+    parse_api_programs,
     parse_rest_networking_resources,
     parse_rest_status,
 )
+
+FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "eisy6"
 
 # --- /api/nodes JSON ------------------------------------------------------
 
@@ -334,3 +340,119 @@ def test_parse_rest_networking_resources_skips_rules_without_id() -> None:
 def test_parse_rest_networking_resources_raises_on_malformed_xml() -> None:
     with pytest.raises(ClientError):
         parse_rest_networking_resources("<not really xml")
+
+
+# --- /api/programs JSON --------------------------------------------------
+
+
+def test_parse_api_programs_distinguishes_folders_and_programs() -> None:
+    """Folders carry no enabled / running fields; programs do."""
+    raw = [
+        {
+            "id": "0001",
+            "name": "Programs Root",
+            "folder": True,
+            "status": "true",
+            "lastFinishTime": "",
+            "lastRunTime": "",
+            "nextScheduledRunTime": "",
+        },
+        {
+            "id": "0011",
+            "name": "Sample Program",
+            "parentId": "0001",
+            "folder": False,
+            "status": "false",
+            "enabled": True,
+            "runAtStartup": False,
+            "running": "idle",
+            "lastFinishTime": "2026-05-10T14:46:36.000Z",
+            "lastRunTime": "2026-05-10T14:46:36.000Z",
+            "nextScheduledRunTime": "",
+        },
+    ]
+    records = parse_api_programs(raw)
+    assert set(records) == {"0001", "0011"}
+
+    folder = records["0001"]
+    assert folder.is_folder is True
+    assert folder.status is True  # "true" string → bool
+    assert folder.enabled is None
+    assert folder.running is None
+    assert folder.last_run_time is None  # empty string → None
+
+    program = records["0011"]
+    assert program.is_folder is False
+    assert program.status is False
+    assert program.enabled is True
+    assert program.run_at_startup is False
+    assert program.running == "idle"
+    assert program.last_run_time == "2026-05-10T14:46:36.000Z"
+    assert program.next_scheduled_run_time is None
+
+
+def test_parse_api_programs_reconstructs_path_from_parent_chain() -> None:
+    """A nested HA-style program shows its full slash-joined ancestry,
+    minus the synthetic root container ("My Programs"). Drives the
+    consumer's HA.<platform>/<name>/<status|actions> classifier."""
+    raw = [
+        {"id": "0001", "name": "My Programs", "folder": True, "status": "true"},
+        {
+            "id": "0010",
+            "name": "HA.switch",
+            "folder": True,
+            "status": "true",
+            "parentId": "0001",
+        },
+        {
+            "id": "0020",
+            "name": "Foo",
+            "folder": True,
+            "status": "true",
+            "parentId": "0010",
+        },
+        {
+            "id": "0030",
+            "name": "status",
+            "folder": False,
+            "status": "true",
+            "enabled": True,
+            "parentId": "0020",
+        },
+    ]
+    records = parse_api_programs(raw)
+    assert records["0030"].path == "HA.switch/Foo/status"
+    # Parent folders also expose path (relative to root drop).
+    assert records["0020"].path == "HA.switch/Foo"
+    # The synthetic root has no parent and gets an empty path.
+    assert records["0001"].path == ""
+
+
+def test_parse_api_programs_handles_real_capture() -> None:
+    """End-to-end against the captured (anonymized) eisy fixture."""
+    raw = json.loads((FIXTURE_DIR / "api_programs.json").read_text())["data"]
+
+    records = parse_api_programs(raw)
+    assert len(records) == len(raw)
+    folders = [r for r in records.values() if r.is_folder]
+    programs = [r for r in records.values() if not r.is_folder]
+    assert folders, "fixture should have at least one folder"
+    assert programs, "fixture should have at least one program"
+    # Every program reports an enabled flag (real captures always
+    # carry it; defensive parser keeps the type Optional).
+    assert all(p.enabled is not None for p in programs)
+
+
+def test_parse_api_programs_handles_empty_payload() -> None:
+    assert parse_api_programs([]) == {}
+
+
+def test_parse_api_programs_skips_entries_without_id() -> None:
+    """Defensive — a malformed wire entry without ``id`` is dropped
+    rather than added with an empty key."""
+    raw = [
+        {"id": "", "name": "no-id", "folder": True, "status": "true"},
+        {"id": "0011", "name": "good", "folder": False, "status": "false"},
+    ]
+    records = parse_api_programs(raw)
+    assert list(records) == ["0011"]

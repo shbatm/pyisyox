@@ -160,6 +160,65 @@ class FolderRecord:
 
 
 @dataclass(slots=True)
+class ProgramRecord:
+    """One program from ``/api/programs``.
+
+    Programs and program-folders live in the same flat list on the
+    wire, discriminated by ``is_folder``. Folders carry only
+    identity + status; programs additionally carry timing /
+    enabled / running fields.
+
+    The eisy returns ``status`` as the strings ``"true"`` or
+    ``"false"`` (matching the legacy XML convention). They're
+    decoded into a Python bool here. Empty time strings become
+    ``None``.
+
+    ``path`` is reconstructed from the ``parent_address`` chain at
+    parse time so consumers can use the legacy ``HA.<platform>/...``
+    folder convention without walking the tree themselves.
+
+    Attributes:
+        address: Program / folder id (4-character hex string).
+        name: User-assigned label.
+        path: Slash-joined ancestry, e.g. ``"My Programs/HA.switch/Foo/status"``.
+            Excludes the root folder name ``"My Programs"`` to match
+            the convention pyisy 3.x consumers used.
+        parent_address: Parent folder id, or ``None`` for the root.
+        is_folder: ``True`` for folders, ``False`` for programs.
+        status: True when the program's last evaluation was True.
+            Folder status reflects the AND of children. Empty string
+            on the wire is treated as ``False``.
+        enabled: ``False`` when the program is disabled. Always
+            ``True`` for folders (which have no enabled flag on
+            the wire). ``None`` if absent.
+        run_at_startup: ``True`` if the program is set to run on
+            controller boot. ``None`` for folders.
+        running: Free-form runtime state — ``"idle"`` on idle
+            programs; running programs report variants like
+            ``"running then"`` / ``"running else"`` /
+            ``"running if"``. ``None`` for folders.
+        last_run_time / last_finish_time / next_scheduled_run_time:
+            ISO 8601 timestamps as strings (``"2026-05-10T14:49:53.000Z"``)
+            or ``None`` when absent. Kept as strings to avoid pulling
+            in a datetime parser at this layer; consumers that need
+            datetime objects can parse on read.
+    """
+
+    address: str
+    name: str
+    path: str
+    parent_address: str | None
+    is_folder: bool
+    status: bool
+    enabled: bool | None = None
+    run_at_startup: bool | None = None
+    running: str | None = None
+    last_run_time: str | None = None
+    last_finish_time: str | None = None
+    next_scheduled_run_time: str | None = None
+
+
+@dataclass(slots=True)
 class NetworkResourceRecord:
     """One entry from ``/rest/networking/resources``.
 
@@ -191,7 +250,10 @@ class LoadResult:
         groups: Map of address → :class:`GroupRecord` for IoX scenes.
         folders: Map of address → :class:`FolderRecord` for the
             organisational tree shown in the controller UI.
-        programs: Raw ``/api/programs`` ``data`` payload.
+        programs: Map of id → :class:`ProgramRecord` for both
+            programs and program-folders (discriminated by
+            ``is_folder``). Empty when the controller has no
+            programs configured.
         triggers: Raw ``/api/triggers`` payload — the program AST as JSON.
         variables: Map of variable type id (``"1"`` or ``"2"``) to the
             raw ``/api/variables/{type}`` ``data`` list.
@@ -205,7 +267,7 @@ class LoadResult:
     nodes: dict[str, NodeRecord]
     groups: dict[str, GroupRecord]
     folders: dict[str, FolderRecord]
-    programs: list[dict[str, Any]]
+    programs: dict[str, ProgramRecord]
     triggers: list[dict[str, Any]]
     variables: dict[str, list[dict[str, Any]]]
     network_resources: dict[str, NetworkResourceRecord]
@@ -307,7 +369,7 @@ class IoXClient:
             nodes=nodes,
             groups=groups,
             folders=folders,
-            programs=_unwrap_data(programs_raw, source="/api/programs"),
+            programs=parse_api_programs(_unwrap_data(programs_raw, source="/api/programs")),
             triggers=_unwrap_data(triggers_raw, source="/api/triggers"),
             variables={
                 "1": _unwrap_data(vars_int_raw, source="/api/variables/1"),
@@ -442,6 +504,26 @@ class IoXClient:
             HTTPError on non-2xx; ClientError on malformed response.
         """
         return await self._post_json(f"/api/variables/{var_type}/{var_id}", body)
+
+    async def run_program_command(self, program_id: str, command: str) -> str:
+        """Send a program / folder command via the legacy REST endpoint.
+
+        Wire shape: ``GET /rest/programs/{id}/{command}``. ``command``
+        is one of:
+
+        * ``run`` / ``runThen`` / ``runElse`` / ``runIf`` — execute
+          the program (or the matching clause). On folders, ``run``
+          executes every program in the folder.
+        * ``stop`` — abort an executing program.
+        * ``enable`` / ``disable`` — toggle program execution.
+        * ``enableRunAtStartup`` / ``disableRunAtStartup`` — toggle
+          the boot-time auto-run flag.
+
+        IoX 6 keeps this legacy path; no ``/api/programs/{id}/...``
+        equivalent has been observed. The controller acknowledges
+        receipt only — status changes flow back over the WebSocket.
+        """
+        return await self._get_text(f"/rest/programs/{program_id}/{command}")
 
     async def run_network_resource(self, resource_id: str | int) -> str:
         """Fire a network resource by id.
@@ -735,6 +817,69 @@ def parse_rest_networking_resources(xml: str) -> dict[str, NetworkResourceRecord
             name=rule_el.findtext("name") or "",
         )
     return resources
+
+
+def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:
+    """Decode the ``/api/programs`` ``data`` list into typed records.
+
+    Reconstructs each entry's ``path`` by walking the ``parentId``
+    chain — the wire payload is a flat list, but consumers expect
+    a slash-joined ancestry to drive the legacy
+    ``HA.<platform>/<name>/<status|actions>`` folder convention.
+    The synthetic root folder name (``"My Programs"`` on stock
+    eisy firmware) is dropped from paths so the leading segment
+    is the user's first folder.
+
+    Status comes off the wire as the strings ``"true"`` / ``"false"``
+    (legacy XML convention preserved); empty / missing strings are
+    treated as ``False``. Empty time strings collapse to ``None``.
+
+    Folders inherit ``status`` from the eisy-side aggregation but
+    don't carry ``enabled`` / ``run_at_startup`` / ``running`` /
+    timing fields — those stay ``None`` on the record.
+    """
+    by_id: dict[str, dict[str, Any]] = {str(entry.get("id") or ""): entry for entry in raw if entry.get("id")}
+
+    def _path(entry: dict[str, Any]) -> str:
+        parts: list[str] = []
+        cursor: dict[str, Any] | None = entry
+        while cursor is not None:
+            parts.append(str(cursor.get("name") or ""))
+            parent_id = cursor.get("parentId")
+            cursor = by_id.get(str(parent_id)) if parent_id else None
+        # Drop the synthetic root segment (always the last one
+        # walked — its parentId is absent or unresolved) so the
+        # leading path segment is the user's first folder. The root
+        # entry itself collapses to an empty string.
+        if parts:
+            parts = parts[:-1]
+        return "/".join(reversed(parts))
+
+    def _str_or_none(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    records: dict[str, ProgramRecord] = {}
+    for prog_id, entry in by_id.items():
+        is_folder = bool(entry.get("folder", False))
+        status_raw = entry.get("status", "")
+        records[prog_id] = ProgramRecord(
+            address=prog_id,
+            name=str(entry.get("name") or ""),
+            path=_path(entry),
+            parent_address=(str(entry.get("parentId")) if entry.get("parentId") else None),
+            is_folder=is_folder,
+            status=str(status_raw).lower() == "true",
+            enabled=entry.get("enabled") if not is_folder else None,
+            run_at_startup=entry.get("runAtStartup") if not is_folder else None,
+            running=_str_or_none(entry.get("running")) if not is_folder else None,
+            last_run_time=_str_or_none(entry.get("lastRunTime")),
+            last_finish_time=_str_or_none(entry.get("lastFinishTime")),
+            next_scheduled_run_time=_str_or_none(entry.get("nextScheduledRunTime")),
+        )
+    return records
 
 
 # --- private helpers ------------------------------------------------------
