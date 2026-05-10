@@ -462,6 +462,44 @@ class Controller:
             raise ControllerNotConnectedError("controller has no client")
         await client.post_variable_update(var_type, var_id, body)
 
+    async def rename_node(self, address: str, name: str) -> None:
+        """Rename a node.
+
+        Wire shape: ``POST /api/nodes/{address}`` with
+        ``{"name": "<str>", "nodeType": "node"}``.
+
+        The ``nodeType`` field is required by the server. Use
+        :meth:`rename_group` for scenes.
+        """
+        await self._post_node(address, {"name": name, "nodeType": "node"})
+
+    async def rename_group(self, address: str, name: str) -> None:
+        """Rename a group / scene.
+
+        Same endpoint as :meth:`rename_node` but with
+        ``nodeType: "group"`` so the server applies the change
+        through the scene registry.
+        """
+        await self._post_node(address, {"name": name, "nodeType": "group"})
+
+    async def rename_folder(self, address: str, name: str) -> None:
+        """Rename a folder (organisational container).
+
+        Same endpoint as :meth:`rename_node` / :meth:`rename_group`
+        but with ``nodeType: "folder"``. Folders are address-keyed
+        like nodes/groups; their addresses are typically 5-digit
+        integers (family ``"13"``).
+        """
+        await self._post_node(address, {"name": name, "nodeType": "folder"})
+
+    async def _post_node(self, address: str, body: dict) -> None:
+        """Internal: route a node mutation through the IoXClient."""
+        self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        await client.post_node_update(address, body)
+
     # --- testing seams -------------------------------------------------
 
     def feed_event_frame(self, raw_frame: str) -> Event | None:

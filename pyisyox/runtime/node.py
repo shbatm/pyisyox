@@ -479,3 +479,16 @@ class Node:
     async def stop_manual_dimming(self) -> None:
         """End manual dimming (legacy Insteon ``SMAN``)."""
         await self.send_command(CMD_MANUAL_DIM_STOP)
+
+    async def rename(self, name: str) -> None:
+        """Rename this node.
+
+        Wire shape: ``POST /api/nodes/{address}`` with
+        ``{"name": "<str>", "nodeType": "node"}``. The IoX server
+        emits a ``<control>_3</control>`` lifecycle event with
+        ``action="NN"`` after a successful rename, so consumers
+        listening through
+        :meth:`Controller.add_node_lifecycle_listener` will see the
+        change without polling.
+        """
+        await self._client.post_node_update(self.address, {"name": name, "nodeType": "node"})

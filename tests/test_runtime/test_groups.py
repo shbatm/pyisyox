@@ -417,3 +417,27 @@ def test_group_all_on_false_when_no_members() -> None:
     )
     group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes={})
     assert group.group_all_on is False
+
+
+@pytest.mark.asyncio
+async def test_group_rename_posts_name_and_type_group() -> None:
+    """``Group.rename`` posts ``{"name", "nodeType": "group"}`` to
+    ``/api/nodes/{address}`` — same endpoint as Node.rename, but the
+    server requires the type field to dispatch through the scene
+    registry instead of the node registry."""
+    record = GroupRecord(
+        address="55090",
+        name="Driveway",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+    )
+    session = FakeSession(BASE)
+    session.set_route("POST", "/api/nodes/55090", 200, '{"successful": true, "data": null}')
+    group = Group.from_record(record, _profile(), _make_client(session))
+
+    await group.rename("Front Yard")
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/nodes/55090")
+    assert kwargs["json"] == {"name": "Front Yard", "nodeType": "group"}
