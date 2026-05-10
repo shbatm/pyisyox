@@ -35,7 +35,7 @@ from pyisyox.runtime.folder import Folder
 from pyisyox.runtime.group import Group
 from pyisyox.runtime.network_resource import NetworkResource
 from pyisyox.runtime.node import Node
-from pyisyox.runtime.program import Program, ProgramFolder
+from pyisyox.runtime.program import Program, ProgramCommand, ProgramFolder
 from pyisyox.runtime.ws import WebSocketEventStream
 from pyisyox.schema.profile import Profile, ProfileMergeResult
 
@@ -497,13 +497,14 @@ class Controller:
         loaded.network_resources = fresh.network_resources
         return diff
 
-    async def send_program_command(self, program_id: str, command: str) -> None:
+    async def send_program_command(self, program_id: str, command: ProgramCommand | str) -> None:
         """Send a program / folder command via the legacy REST endpoint.
 
         Wire shape: ``GET /rest/programs/{id}/{command}``. See
-        :meth:`pyisyox.client.IoXClient.run_program_command` for the
-        documented command set. Status updates flow back over the
-        WebSocket — the controller acknowledges receipt only.
+        :class:`pyisyox.runtime.ProgramCommand` for the typed command
+        set; bare strings are accepted too (the StrEnum members are
+        themselves strings, so ``ProgramCommand.RUN_THEN == "runThen"``
+        — pass either form).
 
         Lower-level than :meth:`Program.run` etc.; useful for
         consumers that hold ids without a Program wrapper (e.g. an

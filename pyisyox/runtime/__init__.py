@@ -23,7 +23,7 @@ from pyisyox.runtime.folder import Folder
 from pyisyox.runtime.group import Group
 from pyisyox.runtime.network_resource import NetworkResource
 from pyisyox.runtime.node import Node, NodeCommandError
-from pyisyox.runtime.program import Program, ProgramFolder
+from pyisyox.runtime.program import Program, ProgramCommand, ProgramFolder
 from pyisyox.runtime.ws import StatusListener, WebSocketEventStream
 
 __all__ = [
@@ -39,6 +39,7 @@ __all__ = [
     "NodeLifecycleEvent",
     "NodeLifecycleListener",
     "Program",
+    "ProgramCommand",
     "ProgramFolder",
     "ProgramStatusEvent",
     "ProgramStatusListener",
