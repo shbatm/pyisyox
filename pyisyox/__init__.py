@@ -49,6 +49,7 @@ from pyisyox.client import (
     NodePropertyValue,
     NodeRecord,
     ProgramRecord,
+    VariableRecord,
 )
 from pyisyox.controller import Controller, ControllerNotConnectedError
 from pyisyox.exceptions import (
@@ -78,6 +79,7 @@ from pyisyox.runtime import (
     ProgramStatusEvent,
     ProgramStatusListener,
     StatusListener,
+    Variable,
     WebSocketEventStream,
 )
 from pyisyox.schema.profile import Profile, ProfileMergeResult
@@ -135,6 +137,8 @@ __all__ = [
     "ReadingPlatform",
     "StatusListener",
     "TLSVersionError",
+    "Variable",
+    "VariableRecord",
     "WebSocketEventStream",
     "build_sslcontext",
     "classify",

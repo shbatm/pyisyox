@@ -216,9 +216,9 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     assert flume.properties["GV1"].formatted == "0.6839 US gallons"
     assert flume.family_id == "10"
 
-    # Variables data unwrapped
-    assert result.variables["1"][0]["name"] == "X"
-    assert result.variables["2"] == []
+    # Variables parsed into typed records keyed by id within type.
+    assert result.variables["1"]["1"].name == "X"
+    assert result.variables["2"] == {}
 
     # Networking module surfaced
     assert list(result.network_resources) == ["1"]

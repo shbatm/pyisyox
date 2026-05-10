@@ -10,10 +10,12 @@ import pytest
 from pyisyox.client import (
     ClientError,
     NodePropertyValue,
+    VariableRecord,
     _unwrap_data,
     merge_status_into_nodes,
     parse_api_nodes,
     parse_api_programs,
+    parse_api_variables_type,
     parse_rest_networking_resources,
     parse_rest_status,
 )
@@ -537,3 +539,82 @@ def test_parse_api_programs_skips_entries_without_id() -> None:
     ]
     records = parse_api_programs(raw)
     assert list(records) == ["0011"]
+
+
+# --- /api/variables/{type} ------------------------------------------------
+
+
+def test_parse_api_variables_type_extracts_typed_records() -> None:
+    """Wire fields (``id`` / ``val`` / ``init`` / ``prec`` / ``name`` / ``ts``)
+    round-trip onto :class:`VariableRecord`, with the wire ``val`` renamed
+    to ``value`` for ergonomic reads."""
+    raw = json.loads((FIXTURE_DIR / "api_variables_state.json").read_text())
+    records = parse_api_variables_type(_unwrap_data(raw, source="test"), "2")
+
+    assert set(records) == {"1", "2", "5", "8", "17"}
+    state_1 = records["1"]
+    assert state_1.type_id == "2"
+    assert state_1.id == "1"
+    assert state_1.name == "State_1"
+    assert state_1.value == 0
+    assert state_1.init == 0
+    assert state_1.prec == 0
+    assert state_1.ts == "2026-05-07T21:16:44.000Z"
+
+    # Composite address joins type+id for downstream unique-id derivation.
+    assert state_1.address == "2.1"
+
+    # ``prec`` carries through for variables that need decimal scaling.
+    calib = records["17"]
+    assert calib.prec == 2
+    assert calib.value == 12345
+
+
+def test_parse_api_variables_type_stamps_type_id_on_every_record() -> None:
+    """The wire payload doesn't carry the variable type — :func:`parse_api_variables_type`
+    receives it as an argument and stamps it onto each record so downstream
+    consumers can route mutations back to ``/api/variables/{type}/{id}`` without
+    threading the type separately."""
+    raw = json.loads((FIXTURE_DIR / "api_variables_int.json").read_text())
+    records = parse_api_variables_type(_unwrap_data(raw, source="test"), "1")
+    assert all(record.type_id == "1" for record in records.values())
+
+
+def test_parse_api_variables_type_handles_empty_payload() -> None:
+    """Controllers without state variables return an empty data list — the
+    parser should produce an empty dict, not raise."""
+    assert parse_api_variables_type([], "2") == {}
+
+
+def test_parse_api_variables_type_skips_entries_without_id() -> None:
+    """Defensive: an entry without an ``id`` field is dropped rather than
+    added with an empty key."""
+    raw = [
+        {"id": "", "name": "no-id", "val": 0},
+        {"name": "missing-id-key", "val": 0},
+        {"id": "5", "name": "good", "val": 1, "init": 0, "prec": 0},
+    ]
+    records = parse_api_variables_type(raw, "1")
+    assert list(records) == ["5"]
+
+
+def test_parse_api_variables_type_coerces_non_int_values_to_zero() -> None:
+    """Junk values in ``val`` / ``init`` / ``prec`` collapse to zero rather
+    than raising — preserves the parse-permissively contract that
+    ``parse_rest_status`` follows for empty XML attrs."""
+    raw = [
+        {"id": "1", "name": "garbage", "val": "abc", "init": "", "prec": None}
+    ]
+    record = parse_api_variables_type(raw, "1")["1"]
+    assert (record.value, record.init, record.prec) == (0, 0, 0)
+
+
+def test_variable_record_default_construction() -> None:
+    """Construction with just type_id + id + name produces sensible defaults
+    (zero value/init/prec, empty timestamp)."""
+    record = VariableRecord(type_id="1", id="42", name="Spare")
+    assert record.value == 0
+    assert record.init == 0
+    assert record.prec == 0
+    assert record.ts == ""
+    assert record.address == "1.42"

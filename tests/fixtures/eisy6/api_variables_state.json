@@ -1,0 +1,45 @@
+{
+  "successful": true,
+  "data": [
+    {
+      "id": "1",
+      "val": 0,
+      "init": 0,
+      "prec": 0,
+      "name": "State_1",
+      "ts": "2026-05-07T21:16:44.000Z"
+    },
+    {
+      "id": "2",
+      "val": 1,
+      "init": 1,
+      "prec": 0,
+      "name": "State_2",
+      "ts": "2026-05-08T13:23:37.000Z"
+    },
+    {
+      "id": "5",
+      "val": 64,
+      "init": 64,
+      "prec": 0,
+      "name": "Current Month",
+      "ts": "2026-05-07T21:16:44.000Z"
+    },
+    {
+      "id": "8",
+      "val": 60,
+      "init": 0,
+      "prec": 0,
+      "name": "Brightness Override",
+      "ts": "2026-05-08T13:56:48.000Z"
+    },
+    {
+      "id": "17",
+      "val": 12345,
+      "init": 0,
+      "prec": 2,
+      "name": "Calibration Factor",
+      "ts": "2026-05-08T10:50:36.000Z"
+    }
+  ]
+}

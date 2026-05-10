@@ -227,6 +227,44 @@ class ProgramRecord:
 
 
 @dataclass(slots=True)
+class VariableRecord:
+    """One entry from ``/api/variables/{type}``.
+
+    The IoX controller exposes two variable types — integer (``"1"``)
+    and state (``"2"``) — and each carries an int value (``val``),
+    init/restore-on-startup value, decimal precision, a user-assigned
+    name, and a last-change timestamp. The wire JSON uses ``val`` for
+    the current value; we expose it here as ``value`` so consumers
+    don't have to track the wire spelling.
+
+    Attributes:
+        type_id: ``"1"`` (integer) or ``"2"`` (state).
+        id: Variable id within the type.
+        name: User-assigned label.
+        value: Current value (wire field ``val``).
+        init: Restore-on-startup value.
+        prec: Decimal precision (``displayed = raw / 10**prec``).
+        ts: Last-change timestamp as the controller emits it (ISO 8601
+            UTC). Empty string when the controller omits it.
+    """
+
+    type_id: str
+    id: str
+    name: str
+    value: int = 0
+    init: int = 0
+    prec: int = 0
+    ts: str = ""
+
+    @property
+    def address(self) -> str:
+        """``"{type_id}.{id}"`` — composite identifier that joins into
+        controller endpoints and is useful for unique-id derivation in
+        downstream consumers (HA entity unique ids, log lines, etc.)."""
+        return f"{self.type_id}.{self.id}"
+
+
+@dataclass(slots=True)
 class NetworkResourceRecord:
     """One entry from ``/rest/networking/resources``.
 
@@ -277,7 +315,7 @@ class LoadResult:
     folders: dict[str, FolderRecord]
     programs: dict[str, ProgramRecord]
     triggers: list[dict[str, Any]]
-    variables: dict[str, list[dict[str, Any]]]
+    variables: dict[str, dict[str, VariableRecord]]
     network_resources: dict[str, NetworkResourceRecord]
 
 
@@ -380,8 +418,12 @@ class IoXClient:
             programs=parse_api_programs(_unwrap_data(programs_raw, source="/api/programs")),
             triggers=_unwrap_data(triggers_raw, source="/api/triggers"),
             variables={
-                "1": _unwrap_data(vars_int_raw, source="/api/variables/1"),
-                "2": _unwrap_data(vars_state_raw, source="/api/variables/2"),
+                "1": parse_api_variables_type(
+                    _unwrap_data(vars_int_raw, source="/api/variables/1"), "1"
+                ),
+                "2": parse_api_variables_type(
+                    _unwrap_data(vars_state_raw, source="/api/variables/2"), "2"
+                ),
             },
             network_resources=parse_rest_networking_resources(networking_xml),
         )
@@ -836,6 +878,58 @@ def parse_rest_networking_resources(xml: str) -> dict[str, NetworkResourceRecord
             name=rule_el.findtext("name") or "",
         )
     return resources
+
+
+def parse_api_variables_type(
+    raw: list[dict[str, Any]], type_id: str
+) -> dict[str, VariableRecord]:
+    """Decode one ``/api/variables/{type}`` ``data`` list into typed records.
+
+    Each wire entry is::
+
+        {"id": "<int>", "val": <int>, "init": <int>, "prec": <int>,
+         "name": "<str>", "ts": "<ISO8601>"}
+
+    The wire field for the current value is ``val``; this surfaces it
+    as :attr:`VariableRecord.value` so consumers don't have to track
+    the wire spelling. Entries without an ``id`` are skipped.
+
+    Args:
+        raw: The unwrapped ``data`` list from ``/api/variables/{type}``.
+        type_id: ``"1"`` (integer) or ``"2"`` (state). Stamped onto each
+            record so callers can route writes back to the right
+            ``/api/variables/{type}/{id}`` endpoint without carrying the
+            type alongside.
+
+    Returns:
+        Map of variable id (string) → :class:`VariableRecord`.
+    """
+    out: dict[str, VariableRecord] = {}
+    for entry in raw:
+        vid = entry.get("id")
+        if vid is None or vid == "":
+            continue
+        vid_str = str(vid)
+        out[vid_str] = VariableRecord(
+            type_id=str(type_id),
+            id=vid_str,
+            name=str(entry.get("name", "")),
+            value=_coerce_int(entry.get("val"), default=0),
+            init=_coerce_int(entry.get("init"), default=0),
+            prec=_coerce_prec(entry.get("prec")),
+            ts=str(entry.get("ts", "")),
+        )
+    return out
+
+
+def _coerce_int(raw: Any, *, default: int = 0) -> int:
+    """Coerce a wire value to ``int``, falling back to ``default`` on junk."""
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:
