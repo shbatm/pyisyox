@@ -419,6 +419,112 @@ def test_group_all_on_false_when_no_members() -> None:
     assert group.group_all_on is False
 
 
+# group_any_on test scaffolding -----------------------------------------
+#
+# Mirrors the group_all_on cases above but with the inverted aggregation:
+# "at least one member on" is what HA's scene-switch ``is_on`` wants, and
+# what the legacy ``pyisy.Group.status`` returned.
+
+
+def test_group_any_on_true_when_at_least_one_member_is_on() -> None:
+    """Mixed on/off members — any-on aggregation is True."""
+    nodes: dict[str, NodeRecord] = {
+        "M1": _record_with_st("M1", "255"),
+        "M2": _record_with_st("M2", "0"),
+    }
+    record = GroupRecord(
+        address="G",
+        name="Mixed",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "M2"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_any_on is True
+
+
+def test_group_any_on_false_when_every_member_is_off() -> None:
+    nodes: dict[str, NodeRecord] = {
+        "M1": _record_with_st("M1", "0"),
+        "M2": _record_with_st("M2", "0"),
+    }
+    record = GroupRecord(
+        address="G",
+        name="All Off",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "M2"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_any_on is False
+
+
+def test_group_any_on_skips_missing_members_instead_of_short_circuiting() -> None:
+    """Unlike ``group_all_on``, a member dropped from the registry doesn't
+    flip the aggregation to False — present-and-on members still count."""
+    nodes: dict[str, NodeRecord] = {"M1": _record_with_st("M1", "255")}
+    record = GroupRecord(
+        address="G",
+        name="Stale",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "M2_MISSING"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_any_on is True
+
+
+def test_group_any_on_false_when_member_has_no_st() -> None:
+    no_st = NodeRecord(
+        address="M1",
+        name="M1",
+        nodedef_id="X",
+        family_id="1",
+        instance_id="1",
+        properties={"BATLVL": NodePropertyValue(id="BATLVL", value="80", formatted="80%")},
+    )
+    nodes: dict[str, NodeRecord] = {"M1": no_st}
+    record = GroupRecord(
+        address="G",
+        name="No ST",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1",),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_any_on is False
+
+
+def test_group_any_on_false_when_constructed_without_nodes_ref() -> None:
+    record = GroupRecord(
+        address="G",
+        name="No Nodes",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1",),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)))
+    assert group.group_any_on is False
+
+
+def test_group_any_on_false_when_no_members() -> None:
+    record = GroupRecord(
+        address="EMPTY",
+        name="No Members",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=(),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes={})
+    assert group.group_any_on is False
+
+
 @pytest.mark.asyncio
 async def test_group_rename_posts_name_and_type_group() -> None:
     """``Group.rename`` posts ``{"name", "nodeType": "group"}`` to
