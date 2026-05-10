@@ -243,11 +243,7 @@ CMD_OFF_FAST = "DFOF"
 CMD_ON = "DON"
 CMD_ON_FAST = "DFON"
 CMD_RESET = "RESET"
-CMD_RUN = "run"
-CMD_RUN_ELSE = "runElse"
-CMD_RUN_THEN = "runThen"
 CMD_SECURE = "SECMD"
-CMD_STOP = "stop"
 CMD_X10 = "X10"
 
 COMMAND_FRIENDLY_NAME: dict[str, str] = {

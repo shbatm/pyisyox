@@ -508,16 +508,10 @@ class IoXClient:
     async def run_program_command(self, program_id: str, command: str) -> str:
         """Send a program / folder command via the legacy REST endpoint.
 
-        Wire shape: ``GET /rest/programs/{id}/{command}``. ``command``
-        is one of:
-
-        * ``run`` / ``runThen`` / ``runElse`` / ``runIf`` — execute
-          the program (or the matching clause). On folders, ``run``
-          executes every program in the folder.
-        * ``stop`` — abort an executing program.
-        * ``enable`` / ``disable`` — toggle program execution.
-        * ``enableRunAtStartup`` / ``disableRunAtStartup`` — toggle
-          the boot-time auto-run flag.
+        Wire shape: ``GET /rest/programs/{id}/{command}``. See
+        :class:`pyisyox.runtime.ProgramCommand` for the typed
+        command set; bare strings (the camelCase wire values) are
+        accepted too.
 
         IoX 6 keeps this legacy path; no ``/api/programs/{id}/...``
         equivalent has been observed. The controller acknowledges

@@ -13,6 +13,7 @@ import pytest
 
 from pyisyox.auth import LocalAuth, PortalAuth
 from pyisyox.controller import Controller, ControllerNotConnectedError
+from pyisyox.runtime import ProgramCommand
 from pyisyox.runtime.events import Event, NodeLifecycleAction, NodeLifecycleEvent
 from tests.test_client.conftest import FakeSession as FakeHttpSession
 from tests.test_runtime.test_ws import FakeWebSocket, FakeWSMessage
@@ -755,6 +756,24 @@ async def test_send_program_command_targets_legacy_endpoint() -> None:
     method, path, _ = session.calls[-1]
     assert (method, path) == ("GET", "/rest/programs/0030/runThen")
 
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_send_program_command_accepts_program_command_enum() -> None:
+    """``Controller.send_program_command(id, ProgramCommand.RUN_THEN)``
+    works equivalently to passing the bare string. The StrEnum members
+    are themselves strings, so URL formatting keeps the wire value."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("GET", "/rest/programs/0030/runThen", 200, "<ok/>")
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.send_program_command("0030", ProgramCommand.RUN_THEN)
+
+    _, path, _ = session.calls[-1]
+    assert path == "/rest/programs/0030/runThen"
     await controller.stop()
 
 
