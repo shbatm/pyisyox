@@ -884,6 +884,149 @@ async def test_program_run_then_routes_through_wrapper() -> None:
     await controller.stop()
 
 
+_PROGRAM_VERBS = [
+    ("run", "run"),
+    ("stop", "stop"),
+    ("enable", "enable"),
+    ("disable", "disable"),
+    ("run_then", "runThen"),
+    ("run_else", "runElse"),
+    ("run_if", "runIf"),
+    ("enable_run_at_startup", "enableRunAtStartup"),
+    ("disable_run_at_startup", "disableRunAtStartup"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method_name", "wire_verb"), _PROGRAM_VERBS)
+async def test_program_command_wrappers_hit_legacy_endpoint(
+    method_name: str, wire_verb: str
+) -> None:
+    """Every command method on ``Program`` issues
+    ``GET /rest/programs/{id}/{wire_verb}``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {
+                "id": "0030",
+                "name": "Foo",
+                "folder": False,
+                "status": "true",
+                "enabled": True,
+            },
+        ),
+    )
+    session.set_route("GET", f"/rest/programs/0030/{wire_verb}", 200, "<ok/>")
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await getattr(controller.programs["0030"], method_name)()
+
+    method, path, _ = session.calls[-1]
+    assert (method, path) == ("GET", f"/rest/programs/0030/{wire_verb}")
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method_name", "wire_verb"),
+    [("run", "run"), ("stop", "stop"), ("enable", "enable"), ("disable", "disable")],
+)
+async def test_program_folder_command_wrappers_hit_legacy_endpoint(
+    method_name: str, wire_verb: str
+) -> None:
+    """``ProgramFolder`` only carries the four shared verbs; each
+    routes to ``GET /rest/programs/{folder_id}/{wire_verb}``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {"id": "0001", "name": "My Programs", "folder": True, "status": "true"},
+            {
+                "id": "0010",
+                "name": "HA.switch",
+                "folder": True,
+                "status": "true",
+                "parentId": "0001",
+            },
+        ),
+    )
+    session.set_route("GET", f"/rest/programs/0010/{wire_verb}", 200, "<ok/>")
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await getattr(controller.program_folders["0010"], method_name)()
+
+    method, path, _ = session.calls[-1]
+    assert (method, path) == ("GET", f"/rest/programs/0010/{wire_verb}")
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_program_record_fields_surface_via_properties() -> None:
+    """Every ``ProgramRecord`` field is exposed through the
+    corresponding ``Program`` / ``ProgramFolder`` property, and
+    both types render a useful ``repr``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {"id": "0001", "name": "My Programs", "folder": True, "status": "true"},
+            {
+                "id": "0010",
+                "name": "HA.switch",
+                "folder": True,
+                "status": "true",
+                "parentId": "0001",
+            },
+            {
+                "id": "0030",
+                "name": "Foo Status",
+                "folder": False,
+                "status": "true",
+                "enabled": True,
+                "runAtStartup": False,
+                "running": "running then",
+                "lastRunTime": "2026-05-10T14:49:53.000Z",
+                "lastFinishTime": "2026-05-10T14:49:54.000Z",
+                "nextScheduledRunTime": "2026-05-10T15:00:00.000Z",
+                "parentId": "0010",
+            },
+        ),
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    program = controller.programs["0030"]
+    assert program.address == "0030"
+    assert program.parent_address == "0010"
+    assert program.run_at_startup is False
+    assert program.running == "running then"
+    assert program.last_run_time == "2026-05-10T14:49:53.000Z"
+    assert program.last_finish_time == "2026-05-10T14:49:54.000Z"
+    assert program.next_scheduled_run_time == "2026-05-10T15:00:00.000Z"
+    assert repr(program) == (
+        "Program(address='0030', name='Foo Status', path='HA.switch/Foo Status', status=True)"
+    )
+
+    folder = controller.program_folders["0010"]
+    assert folder.address == "0010"
+    assert folder.parent_address == "0001"
+    assert repr(folder) == "ProgramFolder(address='0010', name='HA.switch', path='HA.switch')"
+
+    await controller.stop()
+
+
 @pytest.mark.asyncio
 async def test_send_program_command_before_connect_raises() -> None:
     controller = Controller(BASE, LocalAuth("admin", "p"))

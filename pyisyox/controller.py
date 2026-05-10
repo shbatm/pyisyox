@@ -36,6 +36,7 @@ from pyisyox.runtime.group import Group
 from pyisyox.runtime.network_resource import NetworkResource
 from pyisyox.runtime.node import Node
 from pyisyox.runtime.program import Program, ProgramCommand, ProgramFolder
+from pyisyox.runtime.variable import Variable
 from pyisyox.runtime.ws import WebSocketEventStream
 from pyisyox.schema.profile import Profile, ProfileMergeResult
 
@@ -321,9 +322,27 @@ class Controller:
         return self._loaded_or_raise().triggers
 
     @property
-    def variables(self) -> dict[str, list[dict]]:
-        """Raw variables, keyed by type id (``"1"`` integer, ``"2"`` state)."""
-        return self._loaded_or_raise().variables
+    def variables(self) -> dict[str, dict[str, Variable]]:
+        """Map of variable type → id → typed :class:`Variable` wrapper.
+
+        Outer key is ``"1"`` (integer) or ``"2"`` (state); inner key is
+        the variable id within that type. Each :class:`Variable` shares
+        its underlying :class:`VariableRecord` with the controller's
+        loaded state — writes via the wrapper's mutation coroutines
+        update the record in place so subsequent reads reflect the new
+        value without waiting for a WS frame.
+
+        Returns an empty inner dict for a type the controller has no
+        variables in.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        return {
+            type_id: {vid: Variable.from_record(record, client) for vid, record in records.items()}
+            for type_id, records in loaded.variables.items()
+        }
 
     @property
     def network_resources(self) -> dict[str, NetworkResource]:

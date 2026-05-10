@@ -24,6 +24,7 @@ from pyisyox.runtime.group import Group
 from pyisyox.runtime.network_resource import NetworkResource
 from pyisyox.runtime.node import Node, NodeCommandError
 from pyisyox.runtime.program import Program, ProgramCommand, ProgramFolder
+from pyisyox.runtime.variable import Variable
 from pyisyox.runtime.ws import StatusListener, WebSocketEventStream
 
 __all__ = [
@@ -44,6 +45,7 @@ __all__ = [
     "ProgramStatusEvent",
     "ProgramStatusListener",
     "StatusListener",
+    "Variable",
     "WebSocketEventStream",
     "parse_event_frame",
 ]
