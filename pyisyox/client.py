@@ -81,6 +81,13 @@ class NodePropertyValue:
     The shape mirrors :class:`pyisyox.schema.nodedef.Property` but is kept
     here as a private data carrier so the client can produce values
     without importing the runtime Node classes.
+
+    ``prec`` is the decimal precision the controller declares for this
+    value (``raw / 10**prec`` is the displayed number). It arrives on
+    every wire shape — ``/api/nodes`` JSON has ``"prec": <int>``,
+    ``/rest/status`` XML uses ``prec="<int>"``, and WS frames put it on
+    the ``<action prec="...">`` element. Defaults to ``0`` (= no
+    scaling) when the controller omits it.
     """
 
     id: str
@@ -88,6 +95,7 @@ class NodePropertyValue:
     formatted: str = ""
     uom: str = ""
     name: str = ""
+    prec: int = 0
 
 
 @dataclass(slots=True)
@@ -581,6 +589,21 @@ class IoXClient:
 # --- parsers --------------------------------------------------------------
 
 
+def _coerce_prec(raw: Any) -> int:
+    """Normalise a wire-side ``prec`` value to ``int``.
+
+    Returns ``0`` when the field is missing, blank, or non-numeric so
+    the dataclass default holds; the controller occasionally omits the
+    attribute entirely on properties without scaling.
+    """
+    if raw is None or raw == "":
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
 def parse_api_nodes(raw: dict[str, Any]) -> dict[str, NodeRecord]:
     """Decode the ``/api/nodes`` JSON payload into a map of address → record.
 
@@ -625,6 +648,7 @@ def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
             formatted=str(prop.get("formatted", "")),
             uom=str(prop.get("uom", "")),
             name=str(prop.get("name", "")),
+            prec=_coerce_prec(prop.get("prec")),
         )
 
     # ``flag`` arrives stringified from the controller (e.g. ``"128"``
@@ -682,6 +706,7 @@ def parse_rest_status(xml: str) -> dict[str, dict[str, NodePropertyValue]]:
                 formatted=prop.get("formatted", ""),
                 uom=prop.get("uom", ""),
                 name=prop.get("name", ""),
+                prec=_coerce_prec(prop.get("prec")),
             )
         out[addr] = props
     return out

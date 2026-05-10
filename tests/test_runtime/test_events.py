@@ -271,6 +271,39 @@ def test_dispatcher_overlays_property_into_node_record() -> None:
     assert prop.uom == "100"
 
 
+def test_dispatcher_propagates_prec_into_node_record() -> None:
+    """``<action prec="...">`` flows through to ``NodePropertyValue.prec``
+    so the consumer can scale ``raw / 10**prec`` without a second wire trip."""
+    nodes = {"X": _make_record("X")}
+    dispatcher = EventDispatcher(nodes)
+    xml = (
+        '<Event seqnum="1"><control>GV1</control>'
+        '<action uom="69" prec="4">6839</action>'
+        "<node>X</node>"
+        "<fmtAct>0.6839 US gallons</fmtAct><fmtName>Volume</fmtName></Event>"
+    )
+
+    dispatcher.feed(xml)
+
+    prop = nodes["X"].properties["GV1"]
+    assert prop.prec == 4
+    assert prop.value == "6839"
+
+
+def test_dispatcher_falls_back_to_zero_prec_when_action_omits_it() -> None:
+    """An ``<action>`` without ``prec`` (Insteon ``ST``, etc.) defaults to
+    ``prec=0`` rather than leaving the field unset — the consumer always
+    has a numeric scaler."""
+    nodes = {"X": _make_record("X")}
+    dispatcher = EventDispatcher(nodes)
+    xml = (
+        '<Event seqnum="1"><control>ST</control><action uom="100">255</action>'
+        "<node>X</node><fmtAct>On</fmtAct></Event>"
+    )
+    dispatcher.feed(xml)
+    assert nodes["X"].properties["ST"].prec == 0
+
+
 def test_dispatcher_replaces_existing_property() -> None:
     """An event for an already-tracked property replaces (not merges) it."""
     nodes = {
