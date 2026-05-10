@@ -101,9 +101,7 @@ class Variable:
         without waiting for a WS frame.
         """
         new_value = int(value)
-        await self._client.post_variable_update(
-            self._record.type_id, self._record.id, {"value": new_value}
-        )
+        await self._client.post_variable_update(self._record.type_id, self._record.id, {"value": new_value})
         self._record.value = new_value
 
     async def set_init(self, init: int) -> None:
@@ -113,9 +111,7 @@ class Variable:
         ``{"init": <int>}``.
         """
         new_init = int(init)
-        await self._client.post_variable_update(
-            self._record.type_id, self._record.id, {"init": new_init}
-        )
+        await self._client.post_variable_update(self._record.type_id, self._record.id, {"init": new_init})
         self._record.init = new_init
 
     async def rename(self, name: str) -> None:
@@ -124,13 +120,8 @@ class Variable:
         Wire shape: ``POST /api/variables/{type}/{id}`` with
         ``{"name": "<str>"}``.
         """
-        await self._client.post_variable_update(
-            self._record.type_id, self._record.id, {"name": name}
-        )
+        await self._client.post_variable_update(self._record.type_id, self._record.id, {"name": name})
         self._record.name = name
 
     def __repr__(self) -> str:
-        return (
-            f"Variable(type_id={self.type_id!r}, id={self.id!r}, "
-            f"name={self.name!r}, value={self.value})"
-        )
+        return f"Variable(type_id={self.type_id!r}, id={self.id!r}, name={self.name!r}, value={self.value})"

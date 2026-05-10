@@ -206,11 +206,7 @@ def test_parse_rest_status_captures_prec_from_xml_attr() -> None:
 
 def test_parse_status_handles_non_numeric_prec_defensively() -> None:
     """A blank or junk ``prec`` shouldn't poison the parse — coerce to 0."""
-    xml = (
-        '<nodes><node id="X">'
-        '<property id="GV1" value="" formatted="" uom="" prec=""/>'
-        "</node></nodes>"
-    )
+    xml = '<nodes><node id="X"><property id="GV1" value="" formatted="" uom="" prec=""/></node></nodes>'
     assert parse_rest_status(xml)["X"]["GV1"].prec == 0
 
 
@@ -602,9 +598,7 @@ def test_parse_api_variables_type_coerces_non_int_values_to_zero() -> None:
     """Junk values in ``val`` / ``init`` / ``prec`` collapse to zero rather
     than raising — preserves the parse-permissively contract that
     ``parse_rest_status`` follows for empty XML attrs."""
-    raw = [
-        {"id": "1", "name": "garbage", "val": "abc", "init": "", "prec": None}
-    ]
+    raw = [{"id": "1", "name": "garbage", "val": "abc", "init": "", "prec": None}]
     record = parse_api_variables_type(raw, "1")["1"]
     assert (record.value, record.init, record.prec) == (0, 0, 0)
 

@@ -340,10 +340,7 @@ class Controller:
         if client is None:  # pragma: no cover
             raise ControllerNotConnectedError("controller has no client")
         return {
-            type_id: {
-                vid: Variable.from_record(record, client)
-                for vid, record in records.items()
-            }
+            type_id: {vid: Variable.from_record(record, client) for vid, record in records.items()}
             for type_id, records in loaded.variables.items()
         }
 

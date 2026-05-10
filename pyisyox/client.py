@@ -418,12 +418,8 @@ class IoXClient:
             programs=parse_api_programs(_unwrap_data(programs_raw, source="/api/programs")),
             triggers=_unwrap_data(triggers_raw, source="/api/triggers"),
             variables={
-                "1": parse_api_variables_type(
-                    _unwrap_data(vars_int_raw, source="/api/variables/1"), "1"
-                ),
-                "2": parse_api_variables_type(
-                    _unwrap_data(vars_state_raw, source="/api/variables/2"), "2"
-                ),
+                "1": parse_api_variables_type(_unwrap_data(vars_int_raw, source="/api/variables/1"), "1"),
+                "2": parse_api_variables_type(_unwrap_data(vars_state_raw, source="/api/variables/2"), "2"),
             },
             network_resources=parse_rest_networking_resources(networking_xml),
         )
@@ -880,9 +876,7 @@ def parse_rest_networking_resources(xml: str) -> dict[str, NetworkResourceRecord
     return resources
 
 
-def parse_api_variables_type(
-    raw: list[dict[str, Any]], type_id: str
-) -> dict[str, VariableRecord]:
+def parse_api_variables_type(raw: list[dict[str, Any]], type_id: str) -> dict[str, VariableRecord]:
     """Decode one ``/api/variables/{type}`` ``data`` list into typed records.
 
     Each wire entry is::
