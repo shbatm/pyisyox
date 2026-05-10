@@ -119,6 +119,12 @@ def _stub_responses(session: FakeSession) -> None:
     session.set_route("GET", "/api/triggers", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/variables/1", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/variables/2", 200, {"successful": True, "data": []})
+    session.set_route(
+        "GET",
+        "/rest/networking/resources",
+        200,
+        '<?xml version="1.0"?><NetConfig/>',
+    )
 
 
 # --- error surfaces before connect() -------------------------------------
@@ -620,3 +626,62 @@ async def test_set_variable_before_connect_raises() -> None:
     controller = Controller(BASE, LocalAuth("admin", "p"))
     with pytest.raises(ControllerNotConnectedError):
         await controller.set_variable_value(2, 8, 1)
+
+
+@pytest.mark.asyncio
+async def test_run_network_resource_fires_legacy_endpoint() -> None:
+    """``Controller.run_network_resource(5)`` issues
+    ``GET /rest/networking/resources/5``. No modern ``/api/networking``
+    equivalent has been observed; the legacy endpoint is the only
+    supported path on both ISY-994 and IoX 6."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("GET", "/rest/networking/resources/5", 200, "<RestResponse status='200'/>")
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.run_network_resource(5)
+
+    method, path, _ = session.calls[-1]
+    assert (method, path) == ("GET", "/rest/networking/resources/5")
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_run_network_resource_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.run_network_resource(1)
+
+
+@pytest.mark.asyncio
+async def test_network_resources_property_wraps_records() -> None:
+    """``Controller.network_resources`` exposes parsed records as
+    runtime ``NetworkResource`` wrappers; each one's ``run()`` fires
+    the same wire endpoint as ``Controller.run_network_resource``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    # Override the default empty NetConfig with a populated payload.
+    session.set_route(
+        "GET",
+        "/rest/networking/resources",
+        200,
+        '<?xml version="1.0"?><NetConfig>'
+        "<NetRule><id>3</id><name>Notify</name></NetRule>"
+        "<NetRule><id>7</id><name>Webhook</name></NetRule>"
+        "</NetConfig>",
+    )
+    session.set_route("GET", "/rest/networking/resources/3", 200, "<ok/>")
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    resources = controller.network_resources
+    assert {addr: r.name for addr, r in resources.items()} == {
+        "3": "Notify",
+        "7": "Webhook",
+    }
+    await resources["3"].run()
+    assert any(c[1] == "/rest/networking/resources/3" for c in session.calls)
+
+    await controller.stop()

@@ -10,6 +10,7 @@ from pyisyox.client import (
     _unwrap_data,
     merge_status_into_nodes,
     parse_api_nodes,
+    parse_rest_networking_resources,
     parse_rest_status,
 )
 
@@ -286,3 +287,50 @@ def test_parse_api_nodes_flag_defaults_to_zero_when_absent_or_unparseable() -> N
     nodes = parse_api_nodes(raw)
     assert nodes["X"].flag == 0
     assert nodes["Z"].flag == 0
+
+
+# --- /rest/networking/resources XML --------------------------------------
+
+
+def test_parse_rest_networking_resources_extracts_records() -> None:
+    """Two resources, surfaced with their id (as string) + name. The
+    runtime wrapper :class:`pyisyox.runtime.NetworkResource` then
+    fires by id."""
+    xml = (
+        '<?xml version="1.0"?>'
+        "<NetConfig>"
+        "<NetRule><id>1</id><name>Reboot Router</name><host>192.0.2.1</host></NetRule>"
+        "<NetRule><id>2</id><name>Notify</name></NetRule>"
+        "</NetConfig>"
+    )
+    records = parse_rest_networking_resources(xml)
+    assert list(records) == ["1", "2"]
+    assert records["1"].name == "Reboot Router"
+    assert records["2"].address == "2"
+
+
+def test_parse_rest_networking_resources_handles_empty_or_missing() -> None:
+    """Controllers without the networking module return an empty
+    ``<NetConfig/>``. Empty input also flatten to ``{}`` so optional-
+    module endpoints don't abort initial load."""
+    assert parse_rest_networking_resources("") == {}
+    assert parse_rest_networking_resources('<?xml version="1.0"?><NetConfig/>') == {}
+
+
+def test_parse_rest_networking_resources_skips_rules_without_id() -> None:
+    """Defensive — a malformed ``<NetRule>`` without ``<id>`` is
+    dropped rather than added with an empty key."""
+    xml = (
+        '<?xml version="1.0"?>'
+        "<NetConfig>"
+        "<NetRule><name>NoId</name></NetRule>"
+        "<NetRule><id>5</id><name>Real</name></NetRule>"
+        "</NetConfig>"
+    )
+    records = parse_rest_networking_resources(xml)
+    assert list(records) == ["5"]
+
+
+def test_parse_rest_networking_resources_raises_on_malformed_xml() -> None:
+    with pytest.raises(ClientError):
+        parse_rest_networking_resources("<not really xml")

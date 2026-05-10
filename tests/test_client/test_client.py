@@ -193,6 +193,12 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
         "GET", "/api/variables/1", 200, {"successful": True, "data": [{"id": "1", "name": "X"}]}
     )
     session.set_route("GET", "/api/variables/2", 200, {"successful": True, "data": []})
+    session.set_route(
+        "GET",
+        "/rest/networking/resources",
+        200,
+        '<?xml version="1.0"?><NetConfig><NetRule><id>1</id><name>Reboot Router</name></NetRule></NetConfig>',
+    )
 
     client = IoXClient(BASE, PortalAuth("u@example.com", "pass"), session)  # type: ignore[arg-type]
     result = await client.connect()
@@ -214,11 +220,14 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     assert result.variables["1"][0]["name"] == "X"
     assert result.variables["2"] == []
 
-    # Total HTTP cost: 1 (config setup) + 1 (login setup) + 8 (parallel
-    # fan-out) = 10 calls. The fan-out covers: profiles, /api/nodes,
+    # Networking module surfaced
+    assert list(result.network_resources) == ["1"]
+    assert result.network_resources["1"].name == "Reboot Router"
+
+    # Total HTTP cost: 1 (config setup) + 1 (login setup) + 9 (parallel
+    # fan-out) = 11 calls. The fan-out covers: profiles, /api/nodes,
     # /rest/nodes (groups + folders), /rest/status, /api/programs,
-    # /api/triggers, /api/variables/1, /api/variables/2. The original
-    # "<=7" target predated /rest/nodes; it grew to 8 once group + folder
-    # support landed. Still constant w.r.t. node-server count.
+    # /api/triggers, /api/variables/1, /api/variables/2,
+    # /rest/networking/resources. Still constant w.r.t. node-server count.
     fanout = [c for c in session.calls if c[0] == "GET" and c[1] not in ("/api/config",)]
-    assert len(fanout) == 8
+    assert len(fanout) == 9

@@ -33,6 +33,7 @@ from pyisyox.helpers.session import build_sslcontext
 from pyisyox.runtime.events import EventDispatcher
 from pyisyox.runtime.folder import Folder
 from pyisyox.runtime.group import Group
+from pyisyox.runtime.network_resource import NetworkResource
 from pyisyox.runtime.node import Node
 from pyisyox.runtime.ws import WebSocketEventStream
 from pyisyox.schema.profile import Profile, ProfileMergeResult
@@ -273,6 +274,22 @@ class Controller:
         """Raw variables, keyed by type id (``"1"`` integer, ``"2"`` state)."""
         return self._loaded_or_raise().variables
 
+    @property
+    def network_resources(self) -> dict[str, NetworkResource]:
+        """Map of resource id → runtime :class:`NetworkResource`.
+
+        Empty when the controller has no networking module enabled —
+        the optional endpoint either 404s or returns an empty
+        ``<NetConfig/>``, both flattened to ``{}`` here.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        return {
+            address: NetworkResource(record, client) for address, record in loaded.network_resources.items()
+        }
+
     # --- dynamic profile reload ---------------------------------------
 
     async def refresh_profile(self) -> ProfileMergeResult:
@@ -419,7 +436,21 @@ class Controller:
         loaded.programs = fresh.programs
         loaded.triggers = fresh.triggers
         loaded.variables = fresh.variables
+        loaded.network_resources = fresh.network_resources
         return diff
+
+    async def run_network_resource(self, resource_id: str | int) -> None:
+        """Fire a network resource by id.
+
+        Wire shape: ``GET /rest/networking/resources/{id}``. Treat as
+        fire-and-forget — the controller acknowledges receipt only,
+        not the result of the underlying HTTP / TCP / UDP fire.
+        """
+        self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        await client.run_network_resource(resource_id)
 
     async def set_variable_value(self, var_type: int | str, var_id: int | str, value: int) -> None:
         """Set the current value of a controller variable.
