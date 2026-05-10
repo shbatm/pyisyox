@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -69,7 +70,9 @@ class WebSocketEventStream:
         "_backoff_idx",
         "_client",
         "_dispatcher",
+        "_last_event_at",
         "_path",
+        "_status",
         "_status_listeners",
         "_stop_requested",
         "_task",
@@ -104,8 +107,46 @@ class WebSocketEventStream:
         self._stop_requested = False
         self._backoff_idx = 0
         self._status_listeners: list[StatusListener] = []
+        self._status: EventStreamStatus = EventStreamStatus.NOT_STARTED
+        self._last_event_at: datetime | None = None
 
     # --- public API ----------------------------------------------------
+
+    @property
+    def status(self) -> EventStreamStatus:
+        """Most-recent stream status.
+
+        Updated on every transition (initialise / connect /
+        reconnect / disconnect / lost). Defaults to
+        :attr:`EventStreamStatus.NOT_STARTED` before :meth:`start`.
+        Useful for system-health pages that want a single
+        readable status string without subscribing to every
+        notification.
+        """
+        return self._status
+
+    @property
+    def connected(self) -> bool:
+        """``True`` while the stream is in the ``CONNECTED`` state.
+
+        Convenience over comparing :attr:`status` directly. Note
+        that ``connected`` flipping ``False`` doesn't mean the
+        reader has given up — it may be reconnecting.
+        """
+        return self._status == EventStreamStatus.CONNECTED
+
+    @property
+    def last_event_at(self) -> datetime | None:
+        """UTC timestamp of the most recent text frame, or ``None``
+        if no frame has been received this lifetime.
+
+        The eisy emits a heartbeat ``<control>_0</control>`` frame
+        every 30 seconds even when nothing else changes, so a
+        stale ``last_event_at`` (more than ~60 s ago) is a
+        reasonable signal that the connection is broken even
+        when the WS handshake hasn't returned an error yet.
+        """
+        return self._last_event_at
 
     def add_status_listener(self, callback: StatusListener) -> Callable[[], None]:
         """Register a callback for stream-status changes.
@@ -203,6 +244,7 @@ class WebSocketEventStream:
                 if self._stop_requested:
                     break
                 if msg.type == aiohttp.WSMsgType.TEXT:
+                    self._last_event_at = datetime.now(UTC)
                     self._dispatcher.feed(msg.data)
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSING):
                     break
@@ -244,6 +286,7 @@ class WebSocketEventStream:
 
     def _notify(self, status: EventStreamStatus) -> None:
         """Fan a status update out to listeners; suppress listener errors."""
+        self._status = status
         for listener in tuple(self._status_listeners):
             try:
                 listener(status)

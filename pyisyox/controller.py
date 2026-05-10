@@ -211,6 +211,20 @@ class Controller:
         return self._loaded is not None
 
     @property
+    def websocket(self) -> WebSocketEventStream | None:
+        """The active WebSocket stream, or ``None``.
+
+        Returns the live :class:`WebSocketEventStream` when
+        :meth:`connect` was called with ``start_websocket=True`` and
+        :meth:`stop` hasn't run yet. ``None`` for one-shot reads
+        (CLI tools, snapshot tests) that opted out of the WS
+        upgrade. Consumers polling stream health (HA system_health,
+        diagnostics) read ``websocket.status`` /
+        ``websocket.last_event_at`` directly.
+        """
+        return self._ws
+
+    @property
     def base_url(self) -> str:
         """The controller URL passed to ``__init__``."""
         return self._base_url
