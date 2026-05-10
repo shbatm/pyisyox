@@ -546,6 +546,56 @@ async def test_rename_variable_posts_name_body() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rename_node_posts_name_and_type_node() -> None:
+    """``rename_node`` posts ``{"name", "nodeType": "node"}`` to
+    ``/api/nodes/{address}`` (URL-encoded). Wire shape verified
+    against an eisy 6+ admin-UI capture; ``nodeType`` is required
+    even though the address already disambiguates."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("POST", "/api/nodes/3E%20FF%201F%204", 200, {"successful": True, "data": None})
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.rename_node("3E FF 1F 4", "Test Remote - G-H - Test")
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/nodes/3E%20FF%201F%204")
+    assert kwargs["json"] == {
+        "name": "Test Remote - G-H - Test",
+        "nodeType": "node",
+    }
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_rename_group_posts_name_and_type_group() -> None:
+    """``rename_group`` is the scene-side variant — same endpoint,
+    same address-encoding, but ``nodeType: "group"``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("POST", "/api/nodes/12345", 200, {"successful": True, "data": None})
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.rename_group("12345", "Hallway Scene")
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/nodes/12345")
+    assert kwargs["json"] == {"name": "Hallway Scene", "nodeType": "group"}
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_rename_node_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.rename_node("3E FF 1F 4", "any")
+
+
+@pytest.mark.asyncio
 async def test_set_variable_before_connect_raises() -> None:
     controller = Controller(BASE, LocalAuth("admin", "p"))
     with pytest.raises(ControllerNotConnectedError):

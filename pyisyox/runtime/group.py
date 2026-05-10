@@ -191,5 +191,17 @@ class Group:
         """
         await self._client.send_node_command(self.address, command_id, *params)
 
+    async def rename(self, name: str) -> None:
+        """Rename this group / scene.
+
+        Wire shape: ``POST /api/nodes/{address}`` with
+        ``{"name": "<str>", "nodeType": "group"}``. The ``nodeType``
+        field is required by the server even though the address
+        already disambiguates — without it the call is rejected.
+        """
+        await self._client.post_node_update(
+            self.address, {"name": name, "nodeType": "group"}
+        )
+
     def __repr__(self) -> str:
         return f"Group(address={self.address!r}, name={self.name!r}, members={len(self.member_addresses)})"

@@ -399,7 +399,36 @@ class IoXClient:
         Raises:
             HTTPError on non-2xx; ClientError on malformed response.
         """
-        path = f"/api/variables/{var_type}/{var_id}"
+        return await self._post_json(
+            f"/api/variables/{var_type}/{var_id}", body
+        )
+
+    async def post_node_update(
+        self, address: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Issue ``POST /api/nodes/{address}`` with the supplied body.
+
+        Documented body shape (verified against eisy-ui capture):
+
+        * ``{"name": "<str>", "nodeType": "node" | "group"}`` —
+          rename the node or group. ``nodeType`` is required by the
+          server even though the address already disambiguates.
+
+        Returns the parsed response body (a ``{successful, data}``
+        envelope).
+        """
+        encoded = quote(address, safe="")
+        return await self._post_json(f"/api/nodes/{encoded}", body)
+
+    async def _post_json(
+        self, path: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Shared POST-JSON path with auth-recovery on 401.
+
+        Variable + node update endpoints share the exact same shape:
+        JSON body, ``{successful, data}`` envelope, single-shot 401
+        retry through :meth:`Auth.handle_unauthorized`.
+        """
         url = f"{self.base_url}{path}"
         kwargs: dict[str, Any] = {"json": body}
         if not self._authenticated:

@@ -277,6 +277,26 @@ async def test_set_fan_mode_routes_to_clifs(real_profile: Profile) -> None:
     assert any("/cmd/CLIFS/" in path for _, path, _ in session.calls)
 
 
+@pytest.mark.asyncio
+async def test_node_rename_posts_name_and_type_node(real_profile: Profile) -> None:
+    """``Node.rename`` posts ``{"name", "nodeType": "node"}`` to
+    ``/api/nodes/{address}``. URL encoding on the address is
+    handled by the client's quote(safe="") — spaces become ``%20``."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "POST",
+        "/api/nodes/AA%20BB%20CC%201",
+        200,
+        '{"successful": true, "data": null}',
+    )
+    node = _make_node(_make_record(), real_profile, session)
+    await node.rename("New Name")
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/nodes/AA%20BB%20CC%201")
+    assert kwargs["json"] == {"name": "New Name", "nodeType": "node"}
+
+
 #
 # secure_lock / secure_unlock / start_manual_dimming / stop_manual_dimming:
 #
