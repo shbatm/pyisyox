@@ -604,7 +604,7 @@ class EventDispatcher:
         consumers can compare against firmware-version-specific
         running-state codes.
         """
-        if event.event_info is None:
+        if not event.event_info:
             return
         try:
             info = ET.fromstring(  # noqa: S314 — eisy LAN traffic
