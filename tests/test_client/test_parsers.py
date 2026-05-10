@@ -138,6 +138,87 @@ def test_parse_rest_status_preserves_empty_value_attrs() -> None:
     assert out["X"]["OL"].uom == "0"
 
 
+# --- prec field on NodePropertyValue --------------------------------------
+#
+# ``prec`` is the controller-declared decimal scaling for a property's raw
+# ``value``: the displayed reading is ``raw / 10**prec``. It arrives on every
+# wire shape; consumers (e.g. an HA sensor entity) read it to format numeric
+# state.
+
+
+def test_parse_api_nodes_captures_prec_from_json() -> None:
+    """``/api/nodes`` JSON puts ``prec`` next to ``value`` on each property."""
+    raw = {
+        "data": {
+            "nodes": {
+                "node": [
+                    {
+                        "address": "X",
+                        "property": [
+                            {"id": "GV1", "value": "6839", "uom": "69", "prec": 4},
+                            {"id": "ST", "value": "1", "uom": "2", "prec": 0},
+                        ],
+                    }
+                ]
+            }
+        }
+    }
+    nodes = parse_api_nodes(raw)
+    assert nodes["X"].properties["GV1"].prec == 4
+    assert nodes["X"].properties["ST"].prec == 0
+
+
+def test_parse_api_nodes_omitted_prec_defaults_to_zero() -> None:
+    """Properties without scaling (Insteon ``ST``, plugin enums) typically
+    omit ``prec`` entirely — falling through to ``0`` keeps ``raw / 10**0``
+    a no-op."""
+    raw = {
+        "data": {
+            "nodes": {
+                "node": [
+                    {
+                        "address": "X",
+                        "property": [{"id": "ST", "value": "0", "uom": "100"}],
+                    }
+                ]
+            }
+        }
+    }
+    nodes = parse_api_nodes(raw)
+    assert nodes["X"].properties["ST"].prec == 0
+
+
+def test_parse_rest_status_captures_prec_from_xml_attr() -> None:
+    """``/rest/status`` puts ``prec`` on the ``<property>`` XML attr."""
+    xml = (
+        '<nodes><node id="X">'
+        '<property id="GV1" value="6839" formatted="0.6839" uom="69" prec="4"/>'
+        '<property id="ST" value="1" formatted="On" uom="100"/>'
+        "</node></nodes>"
+    )
+    out = parse_rest_status(xml)
+    assert out["X"]["GV1"].prec == 4
+    # ST entry has no prec attribute — default applies.
+    assert out["X"]["ST"].prec == 0
+
+
+def test_parse_status_handles_non_numeric_prec_defensively() -> None:
+    """A blank or junk ``prec`` shouldn't poison the parse — coerce to 0."""
+    xml = (
+        '<nodes><node id="X">'
+        '<property id="GV1" value="" formatted="" uom="" prec=""/>'
+        "</node></nodes>"
+    )
+    assert parse_rest_status(xml)["X"]["GV1"].prec == 0
+
+
+def test_node_property_value_default_prec_is_zero() -> None:
+    """Construction without ``prec`` defaults to 0 — preserves backwards-
+    compatible NodePropertyValue construction at the API level."""
+    npv = NodePropertyValue(id="ST", value="0")
+    assert npv.prec == 0
+
+
 # --- merge ---------------------------------------------------------------
 
 

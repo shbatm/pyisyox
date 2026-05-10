@@ -582,6 +582,7 @@ class EventDispatcher:
             formatted=event.formatted_action,
             uom=event.uom,
             name=event.formatted_name,
+            prec=event.prec or 0,
         )
 
     def _apply_program_status(self, event: Event) -> None:
