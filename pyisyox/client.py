@@ -160,6 +160,26 @@ class FolderRecord:
 
 
 @dataclass(slots=True)
+class NetworkResourceRecord:
+    """One entry from ``/rest/networking/resources``.
+
+    Network resources are user-defined HTTP / TCP / UDP fire-triggers
+    on the controller (e.g. "ping the router", "post to a webhook").
+    The runtime wrapper :class:`pyisyox.runtime.NetworkResource`
+    surfaces ``run()`` which fires the resource by id.
+
+    Attributes:
+        address: Resource id, kept as a string for symmetry with
+            node / group records (the wire is ``<id>5</id>``, an
+            integer, but consumers want it joinable into URL paths).
+        name: User-assigned label.
+    """
+
+    address: str
+    name: str
+
+
+@dataclass(slots=True)
 class LoadResult:
     """Output of :meth:`IoXClient.connect`.
 
@@ -175,6 +195,9 @@ class LoadResult:
         triggers: Raw ``/api/triggers`` payload — the program AST as JSON.
         variables: Map of variable type id (``"1"`` or ``"2"``) to the
             raw ``/api/variables/{type}`` ``data`` list.
+        network_resources: Map of id → :class:`NetworkResourceRecord`,
+            empty when the controller has no networking module
+            enabled (the endpoint returns an empty ``<NetConfig/>``).
     """
 
     config: ControllerConfig
@@ -185,6 +208,7 @@ class LoadResult:
     programs: list[dict[str, Any]]
     triggers: list[dict[str, Any]]
     variables: dict[str, list[dict[str, Any]]]
+    network_resources: dict[str, NetworkResourceRecord]
 
 
 class IoXClient:
@@ -255,6 +279,7 @@ class IoXClient:
             triggers_raw,
             vars_int_raw,
             vars_state_raw,
+            networking_xml,
         ) = await asyncio.gather(
             self._get_json("/rest/profiles?include=nodedefs,editors,linkdefs"),
             self._get_json("/api/nodes"),
@@ -264,6 +289,11 @@ class IoXClient:
             self._get_json("/api/triggers"),
             self._get_json("/api/variables/1"),
             self._get_json("/api/variables/2"),
+            # Networking module is optional — controllers without it
+            # configured return an empty ``<NetConfig/>``. Tolerated by
+            # the parser; we don't want a 404 here to abort load, so
+            # we fall back to an empty document on HTTP errors.
+            self._get_text_or_empty("/rest/networking/resources"),
         )
 
         profile = Profile.load_from_json(profile_raw)
@@ -283,6 +313,7 @@ class IoXClient:
                 "1": _unwrap_data(vars_int_raw, source="/api/variables/1"),
                 "2": _unwrap_data(vars_state_raw, source="/api/variables/2"),
             },
+            network_resources=parse_rest_networking_resources(networking_xml),
         )
 
     async def _fetch_config(self) -> ControllerConfig:
@@ -349,6 +380,17 @@ class IoXClient:
                     raise HTTPError(resp.status, url)
                 return await resp.text()
 
+    async def _get_text_or_empty(self, path: str) -> str:
+        """``_get_text`` that swallows HTTPError and returns an empty
+        string. Used for optional-module endpoints (networking) where a
+        missing module surfaces as a 404 / 503 rather than an empty
+        document — we don't want those to abort initial load."""
+        try:
+            return await self._get_text(path)
+        except HTTPError as exc:
+            _LOGGER.debug("optional endpoint %s unavailable: %s", path, exc)
+            return ""
+
     async def send_node_command(self, address: str, command_id: str, *params: int) -> str:
         """Issue ``GET /rest/nodes/{addr}/cmd/{cmd}[/{p1}[/{p2}...]]``.
 
@@ -400,6 +442,16 @@ class IoXClient:
             HTTPError on non-2xx; ClientError on malformed response.
         """
         return await self._post_json(f"/api/variables/{var_type}/{var_id}", body)
+
+    async def run_network_resource(self, resource_id: str | int) -> str:
+        """Fire a network resource by id.
+
+        Wire shape: ``GET /rest/networking/resources/{id}``. Response
+        is a small ``<RestResponse status="200">`` envelope on success.
+        The controller acknowledges receipt only — it doesn't return
+        the result of the underlying HTTP / TCP / UDP fire.
+        """
+        return await self._get_text(f"/rest/networking/resources/{resource_id}")
 
     async def post_node_update(self, address: str, body: dict[str, Any]) -> dict[str, Any]:
         """Issue ``POST /api/nodes/{address}`` with the supplied body.
@@ -644,6 +696,45 @@ def parse_rest_nodes_groups_folders(
             parent_address=parent_text or None,
         )
     return groups, folders
+
+
+def parse_rest_networking_resources(xml: str) -> dict[str, NetworkResourceRecord]:
+    """Decode ``/rest/networking/resources`` XML into a record map.
+
+    Wire shape (from eisy / ISY 6+ legacy endpoint, also produced by
+    ISY-994 firmware ≥ 4.x)::
+
+        <NetConfig>
+          <NetRule>
+            <id>1</id>
+            <name>Reboot Router</name>
+            <host>192.0.2.1</host>
+            <!-- ...other fields the runtime doesn't surface... -->
+          </NetRule>
+        </NetConfig>
+
+    Empty / missing input (controller without networking module
+    enabled) returns ``{}``. Malformed XML raises
+    :class:`ClientError` so initial-load callers can decide whether
+    to abort or treat as "no resources".
+    """
+    if not xml:
+        return {}
+    try:
+        root = ET.fromstring(xml)  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError as exc:
+        raise ClientError(f"failed to parse /rest/networking XML: {exc}") from exc
+
+    resources: dict[str, NetworkResourceRecord] = {}
+    for rule_el in root.findall("NetRule"):
+        rid = (rule_el.findtext("id") or "").strip()
+        if not rid:
+            continue
+        resources[rid] = NetworkResourceRecord(
+            address=rid,
+            name=rule_el.findtext("name") or "",
+        )
+    return resources
 
 
 # --- private helpers ------------------------------------------------------
