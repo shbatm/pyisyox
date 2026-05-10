@@ -589,6 +589,26 @@ async def test_rename_group_posts_name_and_type_group() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rename_folder_posts_name_and_type_folder() -> None:
+    """``rename_folder`` posts ``nodeType: "folder"`` — the IoX
+    admin UI distinguishes folders from groups even though both go
+    through the same endpoint."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("POST", "/api/nodes/12345", 200, {"successful": True, "data": None})
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    await controller.rename_folder("12345", "Hallway")
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/nodes/12345")
+    assert kwargs["json"] == {"name": "Hallway", "nodeType": "folder"}
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
 async def test_rename_node_before_connect_raises() -> None:
     controller = Controller(BASE, LocalAuth("admin", "p"))
     with pytest.raises(ControllerNotConnectedError):

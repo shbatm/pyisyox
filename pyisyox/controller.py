@@ -482,6 +482,16 @@ class Controller:
         """
         await self._post_node(address, {"name": name, "nodeType": "group"})
 
+    async def rename_folder(self, address: str, name: str) -> None:
+        """Rename a folder (organisational container).
+
+        Same endpoint as :meth:`rename_node` / :meth:`rename_group`
+        but with ``nodeType: "folder"``. Folders are address-keyed
+        like nodes/groups; their addresses are typically 5-digit
+        integers (family ``"13"``).
+        """
+        await self._post_node(address, {"name": name, "nodeType": "folder"})
+
     async def _post_node(self, address: str, body: dict) -> None:
         """Internal: route a node mutation through the IoXClient."""
         self._loaded_or_raise()
