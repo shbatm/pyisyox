@@ -166,6 +166,37 @@ class Group:
                 return False
         return True
 
+    @property
+    def group_any_on(self) -> bool:
+        """True iff at least one member node currently reports an "on" state.
+
+        Companion to :attr:`group_all_on`; this is the aggregation HA
+        scene-switch consumers want for their ``is_on`` — the legacy
+        ``pyisy.Group.status`` did the same thing (non-zero on any
+        responder).
+
+        Returns ``False`` when:
+
+        * the group was constructed without a node-registry reference;
+        * the group has no members;
+        * every present member's ``ST`` property is missing or zero
+          (missing members are skipped, not treated as 'off' — see
+          :attr:`group_all_on` for the strict variant).
+
+        Cheap: ``O(N)`` where N is the member count, only computed
+        when read.
+        """
+        if self._nodes is None or not self._record.member_addresses:
+            return False
+        for addr in self._record.member_addresses:
+            record = self._nodes.get(addr)
+            if record is None:
+                continue
+            st = record.properties.get(PROP_STATUS)
+            if st is not None and str(st.value) not in ("", "0"):
+                return True
+        return False
+
     # --- commanding ---------------------------------------------------
 
     async def send_command(self, command_id: str, *params: int) -> None:
