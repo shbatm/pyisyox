@@ -287,6 +287,24 @@ class Node:
         return self._has_command(CMD_SECURE) or "Lock" in self.nodedef_id
 
     @property
+    def is_fan(self) -> bool:
+        """True if the node is a multi-speed fan controller.
+
+        Derived from the nodedef id substring ``"Fan"`` — matches
+        the Insteon ``FanLincMotor`` sub-node (the FanLinc light
+        side reports as ``DimmerLampOnly``, so light/fan separate
+        cleanly per sub-address) and PG3 plugin fan nodedefs that
+        follow the same naming convention.
+
+        Fan nodes are a subset of dimmable nodes (``FanLincMotor``
+        accepts ``DON`` with a level parameter restricted to the
+        ``{0, 25, 75, 100}`` Off/Low/Medium/High subset), so
+        callers classifying onto a HA-style ``Platform.FAN`` should
+        check ``is_fan`` **before** ``is_dimmable``.
+        """
+        return "Fan" in self.nodedef_id
+
+    @property
     def is_dimmable(self) -> bool:
         """True if the node reports a multilevel ``ST`` (status) state.
 
