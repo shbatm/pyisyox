@@ -399,13 +399,9 @@ class IoXClient:
         Raises:
             HTTPError on non-2xx; ClientError on malformed response.
         """
-        return await self._post_json(
-            f"/api/variables/{var_type}/{var_id}", body
-        )
+        return await self._post_json(f"/api/variables/{var_type}/{var_id}", body)
 
-    async def post_node_update(
-        self, address: str, body: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def post_node_update(self, address: str, body: dict[str, Any]) -> dict[str, Any]:
         """Issue ``POST /api/nodes/{address}`` with the supplied body.
 
         Documented body shape (verified against eisy-ui capture):
@@ -420,9 +416,7 @@ class IoXClient:
         encoded = quote(address, safe="")
         return await self._post_json(f"/api/nodes/{encoded}", body)
 
-    async def _post_json(
-        self, path: str, body: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         """Shared POST-JSON path with auth-recovery on 401.
 
         Variable + node update endpoints share the exact same shape:

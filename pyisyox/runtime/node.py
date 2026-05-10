@@ -491,6 +491,4 @@ class Node:
         :meth:`Controller.add_node_lifecycle_listener` will see the
         change without polling.
         """
-        await self._client.post_node_update(
-            self.address, {"name": name, "nodeType": "node"}
-        )
+        await self._client.post_node_update(self.address, {"name": name, "nodeType": "node"})

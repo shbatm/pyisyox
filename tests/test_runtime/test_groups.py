@@ -433,9 +433,7 @@ async def test_group_rename_posts_name_and_type_group() -> None:
         instance_id="1",
     )
     session = FakeSession(BASE)
-    session.set_route(
-        "POST", "/api/nodes/55090", 200, '{"successful": true, "data": null}'
-    )
+    session.set_route("POST", "/api/nodes/55090", 200, '{"successful": true, "data": null}')
     group = Group.from_record(record, _profile(), _make_client(session))
 
     await group.rename("Front Yard")

@@ -199,9 +199,7 @@ class Group:
         field is required by the server even though the address
         already disambiguates — without it the call is rejected.
         """
-        await self._client.post_node_update(
-            self.address, {"name": name, "nodeType": "group"}
-        )
+        await self._client.post_node_update(self.address, {"name": name, "nodeType": "group"})
 
     def __repr__(self) -> str:
         return f"Group(address={self.address!r}, name={self.name!r}, members={len(self.member_addresses)})"
