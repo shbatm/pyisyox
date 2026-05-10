@@ -117,6 +117,33 @@ def test_is_dimmable_false_for_relay_only(real_profile: Profile) -> None:
     assert node.is_dimmable is False
 
 
+def test_is_fan_true_for_fanlinc_motor(real_profile: Profile) -> None:
+    """``FanLincMotor`` is the Insteon FanLinc fan-side sub-node;
+    its sibling light reports as ``DimmerLampOnly``.
+
+    Note: ``is_dimmable`` returns False on FanLincMotor because the
+    ``I_FLM_LVL`` editor pins the level to a 4-value subset
+    (``{0, 25, 75, 100}``) without an explicit range max — the
+    multilevel-range check requires a numeric max. ``is_fan`` is
+    therefore the only positive classification signal for these
+    nodes; today they fall through to ``SWITCH``."""
+    node = _make_node(_make_record(nodedef_id="FanLincMotor"), real_profile)
+    assert node.is_fan is True
+
+
+def test_is_fan_false_for_dimmer(real_profile: Profile) -> None:
+    """A plain dimmer must not be misclassified as a fan."""
+    node = _make_node(_make_record(nodedef_id="DimmerLampOnly"), real_profile)
+    assert node.is_fan is False
+
+
+def test_is_fan_false_for_thermostat(real_profile: Profile) -> None:
+    """The fan-mode editors on a thermostat are editor ids, not
+    nodedef ids — the Thermostat nodedef must not match ``is_fan``."""
+    node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile)
+    assert node.is_fan is False
+
+
 def test_is_battery_node_detects_batlvl_only_devices(real_profile: Profile) -> None:
     """Battery sensors expose BATLVL but no ST."""
     record = _make_record(properties={"BATLVL": NodePropertyValue(id="BATLVL", value="80", formatted="80%")})
@@ -142,6 +169,7 @@ def test_introspection_safe_when_nodedef_unresolved(real_profile: Profile) -> No
     assert node.nodedef is None
     assert node.is_thermostat is False
     assert node.is_lock is False
+    assert node.is_fan is False
     assert node.is_dimmable is False
 
 
