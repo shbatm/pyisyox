@@ -12,9 +12,11 @@ import aiohttp
 import pytest
 
 from pyisyox.auth import LocalAuth, PortalAuth
+from pyisyox.constants import EventStreamStatus
 from pyisyox.controller import Controller, ControllerNotConnectedError
 from pyisyox.runtime import ProgramCommand
-from pyisyox.runtime.events import Event, NodeLifecycleAction, NodeLifecycleEvent
+from pyisyox.runtime.events import Event, EventDispatcher, NodeLifecycleAction, NodeLifecycleEvent
+from pyisyox.runtime.ws import WebSocketEventStream
 from tests.test_client.conftest import FakeSession as FakeHttpSession
 from tests.test_runtime.test_ws import FakeWebSocket, FakeWSMessage
 
@@ -187,9 +189,77 @@ async def test_connect_without_websocket_skips_ws_call() -> None:
 
     assert controller.connected is True
     assert session.ws_calls == []
+    # ``websocket`` is None when the WS wasn't started — system_health
+    # consumers branch on this.
+    assert controller.websocket is None
     # Status listener registration requires the WS; should raise.
     with pytest.raises(ControllerNotConnectedError, match="WebSocket"):
         controller.add_status_listener(lambda _s: None)
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_websocket_status_and_connected_track_state() -> None:
+    """``WebSocketEventStream.status`` mirrors the most recent
+    ``EventStreamStatus``; ``connected`` is True only while in
+    ``CONNECTED``. ``last_event_at`` advances when a frame arrives."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    # Construct a WS stream against the controller's client + a
+    # fresh dispatcher; we don't start the read loop because we
+    # want to drive status manually.
+    ws = WebSocketEventStream(
+        controller._client,  # type: ignore[arg-type]
+        EventDispatcher(controller.nodes),
+    )
+    assert ws.status == EventStreamStatus.NOT_STARTED
+    assert ws.connected is False
+    assert ws.last_event_at is None
+
+    ws._notify(EventStreamStatus.CONNECTED)  # type: ignore[attr-defined]
+    assert ws.status == EventStreamStatus.CONNECTED
+    assert ws.connected is True
+
+    ws._notify(EventStreamStatus.LOST_CONNECTION)  # type: ignore[attr-defined]
+    assert ws.connected is False
+    assert ws.status == EventStreamStatus.LOST_CONNECTION
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_websocket_records_last_event_on_text_frame() -> None:
+    """Each TEXT frame the read loop dispatches updates
+    ``last_event_at`` to UTC now. Driven through the public
+    surface by queueing a frame on the FakeWebSocket."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.queue_ws(
+        [
+            FakeWSMessage(
+                type=aiohttp.WSMsgType.TEXT,
+                data='<?xml version="1.0"?><Event seqnum="1" sid="x" timestamp="t">'
+                "<control>_0</control><action>90</action><node></node>"
+                "<eventInfo></eventInfo></Event>",
+            ),
+            FakeWSMessage(type=aiohttp.WSMsgType.CLOSED),
+        ]
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect()
+
+    deadline = time.monotonic() + 1.0
+    while time.monotonic() < deadline and (
+        controller.websocket is None or controller.websocket.last_event_at is None
+    ):
+        await asyncio.sleep(0)
+    ws = controller.websocket
+    assert ws is not None
+    assert ws.last_event_at is not None
 
     await controller.stop()
 
