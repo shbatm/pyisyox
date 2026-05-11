@@ -1,20 +1,24 @@
 # Minimal makefile for Sphinx documentation
-#
-
-# You can set these variables from the command line, and also
-# from the environment for the first two.
-SPHINXOPTS    ?=
+SPHINXOPTS    ?= -n
 SPHINXBUILD   ?= sphinx-build
-SOURCEDIR     = source
-BUILDDIR      = build
+SOURCEDIR     = .
+BUILDDIR      = _build
 
-# Put it first so that "make" without argument is like "make help".
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-.PHONY: help Makefile
+# Regenerate docs/api/*.rst from the current package layout. Run this
+# whenever new modules are added under pyisyox/ so the API reference
+# stays in sync.
+apidoc:
+	rm -rf api
+	sphinx-apidoc -f -o api -e -M -H "API Reference" --tocfile index \
+	    ../pyisyox ../pyisyox/__main__.py
 
-# Catch-all target: route all unknown targets to Sphinx using the new
-# "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
+# Convenience: install all build deps, regenerate API, build HTML.
+fresh: apidoc html
+
+.PHONY: help apidoc fresh Makefile
+
 %: Makefile
 	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)

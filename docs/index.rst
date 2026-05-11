@@ -1,68 +1,94 @@
 PyISYoX
-=====
+=======
 
-A Python Library for the ISY/IoX Controllers
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+An async Python client for eisy / Polisy on IoX 6
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This module was developed to communicate with the `UDI ISY <https://www.universal-devices.com/>`_
-home automation hub via the hub's REST interface and Websocket/SOAP event streams. It provides
-near real-time updates from the device and allows control of all devices that
-are supported within the ISY.
+PyISYoX talks to Universal Devices' **eisy** and **Polisy** controllers
+running **IoX 6.0.0+**. It is a JSON-first rewrite of the original
+``pyisy`` library, built around a small set of focused public types:
 
-This module also allows for functions to be assigned as handlers when ISY parameters are changed.
-ISY parameters can be monitored automatically as changes are reported from the device.
-
-.. warning::
-
-    THIS DOCUMENTATION IS STILL A WORK-IN-PROGRESS. Some of the details have not yet been updated
-    for Version 2 or Version 3 of the PyISYoX Module. If you would like to help, please contribute
-    on GitHub.
-
-
-Project Information
-~~~~~~~~~~~~~~~~~~~
+* :class:`pyisyox.Controller` — the one user-facing handle. Construct
+  it, ``await controller.connect()``, drive nodes through
+  ``controller.nodes[address].send_command(...)``, subscribe to
+  WebSocket events, then ``await controller.stop()``.
+* :class:`pyisyox.PortalAuth` / :class:`pyisyox.LocalAuth` — auth
+  strategies. PortalAuth (JWT bearer) is the recommended default;
+  LocalAuth (HTTP basic) exists as a feature-degraded fallback.
+* :class:`pyisyox.Node`, :class:`pyisyox.Group`,
+  :class:`pyisyox.Program`, :class:`pyisyox.Variable`,
+  :class:`pyisyox.NetworkResource` — runtime wrappers over the
+  controller's domain objects. WebSocket frames mutate their
+  underlying records in place, so attribute reads always reflect the
+  latest state.
 
 .. note::
 
-    This documentation is specific to PyISYoX Version 4, which uses asynchronous
-    communications and the asyncio module. If you need threaded (synchronous) support
-    please use Version 2.x.x.
+   The original ISY-994 hardware is **out of scope**. It tops out at
+   TLS 1.1 and a much smaller REST surface; users on that hardware
+   should use the upstream ``pyisy`` (v3.x) library. Everything here
+   assumes IoX 6 on eisy or Polisy.
 
-|  Docs: `ReadTheDocs <https://pyisyox.readthedocs.io>`_
-|  Source: `GitHub <https://github.com/automicus/PyISYoX>`_
+Quick example
+-------------
 
+.. code-block:: python
+
+    import asyncio
+    from pyisyox import Controller, PortalAuth
+
+    async def main() -> None:
+        controller = Controller(
+            "https://eisy.local:443",
+            PortalAuth("me@example.com", "portal-password"),
+        )
+        await controller.connect()
+        try:
+            light = controller.nodes["3D 7D 87 1"]
+            await light.send_command("DON", 75)  # 75% on
+        finally:
+            await controller.stop()
+
+    asyncio.run(main())
+
+See :doc:`quickstart` for a guided tour, :doc:`connection-flow` for
+the wire-level connect sequence, and :doc:`events` for the
+WebSocket dispatcher and subscription API.
 
 Installation
-~~~~~~~~~~~~
+------------
 
-The easiest way to install this package is using pip with the command:
+.. code-block:: shell
 
-.. code-block:: bash
+    pip install pyisyox
 
-    pip3 install pyisyox
+Requirements: **Python 3.11+** and ``aiohttp``. No XML parser
+dependencies — the narrow XML surfaces still in use (``/rest/status``,
+``/rest/nodes``, command responses, WS event frames) are decoded with
+``xml.etree.ElementTree`` from the stdlib.
 
-See the :ref:`PyISYoX Tutorial<tutorial>` for guidance on how to use the module.
+.. _project_information:
 
-Requirements
-~~~~~~~~~~~~
+Project information
+-------------------
 
-This package requires three other packages, also available from pip. They are
-installed automatically when PyISYoX is installed using pip.
-
-* `requests <http://docs.python-requests.org/en/latest/>`_
-* `dateutil <https://dateutil.readthedocs.io/en/stable/>`_
-* `aiohttp <https://docs.aiohttp.org/en/stable/>`_
+| Source: `GitHub <https://github.com/shbatm/pyisyox>`_
+| PyPI: `pyisyox <https://pypi.org/project/pyisyox/>`_
+| Docs: `ReadTheDocs <https://pyisyox.readthedocs.io>`_
 
 Contents
 ========
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :name: mastertoc
-    :glob:
 
-    *
-    api/index.rst
+    quickstart
+    library
+    connection-flow
+    events
+    constants
+    api/index
 
 Indices and tables
 ==================

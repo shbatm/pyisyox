@@ -1,577 +1,301 @@
-# PyISYoX Connection Flow
+# Connection Flow
 
-This document provides a comprehensive narrative of how a connection is established when a new instance of PyISYoX is created, including the sequence of REST API endpoint calls and event stream initialization.
+This document describes how PyISYoX establishes and maintains a
+connection to an eisy / Polisy controller running IoX 6.0.0+. It
+covers the wire-level endpoint sequence, the parallel load
+orchestration, authentication, and the WebSocket reader's state
+machine.
 
-## Table of Contents
+If you only want to _use_ the library, start with the
+[quickstart](quickstart.rst); this document is for understanding what
+`Controller.connect()` does under the hood, debugging connection
+issues, or porting the protocol to another language.
 
-- [Overview](#overview)
-- [Step 1: Initialization](#step-1-initialization)
-- [Step 2: Connection Testing](#step-2-connection-testing)
-- [Step 3: Platform Initialization](#step-3-platform-initialization)
-- [Step 4: Event Stream Setup](#step-4-event-stream-setup)
-- [Complete Endpoint Call Sequence](#complete-endpoint-call-sequence)
-- [Connection Architecture](#connection-architecture)
+## Architectural layers
 
-## Overview
-
-The PyISYoX connection lifecycle consists of four main phases:
-
-1. **Initialization** - Creating the ISY object and connection infrastructure
-2. **Connection Testing** - Validating credentials and fetching ISY configuration
-3. **Platform Initialization** - Loading entities (nodes, programs, variables, etc.)
-4. **Event Stream Setup** - Establishing real-time updates via WebSocket or TCP
-
-## Step 1: Initialization
-
-### Code Example
-
-```python
-from pyisyox import ISY
-from pyisyox.connection import ISYConnectionInfo
-
-# Create connection info
-connection_info = ISYConnectionInfo(
-    "http://polisy.local:8080",
-    "admin",
-    "password"
-)
-
-# Create ISY instance
-isy = ISY(connection_info, use_websocket=True)
+```
+┌────────────────────────────────────────────────────────────┐
+│           pyisyox.Controller (controller.py)               │
+│  glue: lifecycle, listener registration, helper mutations  │
+└──────┬──────────────────────────────────────┬──────────────┘
+       │                                      │
+       ▼                                      ▼
+┌──────────────────────┐               ┌──────────────────────────┐
+│ IoXClient (client.py)│               │ WebSocketEventStream     │
+│  parallel load fan-  │               │   (runtime/ws.py)        │
+│  out, JSON-first;    │               │  read loop + reconnect   │
+│  retries on 401      │               │  + status listeners      │
+└──────┬──────────┬────┘               └─────────────┬────────────┘
+       │          │                                   │
+       ▼          ▼                                   ▼
+┌──────────┐ ┌───────────┐                ┌──────────────────────┐
+│ Auth     │ │ Profile   │                │ EventDispatcher      │
+│ (auth.py)│ │ (schema/) │                │   (runtime/events.py)│
+│ Portal / │ │ nodedefs, │                │  parses frames,      │
+│ LocalAuth│ │ editors   │                │  applies to records, │
+│          │ │           │                │  fires listeners     │
+└──────────┘ └───────────┘                └──────────────────────┘
 ```
 
-### What Happens
+The layers are deliberately decoupled. `IoXClient` is auth-mode-
+agnostic — it takes any `Auth` implementation. `EventDispatcher` is
+transport-agnostic — `WebSocketEventStream` is one feeder; tests inject
+synthetic frames directly via `Controller.feed_event_frame`.
 
-1. **ISYConnectionInfo Creation** (`connection.py:42-63`)
-   - Parses the URL and determines if HTTPS is used
-   - Creates REST URL: `{url}/rest`
-   - Creates WebSocket URL: `{rest_url.replace('http', 'ws')}/subscribe`
-   - Stores authentication credentials as `aiohttp.BasicAuth`
+## Picking an auth mode
 
-2. **ISY Class Instantiation** (`isy.py:62-94`)
-   - Creates `Connection` object with connection info
-   - Initializes connection semaphore:
-     - ISY994: 2 HTTPS / 5 HTTP concurrent connections
-     - IoX: 20 HTTPS / 50 HTTP concurrent connections (upgraded later)
-   - Creates `aiohttp.ClientSession` with connection pooling
-   - Initializes platform classes (executed **before** any network calls):
-     - `Clock` - ISY time/location management
-     - `NetworkResources` - Network commands
-     - `Variables` - ISY variables (integer and state)
-     - `Programs` - ISY programs
-     - `Nodes` - Devices, groups, and folders
-     - `NodeServers` - Polyglot node server definitions
-   - Creates `WebSocketClient` (if `use_websocket=True`) or prepares for TCP `EventStream`
-   - Initializes event emitters for connection and status events
+The eisy exposes two listeners with different feature sets:
 
-**Important**: At this point, **no network calls have been made**. The ISY object exists but is not connected.
+| Mode           | Port    | Credentials             | Wire auth                 | Surface                                          |
+| -------------- | ------- | ----------------------- | ------------------------- | ------------------------------------------------ |
+| **PortalAuth** | `:443`  | Portal email + password | JWT bearer (auto-refresh) | `/api/*` (JSON) + `/rest/*`                      |
+| **LocalAuth**  | `:8443` | Local admin user + pass | HTTP basic                | `/rest/*` only, plus a feature-degraded `/api/*` |
 
-## Step 2: Connection Testing
+**PortalAuth is the recommended default.** It unlocks the modern JSON
+`/api/triggers` AST and `/api/variables` (with names + timestamps), and
+the eisy validates the credentials and signs the JWT locally — no
+my.isy.io round-trip during steady-state operation. Verified
+offline-safe on 2026-05-07.
 
-### Code Example
+**LocalAuth exists for users who refuse to use a portal account.** It
+has no login round-trip (basic on every request) but cannot read the
+modern JSON endpoints; PyISYoX falls back to legacy XML where needed.
 
-```python
-# Must be called to actually connect
-await isy.initialize()
+The smoke-test CLI picks the mode based on the username (anything
+with `@` is treated as a portal email):
+
+```bash
+python3 -m pyisyox https://eisy.local:443  me@example.com portal-pw
+python3 -m pyisyox https://eisy.local:8443 admin           admin-pw
 ```
 
-### What Happens
+### PortalAuth lifecycle
 
-The `initialize()` method begins with connection validation (`isy.py:96-106`):
+1. **Login** — `POST /api/login` body `{"username": "<email>",
+"password": "<password>"}`. Response is `{"successful": true,
+"data": {"accessToken": "<es256-jwt>", "refreshToken": "<es256-jwt>",
+"ssl": {…}, …}}`. The library decodes the JWTs' `exp` claims for
+   proactive refresh scheduling.
 
-```python
-self.config = await self.conn.test_connection()
+   > **Security note**: the login response leaks the PG3 MQTT TLS
+   > keypair under `data.ssl`. PyISYoX's `redact_sensitive()` helper
+   > scrubs it before any debug logging.
+
+2. **Per-request** — every HTTP call carries
+   `Authorization: Bearer <accessToken>`. If the token expires within
+   the next 60 seconds (`PROACTIVE_REFRESH_LEEWAY`), the client
+   refreshes _before_ the request to avoid the cost of an in-flight
+   401 + refresh + retry.
+
+3. **Refresh** — `POST /api/jwt/refresh` body `{"refreshToken": "<rt>"}`,
+   same response shape as login.
+
+4. **401 recovery** — on a 401, the client asks the auth strategy to
+   recover (`handle_unauthorized`). PortalAuth tries refresh; if that
+   fails, it falls back to a full login. Concurrent 401s collapse onto
+   a single refresh round-trip via an internal lock.
+
+5. **Logout** — `Controller.stop()` best-effort posts
+   `POST /api/logout` to invalidate the server-side session. Any
+   error is logged at debug level and swallowed; the long-lived
+   refresh token will expire naturally on its TTL.
+
+### LocalAuth lifecycle
+
+No login round-trip — every request carries `Authorization: Basic …`
+attached via `aiohttp.BasicAuth`. A 401 means the credentials are
+wrong, so re-auth cannot recover and the client raises
+`AuthError` to the caller.
+
+## The connect() call
+
+`await controller.connect()` runs three phases:
+
+### Phase 1 — Config
+
+```
+GET /api/config        →  {"data": {"uuid": "...", "version": "6.0.0", "portalHost": "..."}}
 ```
 
-### REST API Call #1: `/rest/config`
+Cheap, unauthenticated. Confirms the controller is reachable and is
+running an IoX 6+ firmware. The returned `ControllerConfig` is
+attached to the `LoadResult`.
 
-**Purpose**: Validate connection and retrieve ISY system configuration
+### Phase 2 — Authenticate
 
-**Called By**: `Connection.test_connection()` → `Configuration.update()` (`configuration.py:101-146`)
+`auth.authenticate(session, base_url)` runs exactly once across
+concurrent first-use callers (lock-then-recheck inside `IoXClient`).
 
-**Response Contains**:
+- **LocalAuth** — no-op.
+- **PortalAuth** — `POST /api/login`, stores the `TokenPair`.
 
-- ISY UUID (unique identifier)
-- Firmware version
-- Platform type (ISY994 vs IoX)
-- Device model and name
-- Installed features (Z-Wave, Networking Module, Portal Integration, etc.)
-- Module capabilities (variables enabled, node definitions, etc.)
+### Phase 3 — Parallel load fan-out
 
-**Configuration Detection**:
+`asyncio.gather(...)` fires the next nine requests in parallel:
 
-```python
-if self.config.platform == "IoX":
-    self.conn.increase_available_connections()
-```
+| #   | Endpoint                                               | Shape | Used for                                                                                                                                     |
+| --- | ------------------------------------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `GET /rest/profiles?include=nodedefs,editors,linkdefs` | JSON  | The `Profile` blob — every nodedef + editor + linkdef. ~117 KB.                                                                              |
+| 2   | `GET /api/nodes`                                       | JSON  | Node structure (family/instance, addresses, parent/pnode, flags). Plugin nodes have no `property[]` field.                                   |
+| 3   | `GET /rest/nodes`                                      | XML   | Group / folder structure (`<group>`, `<folder>` elements).                                                                                   |
+| 4   | `GET /rest/status`                                     | XML   | Canonical property table for every node — including plugin nodes. Merged into the JSON node records to fill the missing `property[]` fields. |
+| 5   | `GET /api/programs`                                    | JSON  | Programs and program-folders (one flat list, discriminated by `is_folder`).                                                                  |
+| 6   | `GET /api/triggers`                                    | JSON  | Program AST. Stays raw for consumers.                                                                                                        |
+| 7   | `GET /api/variables/1`                                 | JSON  | Integer variables with names + timestamps.                                                                                                   |
+| 8   | `GET /api/variables/2`                                 | JSON  | State variables.                                                                                                                             |
+| 9   | `GET /rest/networking/resources` (optional)            | XML   | Network resources, if the module is enabled. A 404 / 503 here is tolerated — the load doesn't abort if the module isn't installed.           |
 
-If the ISY is running on IoX hardware (eisy, Polisy), the connection limits are increased:
+Total: **8–9 HTTP requests in parallel**, plus the config call from
+Phase 1, plus (if requested) the WebSocket upgrade.
 
-- From 2 → 20 HTTPS connections
-- From 5 → 50 HTTP connections
+After the gather:
 
-This allows for faster parallel loading of large systems.
+- `Profile.load_from_json(profile_raw)` parses the family/instance
+  tree and builds the `(nodedef_id, family_id, instance_id) → NodeDef`
+  lookup.
+- The `/rest/status` overlay is merged into the `/api/nodes` records
+  via `merge_status_into_nodes`. Native nodes get any missing
+  properties filled in; plugin nodes (which carry no `property[]` in
+  the JSON) get _all_ their properties from the overlay.
+- Programs, variables, network resources, and groups/folders are
+  parsed into their record types.
 
-## Step 3: Platform Initialization
+The result is one `LoadResult` dataclass with all the data the
+runtime wrappers need. Each wrapper holds a _reference_ to its record,
+so WebSocket frames that mutate the record in place are visible to the
+wrapper without an explicit notification path.
 
-After connection validation, platform data is loaded **in parallel** using `asyncio.gather()` (`isy.py:111-129`).
+### 401 recovery during load
 
-### Parallel Loading Strategy
+`IoXClient._get_text` retries the request once on 401 if
+`auth.handle_unauthorized` returns `True`. After the retry attempt is
+spent (or recovery returns `False`), the next 401 raises `AuthError`.
 
-```python
-isy_setup_tasks = []
-if nodes:
-    isy_setup_tasks.append(self.nodes.initialize())
-if clock:
-    isy_setup_tasks.append(self.clock.update())
-if programs:
-    isy_setup_tasks.append(self.programs.update())
-if variables:
-    isy_setup_tasks.append(self.variables.update())
-if networking:
-    isy_setup_tasks.append(self.networking.update())
+Any non-2xx (after the optional retry) raises `HTTPError` with the
+status and URL — the parallel `asyncio.gather` propagates the first
+exception.
 
-await asyncio.gather(*isy_setup_tasks)
-```
+## WebSocket upgrade
 
-Each platform loads concurrently to minimize initialization time. Let's examine each platform's endpoint calls:
+`Controller.connect(start_websocket=True)` (the default) constructs a
+`WebSocketEventStream` and calls `start()`, which schedules a
+background `asyncio.Task`.
 
----
+### Connect handshake
 
-### 3.1 Nodes Platform
+1. Build the WS URL by rewriting the base URL's scheme (`https://` →
+   `wss://`) and appending the configured path (default
+   `/rest/subscribe`; the modern JSON-envelope path
+   `/api/events/subscribe` is opt-in).
+2. Pull `auth.request_kwargs(session, base_url)` and pass them to
+   `session.ws_connect(...)`. `LocalAuth` returns
+   `{"auth": aiohttp.BasicAuth(...)}` — aiohttp's `ws_connect` accepts
+   `auth` directly. `PortalAuth` returns
+   `{"headers": {"Authorization": "Bearer …"}}`, passed through
+   verbatim.
+3. On success, transition to `EventStreamStatus.CONNECTED` and notify
+   any status listeners.
 
-**Method**: `Nodes.initialize()` (`nodes/__init__.py:74-92`)
-
-The Nodes platform requires **two** REST calls with special orchestration:
-
-#### Call #2a: `/rest/status` (Started First)
-
-**Purpose**: Get current status values for all nodes
-
-**Why First**: This endpoint typically takes the longest to download, so it's started as a background task while nodes are being loaded.
-
-**Response Contains**:
-
-- Node addresses
-- Current status values for all properties
-- Unit of measurement (UOM) codes
-- Precision/formatting information
-
-```python
-status_task = asyncio.create_task(self.update_status())
-```
-
-#### Call #2b: `/rest/nodes` (Simultaneous)
-
-**Purpose**: Get node definitions and metadata
-
-**Response Contains**:
-
-- Folders (organizational hierarchy)
-- Nodes (individual devices):
-  - Address, name, type
-  - Device category (Insteon type, Z-Wave category, etc.)
-  - Node definition ID (for custom node servers)
-  - Parent/child relationships
-  - Device family (Insteon, Z-Wave, Zigbee, Node Server, etc.)
-  - Enabled/disabled state
-- Groups (ISY scenes/controllers)
+### Read loop
 
 ```python
-nodes_task = asyncio.create_task(self.update())
+async for msg in ws:
+    if msg.type == aiohttp.WSMsgType.TEXT:
+        event = dispatcher.feed(msg.data)
+        last_event_at = now()
+    elif msg.type in (CLOSE, ERROR):
+        break
 ```
 
-**Node Parsing Flow**:
+Each `dispatcher.feed(raw)`:
 
-1. Parse folders first (organizational structure)
-2. Parse individual nodes (devices)
-3. Parse groups (scenes)
-4. Once both tasks complete, merge status data into node objects
+1. Parses the frame (XML or JSON-envelope; non-event JSON frames like
+   PG3 `spolisy` are ignored).
+2. Applies the update to the underlying record in `LoadResult` —
+   property dict, program status, or variable record — _before_
+   firing listeners.
+3. Emits the parsed `Event` (and, if applicable, a
+   `NodeLifecycleEvent` or `ProgramStatusEvent`) to subscribers.
 
-**Result**: All nodes are loaded with their current status, properties, and metadata.
+See [events.rst](events.rst) for the full event taxonomy.
 
----
+### Reconnection
 
-### 3.2 Programs Platform
+On transport error or unexpected close, the reader backs off through
+a fixed schedule and tries again:
 
-**Method**: `Programs.update()` (`programs/__init__.py:60-86`)
+```
+backoff: 1s → 2s → 5s → 10s → 30s → 60s   (capped at 60s thereafter)
+```
 
-#### Call #3: `/rest/programs?subfolders=true`
+The schedule resets after a successful read. Status listeners see
+`EventStreamStatus.RECONNECTING` while we're in the backoff loop and
+`EventStreamStatus.CONNECTED` once a fresh handshake succeeds.
 
-**Purpose**: Get all ISY programs with folder hierarchy
+A 401-class WebSocket handshake failure triggers `auth.handle_unauthorized`
+to refresh tokens before the next reconnect attempt — PortalAuth
+recovers in the background; LocalAuth's `handle_unauthorized` returns
+`False`, which lets the next attempt's basic-auth header carry the
+(possibly updated) credentials.
 
-**Query Parameter**: `subfolders=true` ensures nested folders are included
+### WebSocket health surface
 
-**Response Contains**:
-
-- Program folders (organizational hierarchy)
-- Programs:
-  - ID, name, parent folder
-  - Status (condition: true/false)
-  - Enabled/disabled state
-  - Run at startup flag
-  - Last run time
-  - Last finish time
-  - Running status (idle, running then, running else)
-
-**Parsing**: Programs are differentiated from folders using the `folder` tag in the XML response.
-
----
-
-### 3.3 Variables Platform
-
-**Method**: `Variables.update()` (`variables/__init__.py:53-77`)
-
-The Variables platform makes **four parallel requests** to fetch both definitions and current values:
-
-#### Call #4a: `/rest/vars/definitions/1`
-
-**Purpose**: Get integer variable definitions (names, IDs, precision)
-
-#### Call #4b: `/rest/vars/definitions/2`
-
-**Purpose**: Get state variable definitions (names, IDs, precision)
-
-#### Call #4c: `/rest/vars/get/1`
-
-**Purpose**: Get current values for all integer variables
-
-#### Call #4d: `/rest/vars/get/2`
-
-**Purpose**: Get current values for all state variables
+For consumers wanting to surface stream health to the user (HA's
+system_health card, diagnostics dumps, etc.), the live stream is
+exposed via `Controller.websocket`:
 
 ```python
-endpoints = [
-    [URL_VARIABLES, URL_DEFINITIONS, VAR_INTEGER],  # /rest/vars/definitions/1
-    [URL_VARIABLES, URL_DEFINITIONS, VAR_STATE],    # /rest/vars/definitions/2
-    [URL_VARIABLES, URL_GET, VAR_INTEGER],          # /rest/vars/get/1
-    [URL_VARIABLES, URL_GET, VAR_STATE],            # /rest/vars/get/2
-]
+ws = controller.websocket
+if ws is not None:
+    print(ws.status)            # CONNECTING / CONNECTED / RECONNECTING / DISCONNECTED
+    print(ws.connected)         # bool
+    print(ws.last_event_at)     # datetime in UTC, or None
 ```
 
-**Why Separate Calls**: ISY distinguishes between:
-
-- **Integer variables** (type 1): General-purpose integer storage
-- **State variables** (type 2): Program state storage
-
-**Variable Parsing**:
-
-1. Check if variables are enabled in config
-2. Parse definitions (names, IDs, precision/scale)
-3. Parse current values (initial value, current value)
-4. Merge definitions with values to create Variable objects
-
-**Edge Cases Handled**:
-
-- No variables defined: returns empty
-- Single variable: response is a dict instead of list
-- Variables disabled in ISY config
-
----
-
-### 3.4 Networking Platform
-
-**Method**: `NetworkResources.update()` (`networking.py:48-71`)
-
-#### Call #5: `/rest/networking/resources`
-
-**Purpose**: Get network resource commands
-
-**Conditional**: Only called if `config.networking` or `config.portal` is enabled
-
-**Response Contains**:
-
-- Network resource IDs and names
-- Command type (GET, POST, etc.)
-- URL or IP address
-- Authentication details
-- Enabled/disabled state
-
-**Note**: Network resources are typically used for:
-
-- HTTP GET/POST commands
-- Integration with external systems
-- Custom automation triggers
-
----
-
-### 3.5 Clock Platform
-
-**Method**: `Clock.update()` (`clock.py`)
-
-#### Call #6: `/rest/time`
-
-**Purpose**: Get ISY clock/location information
-
-**Response Contains**:
-
-- Current date/time (NTP timestamp)
-- Time zone offset
-- DST (Daylight Saving Time) status
-- Latitude and longitude
-- Sunrise time (calculated)
-- Sunset time (calculated)
-- Military time format preference
-
-**Special Handling**: ISY uses NTP timestamps with a custom EPOCH offset (36524 days). PyISYoX converts these to Python `datetime` objects.
-
----
-
-### 3.6 Node Servers Platform (Optional)
-
-**Method**: `NodeServers.update()` (`node_servers.py`)
-
-#### Call #7: `/rest/profiles/ns` (Optional)
-
-**Purpose**: Get Polyglot node server profile definitions
-
-**Conditional**: Only called if `node_servers=True` in `initialize()`
-
-**Response Contains**:
-
-- Node server slot information
-- Node type definitions (custom device types)
-- Command definitions
-- Status definitions
-- Editor definitions (for admin console)
-
-**Use Case**: Required for custom node servers (Polyglot plugins) that define non-standard device types beyond Insteon/Z-Wave.
-
----
-
-## Step 4: Event Stream Setup
-
-After all platforms are initialized, real-time event updates can be enabled.
-
-### WebSocket Event Stream (Default for IoX)
-
-**Method**: `WebSocketClient.start()` (`events/websocket.py:68-74`)
-
-#### WebSocket Connection: `ws://{host}/rest/subscribe`
-
-**Protocol Headers**:
-
-```python
-{
-    "Sec-WebSocket-Protocol": "ISYSUB",
-    "Sec-WebSocket-Version": "13",
-    "Origin": "com.universal-devices.websockets.isy"
-}
-```
-
-**Connection Process**:
-
-1. Establish WebSocket connection with ISY
-2. Authenticate using same credentials as REST API
-3. Receive stream ID from ISY
-4. Begin receiving real-time events as XML messages
-
-**Heartbeat Monitoring**:
-
-- ISY sends heartbeat every 30 seconds
-- If heartbeat missed by 35 seconds (30 + 5 grace), connection is reset
-- Auto-reconnect with exponential backoff: 0.01s, 1s, 10s, 30s, 60s
-
-**Event Types Received**:
-
-- Node status changes
-- Program status changes
-- Variable value changes
-- System status (BUSY, IDLE, SAFE_MODE, etc.)
-- Trigger events (DON, DOF, etc.)
-
-### TCP Event Stream (Legacy, ISY994)
-
-**Method**: `EventStream` (`events/tcpsocket.py`)
-
-**Connection**: Raw TCP socket to ISY on HTTP port
-
-If WebSocket is disabled (`use_websocket=False`):
-
-```python
-isy.auto_update = True  # Starts TCP event stream
-```
-
-**Process**:
-
-1. Opens TCP connection to ISY
-2. Sends subscription request
-3. Receives chunked XML event data
-4. Manually parses XML messages (more complex than WebSocket)
-
-**Note**: WebSocket is preferred and enabled by default. TCP is only used for older ISY994 firmware that doesn't support WebSockets.
-
----
-
-### Event Routing
-
-All events (WebSocket or TCP) are processed by `EventRouter` (`events/router.py`):
-
-```python
-class EventRouter:
-    def process_event(self, event_data):
-        match event.action:
-            case "_0":  # Heartbeat
-                self.websocket.heartbeat()
-            case "_1":  # Node changed
-                isy.nodes.update_received(event)
-            case "_2":  # Variable changed
-                isy.variables.update_received(event)
-            case "_3":  # Program changed
-                isy.programs.update_received(event)
-            # ... etc
-```
-
-Events are routed to the appropriate platform's `update_received()` method, which updates entity state and fires event notifications.
-
----
-
-## Complete Endpoint Call Sequence
-
-Here is the **complete order** of REST API calls when initializing PyISYoX with all options enabled:
-
-### Phase 1: Connection Validation (Sequential)
-
-1. **`GET /rest/config`** - Validate connection and get system configuration
-
-### Phase 2: Platform Data Loading (Parallel)
-
-2. **`GET /rest/status`** - Get all node status values (started first, longest)
-3. **`GET /rest/nodes`** - Get all node definitions
-4. **`GET /rest/programs?subfolders=true`** - Get all programs
-5. **`GET /rest/vars/definitions/1`** - Get integer variable definitions
-6. **`GET /rest/vars/definitions/2`** - Get state variable definitions
-7. **`GET /rest/vars/get/1`** - Get integer variable values
-8. **`GET /rest/vars/get/2`** - Get state variable values
-9. **`GET /rest/networking/resources`** - Get network resources (if enabled)
-10. **`GET /rest/time`** - Get clock/location info
-11. **`GET /rest/profiles/ns`** - Get node server definitions (if enabled)
-
-### Phase 3: Real-Time Event Stream (Post-Initialization)
-
-12. **WebSocket** `ws://{host}/rest/subscribe` - Establish event stream
-
-### Total Initial Load
-
-- **Minimum**: 1 config + 2 platform calls = **3 requests** (minimal setup)
-- **Typical**: 1 config + 10 platform calls = **11 requests** (full setup)
-- **Maximum**: 1 config + 11 platform calls = **12 requests** (with node servers)
-
-**Performance**: All platform calls execute in parallel via `asyncio.gather()`, limited only by the connection semaphore (2-20 concurrent connections depending on platform).
-
----
-
-## Connection Architecture
-
-### Connection Pooling
-
-PyISYoX uses `aiohttp.ClientSession` with connection pooling for efficiency:
-
-```python
-session = aiohttp.ClientSession(
-    connector=aiohttp.TCPConnector(
-        limit=MAX_CONNECTIONS,  # 2 or 20 for HTTPS
-        limit_per_host=MAX_CONNECTIONS
-    )
-)
-```
-
-**Benefits**:
-
-- Reuses TCP connections across requests
-- Reduces handshake overhead
-- Improves performance for parallel loading
-
-### Request Retry Logic
-
-Every REST request includes automatic retry with exponential backoff (`connection.py:128-208`):
-
-**Retry Strategy**:
-
-```python
-MAX_RETRIES = 5
-RETRY_BACKOFF = [0.01, 0.10, 0.25, 1, 2]  # Seconds
-```
-
-**Retry Conditions**:
-
-- `503 Service Unavailable` - ISY too busy
-- Timeout errors (30s default)
-- Network errors (connection reset, disconnected)
-
-**Non-Retry Conditions**:
-
-- `401 Unauthorized` - Invalid credentials (raises exception immediately)
-- `404 Not Found` - Invalid endpoint (returns None or "" if `ok404=True`)
-
-### Semaphore-Based Rate Limiting
-
-To prevent overwhelming the ISY, all requests are controlled by an `asyncio.Semaphore`:
-
-```python
-async with self.semaphore:
-    async with self.req_session.get(url, ...) as response:
-        # Process response
-```
-
-**Limits**:
-
-- **ISY994 HTTPS**: 2 concurrent connections
-- **ISY994 HTTP**: 5 concurrent connections
-- **IoX HTTPS**: 20 concurrent connections
-- **IoX HTTP**: 50 concurrent connections
-
-This ensures PyISYoX never exceeds the ISY's connection limits, which would cause request failures.
-
----
-
-## Connection State Machine
-
-PyISYoX tracks connection state through event notifications:
-
-```python
-class EventStreamStatus(StrEnum):
-    NOT_STARTED = "not_started"
-    INITIALIZING = "stream_initializing"
-    LOADED = "stream_loaded"
-    CONNECTED = "connected"
-    DISCONNECTED = "disconnected"
-    LOST_CONNECTION = "lost_connection"
-    RECONNECTING = "reconnecting"
-    STOP_UPDATES = "stop_updates"
-```
-
-**State Transitions**:
-
-1. `NOT_STARTED` - Initial state
-2. `INITIALIZING` - WebSocket connecting
-3. `LOADED` - First heartbeat received
-4. `CONNECTED` - Fully connected and receiving events
-5. `LOST_CONNECTION` - Connection dropped (auto-reconnects)
-6. `RECONNECTING` - Attempting to reconnect
-7. `DISCONNECTED` - Cleanly disconnected
-8. `STOP_UPDATES` - Event stream stopped by user
-
----
-
-## Summary
-
-The PyISYoX connection flow is designed for:
-
-- **Reliability**: Automatic retries, connection pooling, heartbeat monitoring
-- **Performance**: Parallel loading, connection semaphores, optimal request ordering
-- **Flexibility**: Optional platform loading, WebSocket or TCP events
-- **Real-time**: Event-driven updates via WebSocket with auto-reconnect
-
-By understanding this flow, developers can:
-
-- Optimize initialization for specific use cases
-- Debug connection issues effectively
-- Extend PyISYoX with new platforms or features
-- Integrate PyISYoX into larger applications (like Home Assistant)
-
-For more information, see:
-
-- [PyISYoX Documentation](https://pyisyox.readthedocs.io)
-- [ISY REST API Documentation](https://www.universal-devices.com/developers/)
-- [Home Assistant ISY994 Integration](https://www.home-assistant.io/integrations/isy994/)
+`Controller.websocket` is `None` for one-shot reads
+(`connect(start_websocket=False)`) and after `stop()`.
+
+## Refresh and dynamic profile reload
+
+Two methods on `Controller` let consumers absorb controller-side
+changes without re-authenticating:
+
+- **`refresh()`** — re-runs Phase 3 (the parallel load fan-out) and
+  merges the fresh data into the live `LoadResult`. The dispatcher's
+  binding to `LoadResult.nodes` survives because the dict is mutated
+  in place. Call this after a `NodeLifecycleEvent.requires_reload`
+  signal.
+
+- **`refresh_profile()`** — re-fetches just `/rest/profiles` and
+  merges the result into the live `Profile`. Designed for PG3 dynamic
+  profile reload (a plugin updates its nodedefs at runtime). Returns
+  a `ProfileMergeResult` listing the added vs replaced nodedef keys
+  so consumers can re-classify or invalidate caches.
+
+## Shutdown
+
+`await controller.stop()` is symmetric and idempotent:
+
+1. Stop the WebSocket reader (cancel the task, close the WS).
+2. `auth.close(session, base_url)` — PortalAuth posts `/api/logout`;
+   LocalAuth no-ops.
+3. Close the aiohttp session if the controller owns it (when
+   `session=None` was passed to the constructor). Sessions injected
+   by the consumer are not closed.
+4. Drop the loaded snapshot so any post-stop accessor raises
+   `ControllerNotConnectedError` instead of returning stale data.
+
+Errors during the auth.close step are swallowed at debug level —
+shutdown should never raise.
+
+## TLS
+
+The eisy ships with a self-signed certificate. `Controller`'s default
+`verify_ssl=False` accepts it; pass `verify_ssl=True` if the user has
+installed their own CA. Pass `tls_version=1.2` or `tls_version=1.3` to
+pin the negotiated version (default: auto-negotiate; TLS 1.0 / 1.1 are
+rejected by the eisy regardless).
+
+The `tls_version` and `verify_ssl` parameters apply only when the
+controller creates its own `aiohttp.ClientSession`. Consumers that
+inject their own session are responsible for configuring SSL on it.
