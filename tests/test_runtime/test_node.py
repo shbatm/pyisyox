@@ -10,7 +10,10 @@ import pytest
 from pyisyox.auth import LocalAuth
 from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
 from pyisyox.runtime import Node, NodeCommandError
+from pyisyox.runtime._commands import encode_command_params
 from pyisyox.schema import Profile
+from pyisyox.schema.cmd import Command, CommandParameter
+from pyisyox.schema.nodedef import NodeCommands, NodeDef
 from tests.test_client.conftest import FakeSession
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "eisy6"
@@ -188,6 +191,60 @@ async def test_send_command_too_many_params_raises(real_profile: Profile) -> Non
     node = Node.from_record(record, real_profile, _make_client(FakeSession(BASE)))
     with pytest.raises(NodeCommandError, match="accepts 0 parameter"):
         await node.send_command("DOF", 5)
+
+
+@pytest.mark.asyncio
+async def test_send_command_omits_optional_param(real_profile: Profile) -> None:
+    """KeypadDimmer DON's I_OL_PARAM is optional — omitting it sends
+    the URL without a level segment instead of raising."""
+    record = _make_record()
+    session = FakeSession(BASE)
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/DON", 200, "<ok/>")
+    node = Node.from_record(record, real_profile, _make_client(session))
+
+    await node.send_command("DON")
+
+    _, path, _ = session.calls[0]
+    assert path == "/rest/nodes/3D%207D%2087%201/cmd/DON"
+
+
+@pytest.mark.asyncio
+async def test_send_command_missing_required_param_raises(real_profile: Profile) -> None:
+    """Thermostat CLIMD's I_TSTAT_MODE parameter is non-optional —
+    omitting it must raise before any HTTP call fires."""
+    record = _make_record(nodedef_id="Thermostat", family_id="1", instance_id="1")
+    session = FakeSession(BASE)
+    node = Node.from_record(record, real_profile, _make_client(session))
+
+    with pytest.raises(NodeCommandError, match="requires parameter 0"):
+        await node.send_command("CLIMD")
+    assert session.calls == [], "validation must short-circuit before HTTP"
+
+
+@pytest.mark.asyncio
+async def test_send_command_missing_editor_raises() -> None:
+    """If a command parameter references an editor id that doesn't exist
+    in the profile, encoding raises rather than sending a malformed URL."""
+    nodedef = NodeDef(
+        id="synthetic",
+        family_id="1",
+        instance_id="1",
+        cmds=NodeCommands(
+            accepts=[Command(id="DO_THING", parameters=[CommandParameter(editor_id="NOPE")])],
+        ),
+    )
+    empty_profile = Profile()
+
+    with pytest.raises(NodeCommandError, match="editor 'NOPE' not found"):
+        encode_command_params(
+            nodedef=nodedef,
+            profile=empty_profile,
+            family_id="1",
+            instance_id="1",
+            command_id="DO_THING",
+            params=[1],
+            target_label="node 'X'",
+        )
 
 
 # --- IoXClient.send_node_command url construction ------------------------
