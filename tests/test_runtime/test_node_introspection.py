@@ -18,7 +18,7 @@ import pytest
 
 from pyisyox.auth import LocalAuth
 from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
-from pyisyox.constants import NodeFlag
+from pyisyox.constants import NodeFlag, Protocol
 from pyisyox.runtime import Node
 from pyisyox.schema import Profile
 from tests.test_client.conftest import FakeSession
@@ -70,19 +70,25 @@ def _make_node(record: NodeRecord, profile: Profile, session: FakeSession | None
 @pytest.mark.parametrize(
     ("family_id", "expected"),
     [
-        ("1", "insteon"),
-        ("2", "x10"),
-        ("4", "zigbee"),
-        ("12", "zwave"),
-        ("15", "zwave"),
-        ("10", "node_server"),  # plugin slot
-        ("99", "node_server"),  # any non-native id
-        ("", "unknown"),
+        ("1", Protocol.INSTEON),
+        ("2", Protocol.UPB),  # family.xsd: "2" is UPB, not X10
+        ("4", Protocol.ZWAVE),  # legacy attached Z-Wave radio
+        ("12", Protocol.ZWAVE),  # Z-Matter radio as a Z-Wave controller
+        ("15", Protocol.MATTER),  # Z-Matter radio as a Matter controller
+        ("10", Protocol.NODE_SERVER),  # NODESERVER family / PG3 slot
+        ("99", Protocol.NODE_SERVER),  # any id outside the core family set
+        ("13", Protocol.UNKNOWN),  # folder family — recognised but no protocol
+        ("3", Protocol.UNKNOWN),  # RCS — recognised core family, no mapping
+        ("", Protocol.UNKNOWN),  # no family id
     ],
 )
-def test_protocol_classifies_by_family_id(real_profile: Profile, family_id: str, expected: str) -> None:
+def test_protocol_classifies_by_family_id(
+    real_profile: Profile, family_id: str, expected: Protocol
+) -> None:
     node = _make_node(_make_record(family_id=family_id), real_profile)
-    assert node.protocol == expected
+    result = node.protocol
+    assert result is expected
+    assert result == str(expected)  # StrEnum: still string-compatible
 
 
 # --- is_thermostat / is_lock / is_dimmable / is_battery_node -------------

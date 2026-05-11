@@ -35,6 +35,7 @@ import aiohttp
 from pyisyox.auth import AuthError
 from pyisyox.constants import EventStreamStatus
 from pyisyox.logging import LOG_VERBOSE
+from pyisyox.paths import SUBSCRIBE_PATH
 
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient
@@ -84,7 +85,7 @@ class WebSocketEventStream:
         self,
         client: IoXClient,
         dispatcher: EventDispatcher,
-        path: str = "/rest/subscribe",
+        path: str = SUBSCRIBE_PATH,
     ) -> None:
         """Bind to a client + dispatcher.
 

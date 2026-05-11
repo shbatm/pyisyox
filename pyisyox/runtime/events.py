@@ -104,14 +104,26 @@ class SystemEventControl(StrEnum):
             return control
 
 
-#: Action codes within :attr:`SystemEventControl.TRIGGER` (``_1``)
-#: frames. ``"0"`` is program-status (handled via
-#: ``_apply_program_status``); ``"6"``/``"7"`` are variable change/init
-#: (``_apply_variable_change``). Other action values are surfaced
-#: verbatim and consumers parse them if interested.
-_PROGRAM_STATUS_ACTION = "0"
-_VARIABLE_VALUE_ACTION = "6"
-_VARIABLE_INIT_ACTION = "7"
+class TriggerAction(StrEnum):
+    """Action codes carried in :attr:`SystemEventControl.TRIGGER` (``_1``)
+    frames. The ``<action>`` value discriminates what the frame is.
+
+    Only the codes pyisyox routes on are enumerated — like
+    :class:`SystemEventControl`, we don't invent names for codes
+    we've seen on the wire but lack authoritative labels for;
+    consumers can branch on the raw string for those.
+    """
+
+    #: Program-status update — handled by ``_apply_program_status``.
+    #: ``<eventInfo>`` carries the program id plus ``<on/>``/``<off/>``
+    #: and the run/finish timestamps.
+    PROGRAM_STATUS = "0"
+    #: Variable value change — handled by ``_apply_variable_change``.
+    #: ``<eventInfo>`` carries ``<var type="..." id="..."><val>``.
+    VARIABLE_VALUE = "6"
+    #: Variable init (restore-on-startup) change — same handler /
+    #: payload shape as :attr:`VARIABLE_VALUE`, applied to ``init``.
+    VARIABLE_INIT = "7"
 
 
 class NodeLifecycleAction(StrEnum):
@@ -606,9 +618,9 @@ class EventDispatcher:
         if event.control == SystemEventControl.NODE_LIFECYCLE:
             self._emit_lifecycle(event, raw_frame)
         elif event.control == SystemEventControl.TRIGGER:
-            if event.action == _PROGRAM_STATUS_ACTION:
+            if event.action == TriggerAction.PROGRAM_STATUS:
                 self._apply_program_status(event)
-            elif event.action in (_VARIABLE_VALUE_ACTION, _VARIABLE_INIT_ACTION):
+            elif event.action in (TriggerAction.VARIABLE_VALUE, TriggerAction.VARIABLE_INIT):
                 self._apply_variable_change(event)
         for listener in tuple(self._listeners):
             try:
@@ -721,9 +733,9 @@ class EventDispatcher:
             )
             return
 
-        if event.action == _VARIABLE_VALUE_ACTION:
+        if event.action == TriggerAction.VARIABLE_VALUE:
             record.value = new_value
-        else:  # _VARIABLE_INIT_ACTION
+        else:  # TriggerAction.VARIABLE_INIT
             record.init = new_value
 
         ts_text = (var_elem.findtext("ts") or "").strip()

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pyisyox.client import NodeType
 from pyisyox.constants import PROP_STATUS
 
 if TYPE_CHECKING:
@@ -230,7 +231,7 @@ class Group:
         field is required by the server even though the address
         already disambiguates — without it the call is rejected.
         """
-        await self._client.post_node_update(self.address, {"name": name, "nodeType": "group"})
+        await self._client.post_node_update(self.address, {"name": name, "nodeType": NodeType.GROUP})
 
     def __repr__(self) -> str:
         return f"Group(address={self.address!r}, name={self.name!r}, members={len(self.member_addresses)})"
