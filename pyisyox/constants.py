@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from enum import IntEnum, IntFlag
-
-from pyisyox.util.backports import StrEnum
+from enum import IntEnum, IntFlag, StrEnum
 
 UPDATE_INTERVAL = 0.5
 
