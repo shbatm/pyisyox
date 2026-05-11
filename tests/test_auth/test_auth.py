@@ -318,12 +318,14 @@ async def test_portal_auth_close_logs_out_and_clears_tokens() -> None:
     await auth.authenticate(sess, "https://eisy")
     assert auth.tokens is not None
 
-    sess.queue(200, {})  # /api/logout response
+    sess.queue(200, {"successful": True, "data": None})  # /api/jwt/logout
     await auth.close(sess, "https://eisy")
 
     assert auth.tokens is None
-    # Last call should be POST /api/logout with the bearer token attached.
-    assert sess.calls[-1][0].endswith("/api/logout")
+    # Last call should be POST /api/jwt/logout with the bearer token attached.
+    # eisy 1.0.3 confirms this is the actual logout endpoint (the previous
+    # /api/logout 404s).
+    assert sess.calls[-1][0].endswith("/api/jwt/logout")
 
 
 @pytest.mark.asyncio
@@ -344,7 +346,7 @@ async def test_portal_auth_close_swallows_logout_errors() -> None:
 
 @pytest.mark.asyncio
 async def test_portal_auth_close_skips_logout_when_no_tokens() -> None:
-    """No tokens → no /api/logout round-trip (nothing to invalidate)."""
+    """No tokens → no /api/jwt/logout round-trip (nothing to invalidate)."""
     auth = PortalAuth("u@x", "p")
     sess = FakeSession()
     await auth.close(sess, "https://eisy")

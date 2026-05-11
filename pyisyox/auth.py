@@ -210,12 +210,15 @@ class PortalAuth:
 
     Login URL: ``{base_url}/api/login``. Refresh URL:
     ``{base_url}/api/jwt/refresh``. Logout URL (optional, on
-    :meth:`close`): ``{base_url}/api/logout``.
+    :meth:`close`): ``{base_url}/api/jwt/logout``. Verified against
+    eisy 1.0.3 — ``POST /api/jwt/logout`` returns ``200`` with
+    ``{"successful": true, "data": null}``. (Pre-2026-05-12 versions
+    of this module used ``/api/logout``, which 404s.)
     """
 
     LOGIN_PATH = "/api/login"
     REFRESH_PATH = "/api/jwt/refresh"
-    LOGOUT_PATH = "/api/logout"
+    LOGOUT_PATH = "/api/jwt/logout"
 
     #: Number of seconds before access-token expiry at which we proactively refresh.
     PROACTIVE_REFRESH_LEEWAY = 60.0
