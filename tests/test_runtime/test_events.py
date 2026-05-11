@@ -12,10 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from pyisyox.client import NodePropertyValue, NodeRecord, VariableRecord
+from pyisyox.client import NodePropertyValue, NodeRecord, ProgramRecord, VariableRecord
 from pyisyox.runtime.events import (
     Event,
     EventDispatcher,
+    NodeLifecycleEvent,
+    ProgramStatusEvent,
+    _extract_lifecycle_node_xml,
     parse_event_frame,
 )
 
@@ -514,4 +517,196 @@ def test_dispatcher_variable_change_no_registry_is_no_op() -> None:
     )
     event = dispatcher.feed(frame)
     assert event is not None
+
+
+# --- parser: more permissive-decode edge cases --------------------------
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        "<Event seqnum='1'><control",  # malformed XML — ET.ParseError
+        '{"type":"event","data":"<bad-xml"}',  # JSON envelope wrapping malformed XML
+        "{not valid json",  # starts with `{` but isn't JSON — JSONDecodeError
+        "[1,2,3]",  # valid JSON but not a dict
+    ],
+)
+def test_parse_returns_none_on_broken_payloads(frame: str) -> None:
+    """Every malformed-but-shaped frame must be dropped, never raise."""
+    assert parse_event_frame(frame) is None
+
+
+def test_parse_ignores_non_numeric_prec_attribute() -> None:
+    """``prec="abc"`` must coerce to ``None`` rather than crash the parser."""
+    xml = (
+        '<Event seqnum="1"><control>ST</control>'
+        '<action uom="100" prec="abc">1</action>'
+        "<node>A</node></Event>"
+    )
+    event = parse_event_frame(xml)
+    assert event is not None
+    assert event.prec is None
+
+
+def test_parse_preserves_event_info_with_tail_text_between_children() -> None:
+    """Mixed-content ``<eventInfo>`` (text + child + tail text) round-trips
+    via the string-builder path; tails between children mustn't be lost."""
+    xml = (
+        '<Event seqnum="1"><control>_7</control><action>0</action><node></node>'
+        "<eventInfo>head<inner/>tail-text<after/></eventInfo></Event>"
+    )
+    event = parse_event_frame(xml)
+    assert event is not None
+    assert "head" in event.event_info
+    assert "tail-text" in event.event_info
+
+
+# --- _extract_lifecycle_node_xml direct unit tests -----------------------
+#
+# These edge cases aren't reachable through ``dispatcher.feed`` because
+# the dispatcher only calls the helper after a successful frame parse —
+# the helper has its own defensive guards for the wider call surface.
+
+
+def test_extract_lifecycle_node_xml_drops_non_event_json_envelope() -> None:
+    """A non-event JSON envelope short-circuits before re-parsing."""
+    assert _extract_lifecycle_node_xml('{"type":"spolisy","data":"x"}') is None
+
+
+def test_extract_lifecycle_node_xml_drops_malformed_xml() -> None:
+    """Malformed inner XML (post-envelope-unwrap) returns ``None`` rather
+    than raising — defensive guard for future envelope shapes."""
+    assert _extract_lifecycle_node_xml("<Event<broken") is None
+
+
+def test_extract_lifecycle_node_xml_without_event_info_returns_none() -> None:
+    assert _extract_lifecycle_node_xml('<Event><control>_3</control></Event>') is None
+
+
+def test_extract_lifecycle_node_xml_without_inner_node_returns_none() -> None:
+    """``eventInfo`` present but no inner ``<node>`` (rename / remove
+    actions carry only the address)."""
+    xml = '<Event><control>_3</control><eventInfo><addr>A</addr></eventInfo></Event>'
+    assert _extract_lifecycle_node_xml(xml) is None
+
+
+# --- dispatcher: listener unsubscribe-twice + lifecycle / program errors --
+
+
+def test_dispatcher_unsubscribe_twice_is_safe_for_every_listener_type() -> None:
+    """Double-unsubscribe on each of the three listener registries
+    suppresses the ValueError from the redundant ``list.remove``."""
+    dispatcher = EventDispatcher({})
+    for register in (
+        dispatcher.add_listener,
+        dispatcher.add_program_status_listener,
+        dispatcher.add_lifecycle_listener,
+    ):
+        unsub = register(lambda _e: None)
+        unsub()
+        unsub()  # must not raise
+
+
+def test_dispatcher_lifecycle_listener_exception_does_not_break_others() -> None:
+    """A raising lifecycle listener must not stop subsequent listeners."""
+    dispatcher = EventDispatcher({})
+    received: list[NodeLifecycleEvent] = []
+    dispatcher.add_lifecycle_listener(lambda _e: (_ for _ in ()).throw(RuntimeError("boom")))
+    dispatcher.add_lifecycle_listener(received.append)
+
+    dispatcher.feed(
+        '<Event seqnum="1"><control>_3</control><action>ND</action>'
+        '<node>A</node><eventInfo><node id="A"><name>X</name></node></eventInfo></Event>'
+    )
+    assert len(received) == 1
+
+
+# --- dispatcher: program-status decode edge cases ------------------------
+
+
+def _make_program(address: str = "008D") -> ProgramRecord:
+    return ProgramRecord(
+        address=address,
+        name="Foo",
+        path="",
+        parent_address=None,
+        is_folder=False,
+        status=False,
+    )
+
+
+def _program_frame(event_info: str, *, seqnum: int = 1) -> str:
+    return (
+        f'<Event seqnum="{seqnum}"><control>_1</control><action>0</action><node></node>'
+        f"<eventInfo>{event_info}</eventInfo></Event>"
+    )
+
+
+def test_program_status_with_empty_event_info_is_dropped() -> None:
+    """A ``_1`` frame with an empty ``<eventInfo/>`` carries no decode
+    target; the apply step short-circuits."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    dispatcher.feed(
+        '<Event seqnum="1"><control>_1</control><action>0</action><node></node><eventInfo/></Event>'
+    )
+    assert program.status is False, "no event_info means no status change"
+
+
+def test_program_status_with_malformed_event_info_xml_is_dropped() -> None:
+    """``event_info`` text that doesn't parse as XML once re-wrapped
+    must drop silently rather than crash the read loop."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    # ``<id>8D`` without a closing tag — re-wrapped XML fails to parse.
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>0</action><node></node>'
+        "<eventInfo><id>8D</eventInfo></Event>"
+    )
+    dispatcher.feed(frame)
+    assert program.status is False
+
+
+def test_program_status_with_missing_id_is_dropped() -> None:
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+    dispatcher.feed(_program_frame("<on /><s>21</s>"))
+    assert program.status is False, "no <id> means we can't match a record"
+
+
+def test_program_status_without_on_off_marker_preserves_status() -> None:
+    """Unrecognised marker tags fall through to ``record.status`` —
+    defensive against future firmware adding new flavours."""
+    program = _make_program()
+    program.status = True
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    dispatcher.feed(_program_frame("<id>8D</id><weird /><s>21</s>"))
+    assert program.status is True, "unrecognised marker preserves prior status"
+
+
+def test_program_status_with_non_integer_running_is_dropped() -> None:
+    """The ``<s>`` running-state value is best-effort-int; garbage there
+    must not crash the apply step (the record's ``running`` simply
+    stays unchanged)."""
+    program = _make_program()
+    program.running = None
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    dispatcher.feed(_program_frame("<id>8D</id><on /><s>not-a-number</s>"))
+    assert program.status is True
+    assert program.running is None, "non-int <s> leaves running unchanged"
+
+
+def test_program_status_listener_exception_does_not_break_others() -> None:
+    """A raising program-status listener must not stop subsequent listeners."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+    received: list[ProgramStatusEvent] = []
+    dispatcher.add_program_status_listener(lambda _e: (_ for _ in ()).throw(RuntimeError("boom")))
+    dispatcher.add_program_status_listener(received.append)
+
+    dispatcher.feed(_program_frame("<id>8D</id><on /><s>21</s>"))
     assert len(received) == 1
