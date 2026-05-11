@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from pyisyox.client import NodePropertyValue, NodeRecord
+from pyisyox.client import NodePropertyValue, NodeRecord, VariableRecord
 from pyisyox.runtime.events import (
     Event,
     EventDispatcher,
@@ -391,3 +391,127 @@ def test_dispatcher_feed_returns_none_on_garbage() -> None:
     assert dispatcher.feed("") is None
     assert dispatcher.feed("not xml") is None
     assert dispatcher.feed('{"type":"spolisy","data":{}}') is None
+
+
+# --- dispatcher: variable change -----------------------------------------
+#
+# Variable events ride on ``<control>_1</control>`` (same as program-status)
+# but with action ``"6"`` (current value change) or ``"7"`` (init change).
+# The wire payload is ``<eventInfo><var type="N" id="M"><val>...</val></var></eventInfo>``.
+# The dispatcher updates the matching ``VariableRecord`` in place, mirroring
+# how it already handles node properties and program status.
+
+
+def _make_variable_record(
+    *, type_id: str = "1", id_: str = "5", value: int = 0, init: int = 0
+) -> VariableRecord:
+    return VariableRecord(type_id=type_id, id=id_, name=f"Var_{type_id}_{id_}", value=value, init=init)
+
+
+def test_dispatcher_applies_variable_value_change_to_record() -> None:
+    """Action ``"6"`` updates ``record.value`` in place."""
+    record = _make_variable_record(type_id="1", id_="5", value=0)
+    variables = {"1": {"5": record}, "2": {}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node>"
+        '<eventInfo><var type="1" id="5"><val>42</val><ts>20260510 21:00:00</ts></var></eventInfo>'
+        "</Event>"
+    )
+    event = dispatcher.feed(frame)
+
+    assert event is not None
+    assert record.value == 42
+    assert record.init == 0  # untouched on action 6
+    assert record.ts == "20260510 21:00:00"
+
+
+def test_dispatcher_applies_variable_init_change_to_record() -> None:
+    """Action ``"7"`` updates ``record.init`` in place; value is untouched."""
+    record = _make_variable_record(type_id="2", id_="8", value=5, init=0)
+    variables = {"1": {}, "2": {"8": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>7</action>'
+        "<node></node>"
+        '<eventInfo><var type="2" id="8"><val>100</val></var></eventInfo>'
+        "</Event>"
+    )
+    dispatcher.feed(frame)
+
+    assert record.init == 100
+    assert record.value == 5  # untouched on action 7
+
+
+def test_dispatcher_drops_variable_event_for_unknown_type() -> None:
+    """A variable change for a type the registry doesn't track is dropped
+    silently — no exception, no autovivified bucket."""
+    record = _make_variable_record(type_id="1", id_="5", value=0)
+    variables = {"1": {"5": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    # Type "3" doesn't exist on IoX; the dispatcher should ignore it.
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node>"
+        '<eventInfo><var type="3" id="5"><val>42</val></var></eventInfo>'
+        "</Event>"
+    )
+    dispatcher.feed(frame)
+    assert record.value == 0
+
+
+def test_dispatcher_drops_variable_event_for_unknown_id() -> None:
+    """A variable change for an id missing from its type bucket is dropped."""
+    record = _make_variable_record(type_id="1", id_="5", value=0)
+    variables = {"1": {"5": record}, "2": {}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node>"
+        '<eventInfo><var type="1" id="99"><val>42</val></var></eventInfo>'
+        "</Event>"
+    )
+    dispatcher.feed(frame)
+    assert record.value == 0
+
+
+def test_dispatcher_drops_variable_event_with_non_numeric_val() -> None:
+    """The wire is supposed to carry an int; a junk value is ignored rather
+    than coerced to 0 (which would silently clobber state)."""
+    record = _make_variable_record(type_id="1", id_="5", value=99)
+    variables = {"1": {"5": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node>"
+        '<eventInfo><var type="1" id="5"><val>not-a-number</val></var></eventInfo>'
+        "</Event>"
+    )
+    dispatcher.feed(frame)
+    assert record.value == 99  # unchanged
+
+
+def test_dispatcher_variable_change_no_registry_is_no_op() -> None:
+    """When constructed without a variables registry (the test-friendly
+    default), variable-change frames flow through to the generic listener
+    channel but don't mutate any shared state — symmetric with the
+    program-status no-op when ``programs=None``."""
+    dispatcher = EventDispatcher({})  # no variables
+    received: list[Event] = []
+    dispatcher.add_listener(received.append)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node>"
+        '<eventInfo><var type="1" id="5"><val>42</val></var></eventInfo>'
+        "</Event>"
+    )
+    event = dispatcher.feed(frame)
+    assert event is not None
+    assert len(received) == 1

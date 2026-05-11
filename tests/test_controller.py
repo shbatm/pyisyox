@@ -899,9 +899,7 @@ _PROGRAM_VERBS = [
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("method_name", "wire_verb"), _PROGRAM_VERBS)
-async def test_program_command_wrappers_hit_legacy_endpoint(
-    method_name: str, wire_verb: str
-) -> None:
+async def test_program_command_wrappers_hit_legacy_endpoint(method_name: str, wire_verb: str) -> None:
     """Every command method on ``Program`` issues
     ``GET /rest/programs/{id}/{wire_verb}``."""
     session = FakeSession(BASE)
@@ -936,9 +934,7 @@ async def test_program_command_wrappers_hit_legacy_endpoint(
     ("method_name", "wire_verb"),
     [("run", "run"), ("stop", "stop"), ("enable", "enable"), ("disable", "disable")],
 )
-async def test_program_folder_command_wrappers_hit_legacy_endpoint(
-    method_name: str, wire_verb: str
-) -> None:
+async def test_program_folder_command_wrappers_hit_legacy_endpoint(method_name: str, wire_verb: str) -> None:
     """``ProgramFolder`` only carries the four shared verbs; each
     routes to ``GET /rest/programs/{folder_id}/{wire_verb}``."""
     session = FakeSession(BASE)

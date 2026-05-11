@@ -171,7 +171,11 @@ class Controller:
         # Bind the dispatcher to the same dict the LoadResult holds —
         # so runtime Nodes (which read from LoadResult.nodes) see live
         # updates without an explicit notification path.
-        self._dispatcher = EventDispatcher(self._loaded.nodes, programs=self._loaded.programs)
+        self._dispatcher = EventDispatcher(
+            self._loaded.nodes,
+            programs=self._loaded.programs,
+            variables=self._loaded.variables,
+        )
 
         if start_websocket:
             self._ws = WebSocketEventStream(self._client, self._dispatcher, path=self._ws_path)
