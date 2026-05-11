@@ -82,11 +82,13 @@ class NodePropertyValue:
     here as a private data carrier so the client can produce values
     without importing the runtime Node classes.
 
-    ``prec`` is the decimal precision the controller declares for this
-    value (``raw / 10**prec`` is the displayed number). It arrives on
-    every wire shape — ``/api/nodes`` JSON has ``"prec": <int>``,
-    ``/rest/status`` XML uses ``prec="<int>"``, and WS frames put it on
-    the ``<action prec="...">`` element. Defaults to ``0`` (= no
+    ``precision`` is the decimal precision the controller declares for
+    this value (``raw / 10**precision`` is the displayed number). The
+    wire keyed it as ``"prec"`` across all three ingest paths —
+    ``/api/nodes`` JSON has ``"prec": <int>``, ``/rest/status`` XML uses
+    ``prec="<int>"``, and WS frames put it on the ``<action prec="...">``
+    element — but the Python attribute spells it out for readability
+    (matches PyISY 3.x's ``precision`` naming). Defaults to ``0`` (= no
     scaling) when the controller omits it.
     """
 
@@ -95,7 +97,7 @@ class NodePropertyValue:
     formatted: str = ""
     uom: str = ""
     name: str = ""
-    prec: int = 0
+    precision: int = 0
 
 
 @dataclass(slots=True)
@@ -243,7 +245,9 @@ class VariableRecord:
         name: User-assigned label.
         value: Current value (wire field ``val``).
         init: Restore-on-startup value.
-        prec: Decimal precision (``displayed = raw / 10**prec``).
+        precision: Decimal precision (``displayed = raw / 10**precision``).
+            The wire keyed it as ``"prec"`` — Python attribute spells
+            it out (matches PyISY 3.x).
         ts: Last-change timestamp as the controller emits it (ISO 8601
             UTC). Empty string when the controller omits it.
     """
@@ -253,7 +257,7 @@ class VariableRecord:
     name: str
     value: int = 0
     init: int = 0
-    prec: int = 0
+    precision: int = 0
     ts: str = ""
 
     @property
@@ -686,7 +690,7 @@ def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
             formatted=str(prop.get("formatted", "")),
             uom=str(prop.get("uom", "")),
             name=str(prop.get("name", "")),
-            prec=_coerce_prec(prop.get("prec")),
+            precision=_coerce_prec(prop.get("prec")),
         )
 
     # ``flag`` arrives stringified from the controller (e.g. ``"128"``
@@ -744,7 +748,7 @@ def parse_rest_status(xml: str) -> dict[str, dict[str, NodePropertyValue]]:
                 formatted=prop.get("formatted", ""),
                 uom=prop.get("uom", ""),
                 name=prop.get("name", ""),
-                prec=_coerce_prec(prop.get("prec")),
+                precision=_coerce_prec(prop.get("prec")),
             )
         out[addr] = props
     return out
@@ -910,7 +914,7 @@ def parse_api_variables_type(raw: list[dict[str, Any]], type_id: str) -> dict[st
             name=str(entry.get("name", "")),
             value=_coerce_int(entry.get("val"), default=0),
             init=_coerce_int(entry.get("init"), default=0),
-            prec=_coerce_prec(entry.get("prec")),
+            precision=_coerce_prec(entry.get("prec")),
             ts=str(entry.get("ts", "")),
         )
     return out

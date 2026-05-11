@@ -76,9 +76,9 @@ class Variable:
         return self._record.init
 
     @property
-    def prec(self) -> int:
-        """Decimal precision. ``displayed = raw / 10**prec``."""
-        return self._record.prec
+    def precision(self) -> int:
+        """Decimal precision. ``displayed = raw / 10**precision``."""
+        return self._record.precision
 
     @property
     def ts(self) -> str:

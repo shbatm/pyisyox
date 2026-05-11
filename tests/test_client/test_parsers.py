@@ -166,8 +166,8 @@ def test_parse_api_nodes_captures_prec_from_json() -> None:
         }
     }
     nodes = parse_api_nodes(raw)
-    assert nodes["X"].properties["GV1"].prec == 4
-    assert nodes["X"].properties["ST"].prec == 0
+    assert nodes["X"].properties["GV1"].precision == 4
+    assert nodes["X"].properties["ST"].precision == 0
 
 
 def test_parse_api_nodes_omitted_prec_defaults_to_zero() -> None:
@@ -187,7 +187,7 @@ def test_parse_api_nodes_omitted_prec_defaults_to_zero() -> None:
         }
     }
     nodes = parse_api_nodes(raw)
-    assert nodes["X"].properties["ST"].prec == 0
+    assert nodes["X"].properties["ST"].precision == 0
 
 
 def test_parse_rest_status_captures_prec_from_xml_attr() -> None:
@@ -199,22 +199,22 @@ def test_parse_rest_status_captures_prec_from_xml_attr() -> None:
         "</node></nodes>"
     )
     out = parse_rest_status(xml)
-    assert out["X"]["GV1"].prec == 4
+    assert out["X"]["GV1"].precision == 4
     # ST entry has no prec attribute — default applies.
-    assert out["X"]["ST"].prec == 0
+    assert out["X"]["ST"].precision == 0
 
 
 def test_parse_status_handles_non_numeric_prec_defensively() -> None:
     """A blank or junk ``prec`` shouldn't poison the parse — coerce to 0."""
     xml = '<nodes><node id="X"><property id="GV1" value="" formatted="" uom="" prec=""/></node></nodes>'
-    assert parse_rest_status(xml)["X"]["GV1"].prec == 0
+    assert parse_rest_status(xml)["X"]["GV1"].precision == 0
 
 
 def test_node_property_value_default_prec_is_zero() -> None:
     """Construction without ``prec`` defaults to 0 — preserves backwards-
     compatible NodePropertyValue construction at the API level."""
     npv = NodePropertyValue(id="ST", value="0")
-    assert npv.prec == 0
+    assert npv.precision == 0
 
 
 # --- merge ---------------------------------------------------------------
@@ -554,7 +554,7 @@ def test_parse_api_variables_type_extracts_typed_records() -> None:
     assert state_1.name == "State_1"
     assert state_1.value == 0
     assert state_1.init == 0
-    assert state_1.prec == 0
+    assert state_1.precision == 0
     assert state_1.ts == "2026-05-07T21:16:44.000Z"
 
     # Composite address joins type+id for downstream unique-id derivation.
@@ -562,7 +562,7 @@ def test_parse_api_variables_type_extracts_typed_records() -> None:
 
     # ``prec`` carries through for variables that need decimal scaling.
     calib = records["17"]
-    assert calib.prec == 2
+    assert calib.precision == 2
     assert calib.value == 12345
 
 
@@ -600,7 +600,7 @@ def test_parse_api_variables_type_coerces_non_int_values_to_zero() -> None:
     ``parse_rest_status`` follows for empty XML attrs."""
     raw = [{"id": "1", "name": "garbage", "val": "abc", "init": "", "prec": None}]
     record = parse_api_variables_type(raw, "1")["1"]
-    assert (record.value, record.init, record.prec) == (0, 0, 0)
+    assert (record.value, record.init, record.precision) == (0, 0, 0)
 
 
 def test_variable_record_default_construction() -> None:
@@ -609,6 +609,6 @@ def test_variable_record_default_construction() -> None:
     record = VariableRecord(type_id="1", id="42", name="Spare")
     assert record.value == 0
     assert record.init == 0
-    assert record.prec == 0
+    assert record.precision == 0
     assert record.ts == ""
     assert record.address == "1.42"
