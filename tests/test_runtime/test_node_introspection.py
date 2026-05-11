@@ -41,6 +41,7 @@ def _make_record(
     properties: dict[str, NodePropertyValue] | None = None,
     type_: str = "1.0.0.0",
     parent_address: str | None = None,
+    pnode: str | None = None,
 ) -> NodeRecord:
     return NodeRecord(
         address=address,
@@ -51,6 +52,7 @@ def _make_record(
         type=type_,
         properties=properties or {},
         parent_address=parent_address,
+        pnode=pnode,
     )
 
 
@@ -173,7 +175,7 @@ def test_introspection_safe_when_nodedef_unresolved(real_profile: Profile) -> No
     assert node.is_dimmable is False
 
 
-# --- shortcuts: status + primary_node ------------------------------------
+# --- shortcuts: status + primary_address + parent_address ----------------
 
 
 def test_status_returns_st_property_when_present(real_profile: Profile) -> None:
@@ -190,18 +192,57 @@ def test_status_none_when_st_absent(real_profile: Profile) -> None:
     assert node.status is None
 
 
-def test_primary_node_aliases_parent_address(real_profile: Profile) -> None:
-    """``primary_node`` is the IoX-spelling alias for ``parent_address``;
-    consumers migrating from PyISY 3.x can keep the old name."""
-    node = _make_node(_make_record(parent_address="AA BB CC 1"), real_profile)
-    assert node.primary_node == "AA BB CC 1"
-    assert node.primary_node == node.parent_address
+def test_primary_address_resolves_from_pnode(real_profile: Profile) -> None:
+    """``primary_address`` derives from the IoX ``<pnode>`` element — the
+    device-primary address for multi-button physicals (KeypadLinc,
+    RemoteLinc, FanLinc). Returns the primary only when this node is a
+    sub-button (``pnode != address``)."""
+    sub_button = _make_node(
+        _make_record(address="AA BB CC 2", pnode="AA BB CC 1"), real_profile
+    )
+    assert sub_button.primary_address == "AA BB CC 1"
 
 
-def test_primary_node_none_for_root_node(real_profile: Profile) -> None:
-    """A device-root node has no parent address — primary_node is None."""
-    node = _make_node(_make_record(parent_address=None), real_profile)
-    assert node.primary_node is None
+def test_primary_address_none_for_device_root(real_profile: Profile) -> None:
+    """The device primary has ``pnode == address`` — surface as ``None`` so
+    consumers can use ``primary_address is not None`` as a sub-button
+    indicator. ``pnode`` absent is treated the same way."""
+    root_with_self_pnode = _make_node(
+        _make_record(address="AA BB CC 1", pnode="AA BB CC 1"), real_profile
+    )
+    assert root_with_self_pnode.primary_address is None
+
+    root_without_pnode = _make_node(_make_record(pnode=None), real_profile)
+    assert root_without_pnode.primary_address is None
+
+
+def test_parent_address_returns_tree_parent(real_profile: Profile) -> None:
+    """``parent_address`` exposes the IoX ``<parent>`` element — the
+    tree-hierarchy parent (folder/scene), independent of the device
+    primary. The two concepts are orthogonal: a sub-button can be inside
+    a folder while also being a sub-node of a device primary."""
+    sub_button_in_folder = _make_node(
+        _make_record(
+            address="AA BB CC 2",
+            parent_address="folder-id",  # tree parent
+            pnode="AA BB CC 1",  # device primary (different concept)
+        ),
+        real_profile,
+    )
+    assert sub_button_in_folder.parent_address == "folder-id"
+    assert sub_button_in_folder.primary_address == "AA BB CC 1"
+
+    # Tree-root node, no folder parent, also a device primary
+    node = _make_node(
+        _make_record(
+            address="AA BB CC 1",
+            parent_address=None,
+            pnode="AA BB CC 1",
+        ),
+        real_profile,
+    )
+    assert node.parent_address is None
+    assert node.primary_address is None
 
 
 # --- flag / has_flag -----------------------------------------------------
