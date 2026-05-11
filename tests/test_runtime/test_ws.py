@@ -8,15 +8,31 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import aiohttp
+import multidict
 import pytest
+from aiohttp.client_reqrep import RequestInfo
+from yarl import URL
 
 from pyisyox.auth import LocalAuth
 from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
 from pyisyox.constants import EventStreamStatus
+from pyisyox.runtime import ws as ws_module
 from pyisyox.runtime.events import EventDispatcher
 from pyisyox.runtime.ws import WebSocketEventStream
 
 BASE = "https://eisy.local:8443"
+
+
+def _ws_handshake_error(status: int) -> aiohttp.WSServerHandshakeError:
+    """Build a ``WSServerHandshakeError`` with a usable ``status`` field."""
+    headers = multidict.CIMultiDictProxy(multidict.CIMultiDict())
+    request_info = RequestInfo(URL("https://eisy.local/"), "GET", headers)
+    return aiohttp.WSServerHandshakeError(
+        request_info=request_info,
+        history=(),
+        status=status,
+        message=f"HTTP {status}",
+    )
 
 
 # --- fake WS plumbing ----------------------------------------------------
@@ -269,6 +285,215 @@ async def test_ws_reader_unsubscribe_listener() -> None:
     await stream.stop()
 
     assert received == [], "unsubscribed listener must receive nothing"
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_start_is_idempotent() -> None:
+    """Calling ``start()`` twice returns the same task; the second call
+    must not spawn a parallel reader."""
+    session = FakeWSSession()
+    session.queue_success([_closed_frame()])
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    task1 = stream.start()
+    task2 = stream.start()
+    assert task1 is task2
+    await stream.stop()
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_unsubscribe_twice_is_safe() -> None:
+    """Double-unsubscribe must not raise — the ValueError from the
+    second list.remove() is swallowed."""
+    session = FakeWSSession()
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    unsubscribe = stream.add_status_listener(lambda _s: None)
+    unsubscribe()
+    unsubscribe()  # must not raise
+
+
+def test_ws_url_for_http_base() -> None:
+    """``http://`` translates to ``ws://`` so plain-HTTP devices
+    (test harnesses, legacy ISY994) work without ``https://`` upgrade."""
+    session = FakeWSSession()
+    client = IoXClient("http://eisy.local:8080", LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    assert stream._ws_url() == "ws://eisy.local:8080/rest/subscribe"
+
+
+def test_ws_url_for_unknown_scheme_appends_path() -> None:
+    """Non-http(s) base URLs fall through to ``base + path`` so the
+    method always returns *something* — callers see a clear error from
+    ws_connect rather than a silent crash here."""
+    session = FakeWSSession()
+    client = IoXClient("eisy.local:8080", LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    assert stream._ws_url() == "eisy.local:8080/rest/subscribe"
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_401_with_unrecoverable_auth_raises_authoritatively(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LocalAuth cannot recover from a 401 (basic-auth credentials are
+    wrong by construction). The reader must notify
+    ``RECONNECT_FAILED`` and stop instead of looping forever."""
+    monkeypatch.setattr(ws_module, "_BACKOFF_SCHEDULE", (0.0,))
+    session = FakeWSSession()
+    session.queue_failure(_ws_handshake_error(401))
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    statuses: list[EventStreamStatus] = []
+    stream.add_status_listener(statuses.append)
+
+    stream.start()
+    for _ in range(200):
+        if EventStreamStatus.RECONNECT_FAILED in statuses:
+            break
+        await asyncio.sleep(0)
+    await stream.stop()
+
+    assert EventStreamStatus.RECONNECT_FAILED in statuses
+    assert len(session.calls) == 1, "no retry once auth recovery declined"
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_401_recoverable_retries_handshake(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When ``handle_unauthorized`` returns ``True`` the reader retries
+    the handshake once with refreshed kwargs — typical of PortalAuth
+    after a token refresh."""
+
+    class _RecoverableAuth:
+        def __init__(self) -> None:
+            self.recover_calls = 0
+            self.kwargs_calls = 0
+
+        async def authenticate(self, _session: object, _base: str) -> None:
+            return None
+
+        async def request_kwargs(self, _session: object, _base: str) -> dict:
+            self.kwargs_calls += 1
+            return {"headers": {"Authorization": f"Bearer t{self.kwargs_calls}"}}
+
+        async def handle_unauthorized(self, _session: object, _base: str) -> bool:
+            self.recover_calls += 1
+            return True
+
+        async def close(self, _session: object, _base: str) -> None:
+            return None
+
+    session = FakeWSSession()
+    session.queue_failure(_ws_handshake_error(401))
+    session.queue_success([_closed_frame()])
+    auth = _RecoverableAuth()
+    client = IoXClient(BASE, auth, session)  # type: ignore[arg-type]
+    client._authenticated = True
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    statuses: list[EventStreamStatus] = []
+    stream.add_status_listener(statuses.append)
+
+    stream.start()
+    for _ in range(200):
+        if EventStreamStatus.CONNECTED in statuses:
+            break
+        await asyncio.sleep(0)
+    await stream.stop()
+
+    assert auth.recover_calls == 1
+    assert len(session.calls) == 2, "one retry after auth recovery"
+    assert EventStreamStatus.CONNECTED in statuses
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_non_401_handshake_error_triggers_reconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 500 from the handshake is not an auth problem — the loop
+    catches the exception, notifies ``LOST_CONNECTION`` /
+    ``RECONNECTING``, and retries (which succeeds here)."""
+    monkeypatch.setattr(ws_module, "_BACKOFF_SCHEDULE", (0.0,))
+    session = FakeWSSession()
+    session.queue_failure(_ws_handshake_error(500))
+    session.queue_success([_closed_frame()])
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    statuses: list[EventStreamStatus] = []
+    stream.add_status_listener(statuses.append)
+
+    stream.start()
+    for _ in range(200):
+        if EventStreamStatus.CONNECTED in statuses:
+            break
+        await asyncio.sleep(0)
+    await stream.stop()
+
+    assert EventStreamStatus.LOST_CONNECTION in statuses
+    assert EventStreamStatus.RECONNECTING in statuses
+    assert EventStreamStatus.CONNECTED in statuses
+    assert len(session.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_generic_exception_triggers_reconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unexpected exception from ws_connect (not a handshake error)
+    must still flow through the reconnect path rather than killing
+    the reader task."""
+    monkeypatch.setattr(ws_module, "_BACKOFF_SCHEDULE", (0.0,))
+    session = FakeWSSession()
+    session.queue_failure(RuntimeError("transient"))
+    session.queue_success([_closed_frame()])
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    statuses: list[EventStreamStatus] = []
+    stream.add_status_listener(statuses.append)
+
+    stream.start()
+    for _ in range(200):
+        if EventStreamStatus.CONNECTED in statuses:
+            break
+        await asyncio.sleep(0)
+    await stream.stop()
+
+    assert EventStreamStatus.RECONNECTING in statuses
+    assert EventStreamStatus.CONNECTED in statuses
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_breaks_on_error_frame() -> None:
+    """A ``WSMsgType.ERROR`` frame ends the read cycle (we don't try to
+    interpret malformed transport-level errors)."""
+    session = FakeWSSession()
+    ws = session.queue_success(
+        [
+            FakeWSMessage(type=aiohttp.WSMsgType.ERROR),
+        ]
+    )
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    stream.start()
+    for _ in range(50):
+        if ws.closed or ws.close_called:
+            break
+        await asyncio.sleep(0)
+    await stream.stop()
+
+    assert ws.close_called or ws.closed
 
 
 @pytest.mark.asyncio

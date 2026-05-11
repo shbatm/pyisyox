@@ -298,15 +298,120 @@ async def test_node_rename_posts_name_and_type_node(real_profile: Profile) -> No
 
 
 #
-# secure_lock / secure_unlock / start_manual_dimming / stop_manual_dimming:
+# secure_lock / secure_unlock / start_manual_dimming / stop_manual_dimming
+# can't pin wire-level — the captured fixture has no Z-Wave radio (no
+# SECMD) and no Insteon BMAN/SMAN (deprecated in favor of FADE_*). Stub
+# send_command on the instance and assert each wrapper delegates with
+# the right wire-convention command id + parameter.
+
+
+# --- record-backed property accessors (smoke) ----------------------------
+
+
+def test_node_exposes_name_type_and_enabled_from_record(real_profile: Profile) -> None:
+    """``name`` / ``type`` / ``enabled`` are simple record passthroughs —
+    pin them so a future record-shape refactor doesn't silently change
+    the consumer surface."""
+    record = _make_record(type_="1.65.69.0")
+    node = _make_node(record, real_profile)
+    assert node.name == "Test"
+    assert node.type == "1.65.69.0"
+    assert node.enabled is True  # default on NodeRecord
+
+
+# --- is_dimmable defensive guard ----------------------------------------
+
+
+def test_is_dimmable_false_when_st_property_missing_from_nodedef(real_profile: Profile) -> None:
+    """``DimmerSwitchOnly`` advertises only an ``ERR`` property — no ST
+    means the editor lookup can't even start, so the helper returns False
+    rather than crashing on ``st_prop.editor_id``."""
+    node = _make_node(_make_record(nodedef_id="DimmerSwitchOnly"), real_profile)
+    assert node.is_dimmable is False
+
+
+# --- ergonomic wrappers: end-to-end via real fixture nodedefs ------------
+
+
+@pytest.mark.asyncio
+async def test_set_climate_setpoint_heat_routes_to_clisph(real_profile: Profile) -> None:
+    session = FakeSession(BASE)
+    node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile, session)
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLISPH/70")
+    await node.set_climate_setpoint_heat(70)
+    assert any("/cmd/CLISPH/" in path for _, path, _ in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_set_climate_setpoint_cool_routes_to_clispc(real_profile: Profile) -> None:
+    session = FakeSession(BASE)
+    node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile, session)
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLISPC/70")
+    await node.set_climate_setpoint_cool(70)
+    assert any("/cmd/CLISPC/" in path for _, path, _ in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_set_on_level_routes_to_ol(real_profile: Profile) -> None:
+    session = FakeSession(BASE)
+    node = _make_node(_make_record(nodedef_id="DimmerLampSwitch"), real_profile, session)
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/OL/50")
+    await node.set_on_level(50)
+    assert any("/cmd/OL/" in path for _, path, _ in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_set_ramp_rate_routes_to_rr(real_profile: Profile) -> None:
+    session = FakeSession(BASE)
+    node = _make_node(_make_record(nodedef_id="DimmerLampSwitch"), real_profile, session)
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/RR/5")
+    await node.set_ramp_rate(5)
+    assert any("/cmd/RR/" in path for _, path, _ in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_set_backlight_routes_to_bl(real_profile: Profile) -> None:
+    session = FakeSession(BASE)
+    node = _make_node(_make_record(nodedef_id="DimmerLampSwitch"), real_profile, session)
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/BL/50")
+    await node.set_backlight(50)
+    assert any("/cmd/BL/" in path for _, path, _ in session.calls)
+
+
+# --- ergonomic wrappers: stubbed (cmds not in captured fixture) ----------
 #
-# These wrappers route through send_command + the editor codec. The
-# captured profile fixture is from a controller that has no Z-Wave
-# radio and no I2CS-secure Insteon lock, so SECMD doesn't appear in
-# any nodedef.cmds.accepts; BMAN/SMAN are also absent (they're
-# deprecated in favor of FADE_*). Wire-level pinning for those
-# specifically requires either a synthetic nodedef or a fresh
-# capture against a controller that has them. The wrappers
-# themselves are trivially correct (one-line passthroughs to
-# send_command with a constant cmd id) — they're exercised
-# end-to-end whenever the right nodedef is loaded.
+# secure_lock/unlock and start/stop_manual_dimming wrap send_command with
+# constant cmd ids; the captured profile has no nodedef accepting SECMD /
+# BMAN / SMAN, so we stub send_command on the instance and assert each
+# wrapper delegates correctly.
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("wrapper_method", "expected_cmd", "expected_params"),
+    [
+        ("secure_lock", "SECMD", (1,)),
+        ("secure_unlock", "SECMD", (0,)),
+        ("start_manual_dimming", "BMAN", ()),
+        ("stop_manual_dimming", "SMAN", ()),
+    ],
+)
+async def test_thin_wrapper_delegates_to_send_command(
+    real_profile: Profile,
+    monkeypatch: pytest.MonkeyPatch,
+    wrapper_method: str,
+    expected_cmd: str,
+    expected_params: tuple,
+) -> None:
+    node = _make_node(_make_record(), real_profile)
+    calls: list[tuple[str, tuple]] = []
+
+    async def _record(self: Node, cmd_id: str, *params: float | str) -> None:
+        calls.append((cmd_id, params))
+
+    # ``Node`` uses __slots__ so instance attribute assignment is blocked;
+    # patch at the class level instead.
+    monkeypatch.setattr(Node, "send_command", _record)
+    await getattr(node, wrapper_method)()
+
+    assert calls == [(expected_cmd, expected_params)]

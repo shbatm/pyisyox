@@ -752,6 +752,10 @@ async def test_network_resources_property_wraps_records() -> None:
         "3": "Notify",
         "7": "Webhook",
     }
+    # ``.address`` mirrors the dict key (string for symmetry with nodes /
+    # groups). ``repr`` exposes both fields for log-line scanning.
+    assert resources["3"].address == "3"
+    assert repr(resources["3"]) == "NetworkResource(address='3', name='Notify')"
     await resources["3"].run()
     assert any(c[1] == "/rest/networking/resources/3" for c in session.calls)
 
@@ -1128,3 +1132,129 @@ async def test_program_status_event_for_unknown_id_drops_silently() -> None:
     # Should not raise.
     controller.feed_event_frame(frame)
     await controller.stop()
+
+
+# --- coverage fills: listener pre-connect raises, property surface, owned session ---
+
+
+def test_pre_connect_listener_registration_raises() -> None:
+    """All listener-registration methods raise before ``connect()`` —
+    they need the dispatcher / WS, which are built during connect."""
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError, match="add_event_listener"):
+        controller.add_event_listener(lambda _e: None)
+    with pytest.raises(ControllerNotConnectedError, match="add_program_status_listener"):
+        controller.add_program_status_listener(lambda _e: None)
+
+
+@pytest.mark.asyncio
+async def test_post_connect_property_surface() -> None:
+    """Sweep the runtime-wrapping property accessors that aren't exercised
+    elsewhere: ``base_url``, ``groups``, ``folders``, ``triggers``,
+    ``variables``, plus the live-WS branch of ``add_status_listener``."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.queue_ws([FakeWSMessage(type=aiohttp.WSMsgType.CLOSED)])
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect()
+
+    assert controller.base_url == BASE
+    # The default stubs return empty collections, but iterating still
+    # forces the wrapping comprehension to run.
+    assert controller.groups == {}
+    assert controller.folders == {}
+    assert controller.triggers == []
+    assert controller.variables == {"1": {}, "2": {}}
+
+    # WS is live (start_websocket=True by default) — registration returns
+    # an unsubscribe callable rather than raising.
+    unsubscribe = controller.add_status_listener(lambda _s: None)
+    assert callable(unsubscribe)
+    unsubscribe()
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_build_owned_session_uses_unsafe_jar_and_ssl_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_build_owned_session`` wires ``build_sslcontext`` into a
+    TCPConnector and passes an unsafe cookie jar — the unsafe jar
+    is load-bearing so cookies set on bare-IP LAN hosts survive."""
+    captured: dict = {}
+
+    def _fake_connector(ssl: object) -> str:
+        captured["connector_ssl"] = ssl
+        return "sentinel-connector"
+
+    def _fake_session(**kwargs: object) -> str:
+        captured["session_kwargs"] = kwargs
+        return "sentinel-session"
+
+    monkeypatch.setattr(aiohttp, "TCPConnector", _fake_connector)
+    monkeypatch.setattr(aiohttp, "ClientSession", _fake_session)
+
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    result = controller._build_owned_session()
+
+    assert result == "sentinel-session"
+    kwargs = captured["session_kwargs"]
+    assert kwargs["connector"] == "sentinel-connector"
+    assert isinstance(kwargs["cookie_jar"], aiohttp.CookieJar)
+    assert kwargs["cookie_jar"]._unsafe is True
+    # https:// base → an SSL context is built and threaded into TCPConnector.
+    assert captured["connector_ssl"] is not None
+
+
+@pytest.mark.asyncio
+async def test_owned_session_is_built_and_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the consumer doesn't inject a session, ``connect()`` builds
+    one and ``stop()`` closes it. Patch the builder so the test doesn't
+    touch real aiohttp internals."""
+    fake = FakeSession(BASE)
+    _stub_responses(fake)
+    fake.queue_ws([FakeWSMessage(type=aiohttp.WSMsgType.CLOSED)])
+
+    close_calls = []
+
+    async def _fake_close() -> None:
+        close_calls.append(True)
+
+    fake.close = _fake_close  # type: ignore[method-assign]
+
+    monkeypatch.setattr(Controller, "_build_owned_session", lambda self: fake)
+    controller = Controller(BASE, LocalAuth("admin", "p"))  # no session=...
+
+    await controller.connect()
+    await controller.stop()
+
+    assert close_calls == [True], "owned session must be closed on stop()"
+
+
+@pytest.mark.asyncio
+async def test_stop_swallows_auth_close_error() -> None:
+    """``auth.close()`` can raise during PortalAuth logout (network blip,
+    server already invalidated the session). ``stop()`` logs and
+    continues rather than letting the error escape — cleanup paths
+    can't afford to propagate."""
+
+    class _RaisingAuth:
+        async def authenticate(self, _session: object, _base: str) -> None:
+            return None
+
+        async def request_kwargs(self, _session: object, _base: str) -> dict:
+            return {}
+
+        async def handle_unauthorized(self, _session: object, _base: str) -> bool:
+            return False
+
+        async def close(self, _session: object, _base: str) -> None:
+            raise RuntimeError("logout failed")
+
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, _RaisingAuth(), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    # Must not raise.
+    await controller.stop()
+    assert controller.connected is False
