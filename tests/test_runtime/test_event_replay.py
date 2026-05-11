@@ -91,7 +91,7 @@ def test_action_uom_and_prec_decoded(captured_frames: list[str]) -> None:
     parsed = [parse_event_frame(f) for f in captured_frames]
     with_uom = [e for e in parsed if e and e.uom]
     assert with_uom, "expected at least one frame with a uom attribute"
-    with_prec = [e for e in parsed if e and e.prec is not None]
+    with_prec = [e for e in parsed if e and e.precision is not None]
     assert with_prec, "expected at least one frame with a prec attribute"
 
 

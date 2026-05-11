@@ -177,8 +177,9 @@ class Event:
         formatted_name: Display name of the property (e.g.
             ``"Current"``). Empty when not provided.
         uom: Unit-of-measure id from ``<action uom="...">``.
-        prec: Decimal precision from ``<action prec="...">``, or
-            ``None`` if absent.
+        precision: Decimal precision from ``<action prec="...">``, or
+            ``None`` if absent. (Wire keys it as ``"prec"``; Python
+            attribute spells it out.)
         event_info: Inner ``<eventInfo>`` XML preserved verbatim.
             Empty string when the frame had no ``<eventInfo>`` element
             or when its content was empty. Consumers that need the
@@ -196,7 +197,7 @@ class Event:
     formatted_action: str = ""
     formatted_name: str = ""
     uom: str = ""
-    prec: int | None = None
+    precision: int | None = None
     event_info: str = ""
 
     @property
@@ -240,7 +241,7 @@ def parse_event_frame(raw: str) -> Event | None:
         return None
 
     action_el = root.find("action")
-    uom, prec = _decode_action_attrs(action_el)
+    uom, precision = _decode_action_attrs(action_el)
     return Event(
         seqnum=_int_or(root.get("seqnum", "0"), default=0),
         timestamp=root.get("timestamp", ""),
@@ -250,7 +251,7 @@ def parse_event_frame(raw: str) -> Event | None:
         formatted_action=root.findtext("fmtAct", default="") or "",
         formatted_name=root.findtext("fmtName", default="") or "",
         uom=uom,
-        prec=prec,
+        precision=precision,
         event_info=_extract_event_info(root),
     )
 
@@ -599,7 +600,7 @@ class EventDispatcher:
             formatted=event.formatted_action,
             uom=event.uom,
             name=event.formatted_name,
-            prec=event.prec or 0,
+            precision=event.precision or 0,
         )
 
     def _apply_variable_change(self, event: Event) -> None:

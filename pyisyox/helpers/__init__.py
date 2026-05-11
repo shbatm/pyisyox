@@ -50,7 +50,7 @@ def convert_isy_raw_value(
 
     ISY provides float values as an integer and precision component.
     Correct by shifting the decimal place left by the value of precision.
-    (e.g. value=2345, prec="2" == 23.45)
+    (e.g. value=2345, precision=2 → 23.45; wire keys it as "prec")
 
     Insteon Thermostats report temperature in 0.5-deg precision as an int
     by sending a value of 2 times the Temp. Correct by dividing by 2 here.

@@ -34,7 +34,7 @@ def _make_record(**overrides) -> VariableRecord:
         "name": "Boost Mode",
         "value": 60,
         "init": 0,
-        "prec": 0,
+        "precision": 0,
         "ts": "2026-05-08T13:56:48.000Z",
     }
     base.update(overrides)
@@ -43,7 +43,7 @@ def _make_record(**overrides) -> VariableRecord:
 
 def test_variable_exposes_record_fields() -> None:
     """Read-side properties just forward to the underlying record."""
-    record = _make_record(prec=2, value=12345)
+    record = _make_record(precision=2, value=12345)
     variable = Variable.from_record(record, _make_client(FakeSession(BASE)))
 
     assert variable.type_id == "2"
@@ -52,7 +52,7 @@ def test_variable_exposes_record_fields() -> None:
     assert variable.name == "Boost Mode"
     assert variable.value == 12345
     assert variable.init == 0
-    assert variable.prec == 2
+    assert variable.precision == 2
     assert variable.ts == "2026-05-08T13:56:48.000Z"
 
 

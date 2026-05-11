@@ -78,8 +78,9 @@ class EditorRange:
         min: Lower numeric bound for raw values (inclusive). ``None`` when
             the range is purely enumerative (subset only).
         max: Upper numeric bound (inclusive).
-        prec: Decimal precision applied to raw values (e.g., raw ``6839``
-            with ``prec=4`` displays as ``0.6839``).
+        precision: Decimal precision applied to raw values (e.g., raw
+            ``6839`` with ``precision=4`` displays as ``0.6839``). The
+            wire keys it as ``"prec"``; Python attribute spells it out.
         subset: Resolved set of valid raw integers, narrower than
             ``[min, max]``. Empty when the full ``[min, max]`` range is valid.
         names: Mapping of raw integer → display name for enumerated values
@@ -89,7 +90,7 @@ class EditorRange:
     uom: str
     min: float | None = None
     max: float | None = None
-    prec: int = 0
+    precision: int = 0
     subset: set[int] = field(default_factory=set)
     names: dict[int, str] = field(default_factory=dict)
 
@@ -102,7 +103,7 @@ class EditorRange:
             uom=str(raw.get("uom", "0")),
             min=raw.get("min"),
             max=raw.get("max"),
-            prec=int(raw.get("prec", 0)),
+            precision=int(raw.get("prec", 0)),
             subset=_parse_subset(subset_raw) if isinstance(subset_raw, str) else set(),
             names={int(k): v for k, v in names_raw.items()},
         )
@@ -177,8 +178,8 @@ class Editor:
             ival = int(raw_value)
             if ival in rng.names:
                 return rng.names[ival]
-        if rng.prec:
-            return f"{raw_value / (10**rng.prec):.{rng.prec}f}"
+        if rng.precision:
+            return f"{raw_value / (10**rng.precision):.{rng.precision}f}"
         if rng.uom in _HALF_DEGREE_UOMS:
             return f"{raw_value / 2.0:.1f}"
         return str(raw_value)
@@ -225,8 +226,8 @@ class Editor:
             raise EditorCodecError(f"Editor {self.id!r}: {numeric} is below min={rng.min}")
         if rng.max is not None and numeric > rng.max:
             raise EditorCodecError(f"Editor {self.id!r}: {numeric} is above max={rng.max}")
-        if rng.prec:
-            raw = round(numeric * (10**rng.prec))
+        if rng.precision:
+            raw = round(numeric * (10**rng.precision))
         elif rng.uom in _HALF_DEGREE_UOMS:
             # Insteon thermostat half-degree encoding (raw = 2 * displayed).
             # Only triggers on prec=0 ranges — modern prec=1 ranges already

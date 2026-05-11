@@ -49,7 +49,7 @@ def test_parse_native_property_update() -> None:
     assert event.formatted_action == "On"
     assert event.formatted_name == "Status"
     assert event.uom == "100"
-    assert event.prec == 0
+    assert event.precision == 0
     assert event.is_node_property is True
     assert event.is_system is False
 
@@ -70,7 +70,7 @@ def test_parse_plugin_gallons_update() -> None:
     assert event is not None
     assert event.control == "GV1"
     assert event.uom == "69"
-    assert event.prec == 4
+    assert event.precision == 4
     assert event.formatted_action == "0.6839 US gallons"
     assert event.is_node_property is True
 
@@ -208,7 +208,7 @@ def test_parse_action_without_uom_or_prec() -> None:
     event = parse_event_frame(xml)
     assert event is not None
     assert event.uom == ""
-    assert event.prec is None
+    assert event.precision is None
 
 
 # --- parser: real captured frames ---------------------------------------
@@ -275,7 +275,7 @@ def test_dispatcher_overlays_property_into_node_record() -> None:
 
 
 def test_dispatcher_propagates_prec_into_node_record() -> None:
-    """``<action prec="...">`` flows through to ``NodePropertyValue.prec``
+    """``<action prec="...">`` flows through to ``NodePropertyValue.precision``
     so the consumer can scale ``raw / 10**prec`` without a second wire trip."""
     nodes = {"X": _make_record("X")}
     dispatcher = EventDispatcher(nodes)
@@ -289,7 +289,7 @@ def test_dispatcher_propagates_prec_into_node_record() -> None:
     dispatcher.feed(xml)
 
     prop = nodes["X"].properties["GV1"]
-    assert prop.prec == 4
+    assert prop.precision == 4
     assert prop.value == "6839"
 
 
@@ -304,7 +304,7 @@ def test_dispatcher_falls_back_to_zero_prec_when_action_omits_it() -> None:
         "<node>X</node><fmtAct>On</fmtAct></Event>"
     )
     dispatcher.feed(xml)
-    assert nodes["X"].properties["ST"].prec == 0
+    assert nodes["X"].properties["ST"].precision == 0
 
 
 def test_dispatcher_replaces_existing_property() -> None:
@@ -665,7 +665,7 @@ def test_parse_ignores_non_numeric_prec_attribute() -> None:
     )
     event = parse_event_frame(xml)
     assert event is not None
-    assert event.prec is None
+    assert event.precision is None
 
 
 def test_parse_preserves_event_info_with_tail_text_between_children() -> None:
