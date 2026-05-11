@@ -44,6 +44,7 @@ from xml.etree import ElementTree as ET
 import aiohttp
 
 from pyisyox.auth import Auth, AuthError
+from pyisyox.logging import LOG_VERBOSE
 from pyisyox.redactor import redact_sensitive
 from pyisyox.schema import Profile
 
@@ -468,8 +469,12 @@ class IoXClient:
             payload = _loads_json(text)
         except ValueError as exc:
             raise ClientError(f"invalid JSON from {path}: {exc}") from exc
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            _LOGGER.debug("GET %s -> %s", path, redact_sensitive(payload))
+        # Full payloads are high-volume on initial load (the profiles
+        # blob alone is ~117 KB); keep them at VERBOSE so DEBUG stays
+        # readable. A one-line summary at DEBUG keeps the load trail.
+        _LOGGER.debug("GET %s -> %d bytes", path, len(text))
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, redact_sensitive(payload))
         return payload
 
     async def _get_text(self, path: str, *, authenticated: bool = True) -> str:

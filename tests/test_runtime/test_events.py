@@ -18,6 +18,7 @@ from pyisyox.runtime.events import (
     EventDispatcher,
     NodeLifecycleEvent,
     ProgramStatusEvent,
+    SystemEventControl,
     _extract_lifecycle_node_xml,
     parse_event_frame,
 )
@@ -815,3 +816,43 @@ def test_program_status_listener_exception_does_not_break_others() -> None:
 
     dispatcher.feed(_program_frame("<id>8D</id><on /><s>21</s>"))
     assert len(received) == 1
+
+
+# --- SystemEventControl public surface -----------------------------------
+
+
+def test_system_event_control_documented_codes() -> None:
+    """Pin the wire codes for each documented system event.
+
+    Source: PyISY 3.x ``events/websocket.py`` (canonical legacy mapping)
+    plus the pyisyox v6 dispatcher's own internal usage.
+    """
+    assert SystemEventControl.HEARTBEAT == "_0"
+    assert SystemEventControl.TRIGGER == "_1"
+    assert SystemEventControl.NODE_LIFECYCLE == "_3"
+    assert SystemEventControl.SYSTEM_STATUS == "_5"
+    assert SystemEventControl.PROGRESS == "_7"
+    assert SystemEventControl.MATTER_STATUS == "_28"
+
+
+def test_system_event_control_label_known_code_renders_lowercase_name() -> None:
+    """Known codes render as their lowercased enum-name for log readability."""
+    assert SystemEventControl.label("_3") == "node_lifecycle"
+    assert SystemEventControl.label("_5") == "system_status"
+    assert SystemEventControl.label("_28") == "matter_status"
+
+
+def test_system_event_control_label_unknown_code_returns_raw() -> None:
+    """Unknown system control codes pass through verbatim — the log line
+    still identifies the wire code, callers can correlate against
+    captures even when pyisyox hasn't enumerated the code."""
+    assert SystemEventControl.label("_42") == "_42"
+    assert SystemEventControl.label("_99") == "_99"
+
+
+def test_system_event_control_label_handles_arbitrary_string() -> None:
+    """``label`` accepts any ``str`` so consumers can pass
+    ``event.control`` unguarded. Property-update controls (``"ST"``,
+    ``"GV1"``, etc.) are non-system and pass through verbatim."""
+    assert SystemEventControl.label("ST") == "ST"
+    assert SystemEventControl.label("") == ""

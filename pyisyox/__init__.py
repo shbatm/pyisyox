@@ -61,6 +61,7 @@ from pyisyox.exceptions import (
     ISYStreamDisconnected,
 )
 from pyisyox.helpers.session import TLSVersionError, build_sslcontext
+from pyisyox.logging import LOG_VERBOSE
 from pyisyox.runtime import (
     Event,
     EventDispatcher,
@@ -79,6 +80,7 @@ from pyisyox.runtime import (
     ProgramStatusEvent,
     ProgramStatusListener,
     StatusListener,
+    SystemEventControl,
     Variable,
     WebSocketEventStream,
 )
@@ -90,6 +92,7 @@ except PackageNotFoundError:
     __version__ = "unknown"
 
 __all__ = [
+    "LOG_VERBOSE",
     "Auth",
     "AuthError",
     "ClassificationResult",
@@ -136,6 +139,7 @@ __all__ = [
     "Reading",
     "ReadingPlatform",
     "StatusListener",
+    "SystemEventControl",
     "TLSVersionError",
     "Variable",
     "VariableRecord",

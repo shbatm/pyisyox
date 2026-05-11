@@ -1,4 +1,17 @@
-"""Logging helper functions."""
+"""Logging helper functions.
+
+The ``VERBOSE`` level (numeric ``5``) sits below ``DEBUG`` and is used for
+high-volume wire-shape diagnostics:
+
+* Full ``/api/*`` JSON payloads on initial load (``IoXClient._get_json``).
+* Raw WebSocket frames before they're parsed (``WebSocketEventStream``).
+
+``DEBUG`` keeps the higher-signal lifecycle and one-line summaries; flip
+to ``VERBOSE`` only when chasing a wire-protocol bug. The level name is
+registered at import time so consumers like Home Assistant (which never
+calls :func:`enable_logging`) can still set ``pyisyox: verbose`` in
+``configuration.yaml`` and see the level rendered correctly in logs.
+"""
 
 import logging
 
@@ -8,6 +21,11 @@ LOG_VERBOSE = 5
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 LOG_PRINT_TO_FILE = False
+
+# Register the "VERBOSE" name at import time so it's available regardless
+# of whether the consumer calls enable_logging() — HA reads pyisyox via
+# its own logging stack and never invokes ours.
+logging.addLevelName(LOG_VERBOSE, "VERBOSE")
 
 
 def enable_logging(
@@ -25,7 +43,6 @@ def enable_logging(
             # basicConfig must be called after importing colorlog in order to
             # ensure that the handlers it sets up wraps the correct streams.
             logging.basicConfig(level=level)
-            logging.addLevelName(LOG_VERBOSE, "VERBOSE")
 
             colorfmt = f"%(log_color)s{LOG_FORMAT}%(reset)s"
             logging.getLogger().handlers[0].setFormatter(

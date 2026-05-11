@@ -34,6 +34,7 @@ import aiohttp
 
 from pyisyox.auth import AuthError
 from pyisyox.constants import EventStreamStatus
+from pyisyox.logging import LOG_VERBOSE
 
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient
@@ -245,6 +246,8 @@ class WebSocketEventStream:
                     break
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     self._last_event_at = datetime.now(UTC)
+                    if _LOGGER.isEnabledFor(LOG_VERBOSE):
+                        _LOGGER.log(LOG_VERBOSE, "WS frame: %s", msg.data)
                     self._dispatcher.feed(msg.data)
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSING):
                     break
