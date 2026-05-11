@@ -519,6 +519,126 @@ def test_dispatcher_variable_change_no_registry_is_no_op() -> None:
     assert event is not None
 
 
+# --- dispatcher: variable change — defensive paths -----------------------
+#
+# Same "the firmware sometimes sends partial shapes" pattern as the
+# program-status defensive paths above; pin every short-circuit so a
+# future refactor doesn't regress to a crash.
+
+
+def test_variable_event_with_empty_event_info_is_dropped() -> None:
+    """A ``_1/6`` frame with empty ``<eventInfo/>`` carries no decode
+    target — the apply step short-circuits before touching the
+    registry."""
+    record = _make_variable_record(type_id="1", id_="5", value=0)
+    variables = {"1": {"5": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node><eventInfo/></Event>"
+    )
+    dispatcher.feed(frame)
+    assert record.value == 0
+
+
+def test_variable_event_without_var_child_is_dropped() -> None:
+    """``<eventInfo>`` present but missing the ``<var>`` child — drop."""
+    record = _make_variable_record(type_id="1", id_="5", value=0)
+    variables = {"1": {"5": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node><eventInfo><other /></eventInfo></Event>"
+    )
+    dispatcher.feed(frame)
+    assert record.value == 0
+
+
+@pytest.mark.parametrize(
+    "var_attrs",
+    [
+        'id="5"',  # missing type
+        'type="1"',  # missing id
+        'type="" id="5"',  # empty type
+        'type="1" id=""',  # empty id
+    ],
+)
+def test_variable_event_without_type_or_id_attrs_is_dropped(var_attrs: str) -> None:
+    """``<var>`` must carry both ``type`` and ``id`` to route to a record."""
+    record = _make_variable_record(type_id="1", id_="5", value=0)
+    variables = {"1": {"5": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        f"<node></node><eventInfo><var {var_attrs}><val>42</val></var></eventInfo></Event>"
+    )
+    dispatcher.feed(frame)
+    assert record.value == 0
+
+
+def test_variable_event_with_empty_val_is_dropped() -> None:
+    """``<val/>`` (no text) means the firmware didn't actually carry a
+    value — drop rather than coerce empty to 0."""
+    record = _make_variable_record(type_id="1", id_="5", value=99)
+    variables = {"1": {"5": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        '<node></node><eventInfo><var type="1" id="5"><val></val></var></eventInfo></Event>'
+    )
+    dispatcher.feed(frame)
+    assert record.value == 99  # unchanged
+
+
+def test_variable_event_with_malformed_event_info_xml_is_dropped() -> None:
+    """A pathological eventInfo containing escaped ``</eventInfo>`` text
+    re-wraps to malformed XML when the apply step concatenates the tags
+    back — the try/except guards against any such firmware oddities.
+    Mirror test for program-status decode below."""
+    record = _make_variable_record(type_id="1", id_="5", value=0)
+    variables = {"1": {"5": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node><eventInfo>&lt;/eventInfo&gt;</eventInfo></Event>"
+    )
+    dispatcher.feed(frame)
+    assert record.value == 0
+
+
+def test_program_status_with_malformed_event_info_xml_is_dropped() -> None:
+    """Same trick as the variable test above: escaped ``</eventInfo>``
+    text in the outer frame survives outer-parse, then breaks the
+    inner re-wrap. The try/except in ``_apply_program_status`` swallows
+    it."""
+    program = ProgramRecord(
+        address="008D",
+        name="Foo",
+        path="",
+        parent_address=None,
+        is_folder=False,
+        status=False,
+    )
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>0</action>'
+        "<node></node><eventInfo>&lt;/eventInfo&gt;</eventInfo></Event>"
+    )
+    event = dispatcher.feed(frame)
+    # feed must produce an Event (proves the dispatcher ran) and the
+    # apply step must not have flipped status (proves the ParseError
+    # branch in _apply_program_status caught the re-wrap failure).
+    assert event is not None
+    assert event.control == "_1"
+    assert program.status is False
+
+
 # --- parser: more permissive-decode edge cases --------------------------
 
 
@@ -652,21 +772,6 @@ def test_program_status_with_empty_event_info_is_dropped() -> None:
         '<Event seqnum="1"><control>_1</control><action>0</action><node></node><eventInfo/></Event>'
     )
     assert program.status is False, "no event_info means no status change"
-
-
-def test_program_status_with_malformed_event_info_xml_is_dropped() -> None:
-    """``event_info`` text that doesn't parse as XML once re-wrapped
-    must drop silently rather than crash the read loop."""
-    program = _make_program()
-    dispatcher = EventDispatcher({}, programs={"008D": program})
-
-    # ``<id>8D`` without a closing tag — re-wrapped XML fails to parse.
-    frame = (
-        '<Event seqnum="1"><control>_1</control><action>0</action><node></node>'
-        "<eventInfo><id>8D</eventInfo></Event>"
-    )
-    dispatcher.feed(frame)
-    assert program.status is False
 
 
 def test_program_status_with_missing_id_is_dropped() -> None:
