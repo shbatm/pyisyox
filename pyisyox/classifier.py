@@ -46,6 +46,36 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from pyisyox.constants import (
+    CMD_ALARM_ARM,
+    CMD_ALARM_DISARM,
+    CMD_BRIGHTEN,
+    CMD_CLIMATE_FAN_SETTING,
+    CMD_CLIMATE_MODE,
+    CMD_DIM,
+    CMD_FADE_DOWN,
+    CMD_FADE_STOP,
+    CMD_FADE_UP,
+    CMD_OFF,
+    CMD_OFF_FAST,
+    CMD_ON,
+    CMD_ON_FAST,
+    CMD_QUERY,
+    CMD_SECURE,
+    PROP_HEAT_COOL_STATE,
+    PROP_ON_LEVEL,
+    PROP_RAMP_RATE,
+    PROP_SCHEDULE_MODE,
+    PROP_SETPOINT_COOL,
+    PROP_SETPOINT_COOL_DELTA,
+    PROP_SETPOINT_HEAT,
+    PROP_SETPOINT_HEAT_DELTA,
+    PROP_STATUS,
+    PROP_TEMPERATURE,
+    UOM_BOOLEAN,
+    UOM_ON_OFF,
+    UOM_OPEN_CLOSED,
+)
 from pyisyox.schema.cmd import Command
 from pyisyox.schema.editor import Editor
 from pyisyox.schema.nodedef import NodeDef, NodeProperty
@@ -116,29 +146,50 @@ class ClassificationResult:
     readings: list[Reading] = field(default_factory=list)
 
 
-_QUERY_CMDS = frozenset({"QUERY"})
+#: ``QUERY`` is implicitly accepted by every node — never a "button".
+_QUERY_CMDS = frozenset({CMD_QUERY})
 
-_LIGHT_DIMMER_HINTS = frozenset({"BRT", "DIM", "FDUP", "FDDOWN", "FDSTOP"})
-_LIGHT_SWITCH_CMDS = frozenset({"DON", "DOF", "DFON", "DFOF"}) | _LIGHT_DIMMER_HINTS
-_THERMOSTAT_CMDS = frozenset({"CLISPC", "CLISPH", "CLIMD", "CLIFS", "BRT", "DIM"})
-_LOCK_CMDS = frozenset({"SECMD"})
-_ALARM_CMDS = frozenset({"ARM", "DISARM"})
-_COVER_CMDS = frozenset({"FDUP", "FDDOWN", "FDSTOP"})
-
-_LIGHT_STATE_PROPS = frozenset({"ST", "OL", "RR"})
-_THERMOSTAT_STATE_PROPS = frozenset(
-    {"ST", "CLISPC", "CLISPH", "CLIMD", "CLIFS", "CLITEMP", "CLIHCS", "CLISMD", "CLISPHD", "CLISPCD"}
+_LIGHT_DIMMER_HINTS = frozenset({CMD_BRIGHTEN, CMD_DIM, CMD_FADE_UP, CMD_FADE_DOWN, CMD_FADE_STOP})
+_LIGHT_SWITCH_CMDS = frozenset({CMD_ON, CMD_OFF, CMD_ON_FAST, CMD_OFF_FAST}) | _LIGHT_DIMMER_HINTS
+#: On a thermostat ``BRT``/``DIM`` mean setpoint up/down, not light
+#: dimming. ``CLISPC``/``CLISPH`` are reported as properties *and*
+#: accepted as setpoint commands (IoX dual-purposes the id), as are
+#: ``CLIMD``/``CLIFS``.
+_THERMOSTAT_CMDS = frozenset(
+    {PROP_SETPOINT_COOL, PROP_SETPOINT_HEAT, CMD_CLIMATE_MODE, CMD_CLIMATE_FAN_SETTING, CMD_BRIGHTEN, CMD_DIM}
 )
-_LOCK_STATE_PROPS = frozenset({"ST"})
-_COVER_STATE_PROPS = frozenset({"ST", "OL"})
-_ALARM_STATE_PROPS = frozenset({"ST"})
+_LOCK_CMDS = frozenset({CMD_SECURE})
+_ALARM_CMDS = frozenset({CMD_ALARM_ARM, CMD_ALARM_DISARM})
+_COVER_CMDS = frozenset({CMD_FADE_UP, CMD_FADE_DOWN, CMD_FADE_STOP})
+
+_LIGHT_STATE_PROPS = frozenset({PROP_STATUS, PROP_ON_LEVEL, PROP_RAMP_RATE})
+#: Properties the climate entity owns (so they aren't surfaced as
+#: separate sensors). Includes the ``CLIMD``/``CLIFS`` ids that the
+#: thermostat both reports and accepts (see ``_THERMOSTAT_CMDS``).
+_THERMOSTAT_STATE_PROPS = frozenset(
+    {
+        PROP_STATUS,
+        PROP_SETPOINT_COOL,
+        PROP_SETPOINT_HEAT,
+        PROP_SETPOINT_COOL_DELTA,
+        PROP_SETPOINT_HEAT_DELTA,
+        CMD_CLIMATE_MODE,
+        CMD_CLIMATE_FAN_SETTING,
+        PROP_TEMPERATURE,
+        PROP_HEAT_COOL_STATE,
+        PROP_SCHEDULE_MODE,
+    }
+)
+_LOCK_STATE_PROPS = frozenset({PROP_STATUS})
+_COVER_STATE_PROPS = frozenset({PROP_STATUS, PROP_ON_LEVEL})
+_ALARM_STATE_PROPS = frozenset({PROP_STATUS})
 
 #: UOM ids whose property values are binary (two-state) — surface as
 #: HA ``binary_sensor`` entities. The base case is UOM 2 (true/false);
 #: UOM 78 ("On/Off where Off=0, On=100") and UOM 79 ("Open/Closed
 #: where Open=0, Closed=100") are also two-state in practice and
 #: belong here even though their value range is wider than 0/1.
-_BINARY_UOMS = frozenset({"2", "78", "79"})
+_BINARY_UOMS = frozenset({UOM_BOOLEAN, UOM_ON_OFF, UOM_OPEN_CLOSED})
 
 
 EditorResolver = Callable[[str], Editor | None]
@@ -153,12 +204,12 @@ def _detect_controllable(
     Insteon Thermostat nodedef accepts ``BRT``/``DIM`` (interpreted as
     setpoint up/down on a thermostat, not as a light dimmer).
     """
-    has_dim_or_switch = "DON" in accept_ids and "DOF" in accept_ids
-    has_thermostat_setpoint = "CLISPC" in accept_ids or "CLISPH" in accept_ids
-    has_lock = "SECMD" in accept_ids
+    has_dim_or_switch = CMD_ON in accept_ids and CMD_OFF in accept_ids
+    has_thermostat_setpoint = PROP_SETPOINT_COOL in accept_ids or PROP_SETPOINT_HEAT in accept_ids
+    has_lock = CMD_SECURE in accept_ids
     has_alarm = bool(_ALARM_CMDS & accept_ids)
     has_cover_only = (_COVER_CMDS & accept_ids) and not has_dim_or_switch
-    has_OL = "OL" in properties
+    has_on_level = PROP_ON_LEVEL in properties
 
     if has_lock:
         return ControllablePlatform.LOCK, _LOCK_CMDS & accept_ids
@@ -169,7 +220,7 @@ def _detect_controllable(
     if has_cover_only:
         return ControllablePlatform.COVER, _COVER_CMDS & accept_ids
     if has_dim_or_switch:
-        is_dimmer = has_OL or bool(_LIGHT_DIMMER_HINTS & accept_ids)
+        is_dimmer = has_on_level or bool(_LIGHT_DIMMER_HINTS & accept_ids)
         platform = ControllablePlatform.LIGHT if is_dimmer else ControllablePlatform.SWITCH
         return platform, _LIGHT_SWITCH_CMDS & accept_ids
     return None, frozenset()

@@ -195,7 +195,9 @@ PROP_ON_LEVEL = "OL"
 PROP_RAMP_RATE = "RR"
 PROP_SCHEDULE_MODE = "CLISMD"
 PROP_SETPOINT_COOL = "CLISPC"
+PROP_SETPOINT_COOL_DELTA = "CLISPCD"  # auto-changeover cool setpoint delta
 PROP_SETPOINT_HEAT = "CLISPH"
+PROP_SETPOINT_HEAT_DELTA = "CLISPHD"  # auto-changeover heat setpoint delta
 PROP_STATUS = "ST"
 PROP_TEMPERATURE = "CLITEMP"
 PROP_UOM = "UOM"
@@ -250,9 +252,13 @@ CMD_OFF = "DOF"
 CMD_OFF_FAST = "DFOF"
 CMD_ON = "DON"
 CMD_ON_FAST = "DFON"
+CMD_QUERY = "QUERY"
 CMD_RESET = "RESET"
 CMD_SECURE = "SECMD"
 CMD_X10 = "X10"
+# Alarm-panel control verbs (Z-Wave / plugin alarm nodedefs).
+CMD_ALARM_ARM = "ARM"
+CMD_ALARM_DISARM = "DISARM"
 
 COMMAND_FRIENDLY_NAME: dict[str, str] = {
     "ADRPST": "auto_dr_processing_state",
@@ -431,11 +437,14 @@ COMMAND_NAME = {val: key for key, val in COMMAND_FRIENDLY_NAME.items()}
 UOM_ISYV4_DEGREES = "degrees"
 UOM_ISYV4_NONE = "n/a"
 
+UOM_BOOLEAN = "2"  # 0 = False / 1 = True
 UOM_CLIMATE_MODES = "98"
 UOM_CLIMATE_MODES_ZWAVE = "67"
 UOM_DOUBLE_TEMP = "101"
 UOM_FAN_MODES = "99"
 UOM_INDEX = "25"
+UOM_ON_OFF = "78"  # 0 = Off / 100 = On
+UOM_OPEN_CLOSED = "79"  # 0 = Open / 100 = Closed
 UOM_PERCENTAGE = "51"
 UOM_RAW = "56"
 UOM_SECONDS = "57"
