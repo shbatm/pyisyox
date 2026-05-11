@@ -1,12 +1,7 @@
-PyISYoX Module API Reference
-==========================
-
-Contents
-========
+API Reference
+=============
 
 .. toctree::
-    :maxdepth: 1
-    :name: apitoc
-    :glob:
+   :maxdepth: 4
 
-    *
+   pyisyox
