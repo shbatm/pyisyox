@@ -74,3 +74,4 @@ example/
 
 ruff_cache/
 .claude/
+.venv/

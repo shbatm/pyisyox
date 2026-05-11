@@ -39,7 +39,7 @@ from xml.etree import ElementTree as ET
 from pyisyox.client import NodePropertyValue
 
 if TYPE_CHECKING:
-    from pyisyox.client import NodeRecord, ProgramRecord
+    from pyisyox.client import NodeRecord, ProgramRecord, VariableRecord
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +55,8 @@ _NODE_LIFECYCLE_CONTROL = "_3"
 #: interested).
 _PROGRAM_OR_VAR_CONTROL = "_1"
 _PROGRAM_STATUS_ACTION = "0"
+_VARIABLE_VALUE_ACTION = "6"
+_VARIABLE_INIT_ACTION = "7"
 
 
 class NodeLifecycleAction(StrEnum):
@@ -421,14 +423,16 @@ class EventDispatcher:
         "_nodes",
         "_program_status_listeners",
         "_programs",
+        "_variables",
     )
 
     def __init__(
         self,
         nodes: dict[str, NodeRecord],
         programs: dict[str, ProgramRecord] | None = None,
+        variables: dict[str, dict[str, VariableRecord]] | None = None,
     ) -> None:
-        """Bind to a node + program registry.
+        """Bind to a node + program + variable registry.
 
         Args:
             nodes: The same ``dict[str, NodeRecord]`` that
@@ -443,9 +447,19 @@ class EventDispatcher:
                 in place on program-status frames. ``None`` (the
                 default for tests that only care about node events)
                 makes program-status dispatch a no-op.
+            variables: Optional variable registry, shape
+                ``{type_id: {var_id: VariableRecord}}``. When provided,
+                the dispatcher mutates ``record.value`` (action ``"6"``
+                frames) or ``record.init`` (action ``"7"`` frames) in
+                place; symmetric with the node-property and
+                program-status handling. ``None`` (the default) makes
+                variable-change dispatch a no-op — consumers that need
+                variable updates without registering a registry can
+                still parse :attr:`Event.event_info` themselves.
         """
         self._nodes = nodes
         self._programs = programs if programs is not None else {}
+        self._variables = variables if variables is not None else {}
         self._listeners: list[EventListener] = []
         self._lifecycle_listeners: list[NodeLifecycleListener] = []
         self._program_status_listeners: list[ProgramStatusListener] = []
@@ -535,8 +549,11 @@ class EventDispatcher:
         # reload UX than re-parsing the raw frame.
         if event.control == _NODE_LIFECYCLE_CONTROL:
             self._emit_lifecycle(event, raw_frame)
-        elif event.control == _PROGRAM_OR_VAR_CONTROL and event.action == _PROGRAM_STATUS_ACTION:
-            self._apply_program_status(event)
+        elif event.control == _PROGRAM_OR_VAR_CONTROL:
+            if event.action == _PROGRAM_STATUS_ACTION:
+                self._apply_program_status(event)
+            elif event.action in (_VARIABLE_VALUE_ACTION, _VARIABLE_INIT_ACTION):
+                self._apply_variable_change(event)
         for listener in tuple(self._listeners):
             try:
                 listener(event)
@@ -584,6 +601,78 @@ class EventDispatcher:
             name=event.formatted_name,
             prec=event.prec or 0,
         )
+
+    def _apply_variable_change(self, event: Event) -> None:
+        """Decode a variable-change frame and update the matching record.
+
+        Wire shape (same control as program-status, different action)::
+
+            <control>_1</control><action>6|7</action>
+            <eventInfo><var type="N" id="M"><val>123</val><ts>...</ts>...</var></eventInfo>
+
+        Action ``"6"`` is a current-value change; ``"7"`` is an init
+        (restore-on-startup) change. ``type`` is ``"1"`` (integer) or
+        ``"2"`` (state); the ``VariableRecord`` registry is keyed
+        ``{type_id: {id: record}}`` matching what
+        :func:`pyisyox.client.parse_api_variables_type` produces.
+
+        Unknown (type, id) pairs are dropped silently — typically a
+        variable created after the initial load. Consumers that care
+        can trigger a reload via :meth:`Controller.refresh`.
+        """
+        if not event.event_info:
+            return
+        try:
+            info = ET.fromstring(  # noqa: S314 — eisy LAN traffic
+                f"<eventInfo>{event.event_info}</eventInfo>"
+            )
+        except ET.ParseError:
+            return
+
+        var_elem = info.find("var")
+        if var_elem is None:
+            return
+
+        type_id = (var_elem.get("type") or "").strip()
+        var_id = (var_elem.get("id") or "").strip()
+        if not type_id or not var_id:
+            return
+
+        type_bucket = self._variables.get(type_id)
+        if type_bucket is None:
+            _LOGGER.debug("WS variable-change event for unknown type %r — dropping", type_id)
+            return
+        record = type_bucket.get(var_id)
+        if record is None:
+            _LOGGER.debug(
+                "WS variable-change event for unknown id %r/%r — dropping",
+                type_id,
+                var_id,
+            )
+            return
+
+        val_text = (var_elem.findtext("val") or "").strip()
+        if not val_text:
+            return
+        try:
+            new_value = int(val_text)
+        except ValueError:
+            _LOGGER.debug(
+                "WS variable-change event for %s.%s carried non-numeric value %r",
+                type_id,
+                var_id,
+                val_text,
+            )
+            return
+
+        if event.action == _VARIABLE_VALUE_ACTION:
+            record.value = new_value
+        else:  # _VARIABLE_INIT_ACTION
+            record.init = new_value
+
+        ts_text = (var_elem.findtext("ts") or "").strip()
+        if ts_text:
+            record.ts = ts_text
 
     def _apply_program_status(self, event: Event) -> None:
         """Decode a program-status frame and update the matching record.
