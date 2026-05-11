@@ -752,6 +752,10 @@ async def test_network_resources_property_wraps_records() -> None:
         "3": "Notify",
         "7": "Webhook",
     }
+    # ``.address`` mirrors the dict key (string for symmetry with nodes /
+    # groups). ``repr`` exposes both fields for log-line scanning.
+    assert resources["3"].address == "3"
+    assert repr(resources["3"]) == "NetworkResource(address='3', name='Notify')"
     await resources["3"].run()
     assert any(c[1] == "/rest/networking/resources/3" for c in session.calls)
 
