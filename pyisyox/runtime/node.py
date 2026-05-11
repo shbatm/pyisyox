@@ -153,19 +153,42 @@ class Node:
 
     @property
     def parent_address(self) -> str | None:
-        """Address of the parent node (for KeypadLinc buttons, the primary
-        load; for plugin sub-nodes, the controller). ``None`` for primaries."""
+        """Address of the tree-hierarchy parent (folder containing this node).
+
+        Sourced from the IoX ``<parent>`` element. ``None`` for nodes at the
+        root of the node tree. Matches the ``parent_address`` semantic on
+        :class:`pyisyox.Folder`, :class:`pyisyox.Group`, and
+        :class:`pyisyox.Program` — i.e., "what folder is this in?"
+
+        Note: this is NOT the device primary for multi-button physical
+        devices (KeypadLinc, RemoteLinc, FanLinc). For that, use
+        :attr:`primary_address` — which derives from the IoX ``<pnode>``
+        element. The two concepts are independent: a sub-button can be
+        under a folder while also being a sub-node of a device primary.
+        """
         return self._record.parent_address
 
     @property
-    def primary_node(self) -> str | None:
-        """Alias for :attr:`parent_address`.
+    def primary_address(self) -> str | None:
+        """Address of the device primary for sub-button nodes.
 
-        The IoX REST surface and the legacy PyISY 3.x consumer API both
-        used the term "primary node" for the address of the device's
-        root node. Kept here so consumers don't have to translate.
+        Sourced from the IoX ``<pnode>`` element. For multi-button physical
+        devices (KeypadLinc, RemoteLinc, FanLinc) the sub-button nodes carry
+        the primary load node's address in ``<pnode>``; primaries carry
+        their own address. We return ``None`` for primaries so the consumer
+        can treat ``primary_address is not None`` as a "this is a sub-node"
+        indicator and ``primary_address or address`` as "the canonical
+        device-grouping address."
+
+        PyISY 3.x exposed the same concept as ``Node.primary_node`` (which
+        returned a string). The ``_address`` suffix here matches the
+        convention used elsewhere in the package (``parent_address``,
+        ``member_addresses``, ``controller_addresses``).
         """
-        return self._record.parent_address
+        pnode = self._record.pnode
+        if pnode is None or pnode == self._record.address:
+            return None
+        return pnode
 
     @property
     def enabled(self) -> bool:
