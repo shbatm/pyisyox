@@ -28,8 +28,9 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 
-from pyisyox.client import IoXClient
+from pyisyox.client import IoXClient, NodeType, VariableField
 from pyisyox.helpers.session import build_sslcontext
+from pyisyox.paths import PROFILES_PATH, SUBSCRIBE_PATH
 from pyisyox.runtime.events import EventDispatcher
 from pyisyox.runtime.folder import Folder
 from pyisyox.runtime.group import Group
@@ -93,7 +94,7 @@ class Controller:
         base_url: str,
         auth: Auth,
         session: aiohttp.ClientSession | None = None,
-        ws_path: str = "/rest/subscribe",
+        ws_path: str = SUBSCRIBE_PATH,
         tls_version: float | None = None,
         verify_ssl: bool = False,
     ) -> None:
@@ -403,7 +404,7 @@ class Controller:
         # the Controller is the only consumer that legitimately needs to
         # re-issue a load-time endpoint outside of the connect() flow.
         new_raw = await client._get_json(  # pylint: disable=protected-access
-            "/rest/profiles?include=nodedefs,editors,linkdefs"
+            PROFILES_PATH
         )
         incoming = Profile.load_from_json(new_raw)
         return loaded.profile.merge(incoming)
@@ -581,7 +582,7 @@ class Controller:
             ControllerNotConnectedError: When called before :meth:`connect`.
             HTTPError / ClientError: On wire failures.
         """
-        await self._post_variable(var_type, var_id, {"value": int(value)})
+        await self._post_variable(var_type, var_id, {VariableField.VALUE: int(value)})
 
     async def set_variable_init(self, var_type: int | str, var_id: int | str, init: int) -> None:
         """Set the initial / restore-on-startup value of a variable.
@@ -589,7 +590,7 @@ class Controller:
         Wire shape: ``POST /api/variables/{type}/{id}`` with
         ``{"init": <int>}``.
         """
-        await self._post_variable(var_type, var_id, {"init": int(init)})
+        await self._post_variable(var_type, var_id, {VariableField.INIT: int(init)})
 
     async def rename_variable(self, var_type: int | str, var_id: int | str, name: str) -> None:
         """Rename a variable.
@@ -597,7 +598,7 @@ class Controller:
         Wire shape: ``POST /api/variables/{type}/{id}`` with
         ``{"name": "<str>"}``.
         """
-        await self._post_variable(var_type, var_id, {"name": name})
+        await self._post_variable(var_type, var_id, {VariableField.NAME: name})
 
     async def _post_variable(self, var_type: int | str, var_id: int | str, body: dict) -> None:
         """Internal: route a variable mutation through the IoXClient."""
@@ -616,7 +617,7 @@ class Controller:
         The ``nodeType`` field is required by the server. Use
         :meth:`rename_group` for scenes.
         """
-        await self._post_node(address, {"name": name, "nodeType": "node"})
+        await self._post_node(address, {"name": name, "nodeType": NodeType.NODE})
 
     async def rename_group(self, address: str, name: str) -> None:
         """Rename a group / scene.
@@ -625,7 +626,7 @@ class Controller:
         ``nodeType: "group"`` so the server applies the change
         through the scene registry.
         """
-        await self._post_node(address, {"name": name, "nodeType": "group"})
+        await self._post_node(address, {"name": name, "nodeType": NodeType.GROUP})
 
     async def rename_folder(self, address: str, name: str) -> None:
         """Rename a folder (organisational container).
@@ -635,7 +636,7 @@ class Controller:
         like nodes/groups; their addresses are typically 5-digit
         integers (family ``"13"``).
         """
-        await self._post_node(address, {"name": name, "nodeType": "folder"})
+        await self._post_node(address, {"name": name, "nodeType": NodeType.FOLDER})
 
     async def _post_node(self, address: str, body: dict) -> None:
         """Internal: route a node mutation through the IoXClient."""

@@ -148,11 +148,33 @@ HTTP client and load records
     :no-index:
     :members:
 
+Wire-vocabulary enums used in mutation request bodies:
+
+.. autoclass:: pyisyox.NodeType
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.VariableField
+    :no-index:
+    :members:
+    :show-inheritance:
+
 .. autoexception:: pyisyox.ClientError
     :no-index:
 
 .. autoexception:: pyisyox.HTTPError
     :no-index:
+
+Endpoint paths
+~~~~~~~~~~~~~~
+
+REST / WebSocket endpoint paths are centralised in
+:mod:`pyisyox.paths` — fixed paths as string constants, parametric
+paths as ``.format(...)`` templates. Consumers rarely need these
+directly (the :class:`~pyisyox.Controller` and
+:class:`~pyisyox.IoXClient` use them internally), but they're public
+for anyone building against the raw wire surface.
 
 Event pipeline
 --------------
@@ -168,6 +190,16 @@ Event pipeline
     :show-inheritance:
 
 .. autoclass:: pyisyox.WebSocketEventStream
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.SystemEventControl
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.TriggerAction
     :no-index:
     :members:
     :show-inheritance:

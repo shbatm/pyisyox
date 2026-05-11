@@ -27,9 +27,6 @@ event handlers and node introspection:
 .. autoclass:: pyisyox.constants.NodeFamily
     :members:
 
-.. autoclass:: pyisyox.constants.NodeChangeAction
-    :members:
-
 .. autoclass:: pyisyox.constants.SystemStatus
     :members:
 

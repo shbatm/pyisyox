@@ -150,14 +150,23 @@ class Protocol(StrEnum):
     NODE_FOLDER = "node_folder"
     PROGRAM = "program"
     STATE_VAR = "state_variable"
+    UPB = "upb"
+    MATTER = "matter"
     ZIGBEE = "zigbee"
     ZWAVE = "zwave"
+    #: Family id present but not one we map to a known device protocol
+    #: (RCS, Brultech, NCD, UDI, group families, folders, …).
+    UNKNOWN = "unknown"
 
 
 class NodeFamily(StrEnum):
     """Node family string enum.
 
-    Referenced from ISY-WSDK-5.0.4/WSDL/family.xsd
+    IDs 0-9 come from ``ISY-WSDK-5.0.4/WSDL/family.xsd`` (still the
+    latest published WSDL). 10 (Node Server / PG3) and 12-15 are IoX 6
+    additions confirmed against eisy hardware: 12 is the Z-Matter
+    radio acting as a Z-Wave controller, 15 the same radio acting as
+    a Matter/Thread controller, 13 the folder family.
     """
 
     CORE = "0"
@@ -173,6 +182,7 @@ class NodeFamily(StrEnum):
     NODESERVER = "10"
     ZMATTER_ZWAVE = "12"
     FOLDER = "13"
+    MATTER = "15"
 
 
 PROP_BATTERY_LEVEL = "BATLVL"
@@ -837,58 +847,6 @@ NODE_CATEGORIES: dict[str, str] = {
     "113": "a10/x10",
     "127": "virtual",
     "254": "unknown",
-}
-
-
-class NodeChangeAction(StrEnum):
-    """Node change actions enum."""
-
-    CLEAR_ERROR = "CE"
-    FOLDER_ADDED = "FD"
-    FOLDER_REMOVED = "FR"
-    FOLDER_RENAMED = "FN"
-    GROUP_ADDED = "GD"
-    GROUP_REMOVED = "GR"
-    GROUP_RENAMED = "GN"
-    NET_RENAMED = "WR"
-    NODE_ADDED = "ND"
-    NODE_ENABLED = "EN"
-    NODE_ERROR = "NE"
-    NODE_MOVED = "MV"
-    NODE_REMOVED_FROM_GROUP = "RG"
-    NODE_REMOVED = "NR"
-    NODE_RENAMED = "NN"
-    NODE_REVISED = "RV"
-    PARENT_CHANGED = "PC"
-    PENDING_DEVICE_OP = "WH"
-    PROGRAMMING_DEVICE = "WD"
-    DEVICE_WRITING = "_7A"
-    DEVICE_MEMORY = "_7M"
-
-
-# Node Change Code: (Description, EventInfo Tags)
-NODE_CHANGED_ACTIONS: dict[NodeChangeAction, list[str]] = {
-    NodeChangeAction.CLEAR_ERROR: [],
-    NodeChangeAction.FOLDER_ADDED: [],
-    NodeChangeAction.FOLDER_REMOVED: [],
-    NodeChangeAction.FOLDER_RENAMED: ["newName"],
-    NodeChangeAction.GROUP_ADDED: ["groupName", "groupType"],
-    NodeChangeAction.GROUP_REMOVED: [],
-    NodeChangeAction.GROUP_RENAMED: ["newName"],
-    NodeChangeAction.NET_RENAMED: [],
-    NodeChangeAction.NODE_ADDED: ["nodeName", "nodeType"],
-    NodeChangeAction.NODE_ENABLED: ["enabled"],
-    NodeChangeAction.NODE_ERROR: [],
-    NodeChangeAction.NODE_MOVED: ["movedNode", "linkType"],
-    NodeChangeAction.NODE_REMOVED_FROM_GROUP: ["removedNode"],
-    NodeChangeAction.NODE_REMOVED: [],
-    NodeChangeAction.NODE_RENAMED: ["newName"],
-    NodeChangeAction.NODE_REVISED: [],
-    NodeChangeAction.PARENT_CHANGED: ["node", "nodeType", "parent", "parentType"],
-    NodeChangeAction.PENDING_DEVICE_OP: [],
-    NodeChangeAction.PROGRAMMING_DEVICE: [],
-    NodeChangeAction.DEVICE_WRITING: ["message"],
-    NodeChangeAction.DEVICE_MEMORY: ["memory", "cmd1", "cmd2", "value"],
 }
 
 

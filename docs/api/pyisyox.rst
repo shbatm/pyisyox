@@ -30,4 +30,5 @@ Submodules
    pyisyox.controller
    pyisyox.exceptions
    pyisyox.logging
+   pyisyox.paths
    pyisyox.redactor

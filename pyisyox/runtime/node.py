@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pyisyox.client import NodeType
 from pyisyox.constants import (
     CMD_BACKLIGHT,
     CMD_CLIMATE_FAN_SETTING,
@@ -42,7 +43,9 @@ from pyisyox.constants import (
     PROP_SETPOINT_COOL,
     PROP_SETPOINT_HEAT,
     PROP_STATUS,
+    NodeFamily,
     NodeFlag,
+    Protocol,
 )
 from pyisyox.runtime._commands import NodeCommandError, encode_command_params
 
@@ -54,22 +57,17 @@ if TYPE_CHECKING:
 __all__ = ["Node", "NodeCommandError"]
 
 
-#: Family-id values that identify a Z-Wave / Z-Matter native node. The
-#: legacy split is preserved on IoX 6 — `12` is the original Z-Wave radio,
-#: `15` is the Matter / Z-Wave 800-series Z-Matter radio.
-_FAMILY_ZWAVE = "12"
-_FAMILY_ZMATTER_ZWAVE = "15"
-#: Family `1` is native Insteon (and a few legacy paths).
-_FAMILY_INSTEON = "1"
-#: Family `2` is X10.
-_FAMILY_X10 = "2"
-#: Family `4` is Zigbee.
-_FAMILY_ZIGBEE = "4"
+#: Two IoX family ids carry Z-Wave devices: ``"4"`` is the legacy
+#: attached Z-Wave radio, ``"12"`` is the Z-Matter (800-series / Matter)
+#: radio. Both classify as :attr:`Protocol.ZWAVE`.
+_ZWAVE_FAMILY_IDS = frozenset({NodeFamily.ZWAVE, NodeFamily.ZMATTER_ZWAVE})
 
-#: All known native (non-plugin) family ids, for protocol classification.
-_NATIVE_FAMILY_IDS = frozenset(
-    {_FAMILY_INSTEON, _FAMILY_ZWAVE, _FAMILY_ZMATTER_ZWAVE, _FAMILY_ZIGBEE, _FAMILY_X10}
-)
+#: IoX *core* (non-plugin) family ids — everything in ``family.xsd``
+#: plus the Z-Matter extension and the folder family, minus
+#: ``NODESERVER``. A node whose family id is ``NODESERVER`` or any
+#: value outside this set is a PG3 plugin node (plugins report a slot
+#: id here), so it classifies as :attr:`Protocol.NODE_SERVER`.
+_CORE_FAMILY_IDS = frozenset(NodeFamily) - {NodeFamily.NODESERVER}
 
 
 class Node:
@@ -258,32 +256,44 @@ class Node:
     # --- introspection (derived) --------------------------------------
 
     @property
-    def protocol(self) -> str:
-        """Best-effort protocol classification.
+    def protocol(self) -> Protocol:
+        """Best-effort device-protocol classification, derived from ``family_id``.
 
-        Returned strings: ``"insteon"``, ``"zwave"``, ``"zigbee"``,
-        ``"x10"``, ``"node_server"``, ``"unknown"``. Derived from
-        ``family_id`` (a numeric IoX family id for native devices,
-        slot id for plugins).
+        Returns a :class:`pyisyox.constants.Protocol` member (a
+        ``StrEnum``, so it compares equal to its string value):
 
-        For PG3 plugin nodes the family id is the plugin's slot
-        number (e.g. ``"10"`` for Flume) — those return
-        ``"node_server"`` regardless of which physical protocol the
-        plugin abstracts over.
+        * :attr:`Protocol.INSTEON` — family ``"1"``.
+        * :attr:`Protocol.UPB` — family ``"2"``.
+        * :attr:`Protocol.ZWAVE` — family ``"4"`` (legacy attached
+          Z-Wave radio) or ``"12"`` (Z-Matter radio as a Z-Wave
+          controller).
+        * :attr:`Protocol.MATTER` — family ``"15"`` (Z-Matter radio
+          as a Matter/Thread controller).
+        * :attr:`Protocol.NODE_SERVER` — family ``"10"`` or any id
+          outside the IoX core family set; PG3 plugin nodes report a
+          slot id here, so we treat the whole space as node-server.
+        * :attr:`Protocol.UNKNOWN` — recognised core family with no
+          dedicated protocol mapping (RCS, Brultech, NCD, UDI, the
+          group/auto families, folders) or no family id at all.
+
+        This classifies the *transport*, not the device class — a
+        plugin thermostat reads as ``NODE_SERVER`` here; use
+        :attr:`is_thermostat` etc. for capability.
         """
         fid = self.family_id
-        if fid == _FAMILY_INSTEON:
-            return "insteon"
-        if fid in (_FAMILY_ZWAVE, _FAMILY_ZMATTER_ZWAVE):
-            return "zwave"
-        if fid == _FAMILY_ZIGBEE:
-            return "zigbee"
-        if fid == _FAMILY_X10:
-            return "x10"
-        # Plugin slots are anything that isn't a known native family id.
-        if fid and fid not in _NATIVE_FAMILY_IDS:
-            return "node_server"
-        return "unknown"
+        if fid == NodeFamily.INSTEON:
+            return Protocol.INSTEON
+        if fid == NodeFamily.UPB:
+            return Protocol.UPB
+        if fid in _ZWAVE_FAMILY_IDS:
+            return Protocol.ZWAVE
+        if fid == NodeFamily.MATTER:
+            return Protocol.MATTER
+        # NODESERVER family, or any id we don't recognise — PG3
+        # plugin nodes report their slot id in this field.
+        if fid and fid not in _CORE_FAMILY_IDS:
+            return Protocol.NODE_SERVER
+        return Protocol.UNKNOWN
 
     @property
     def is_thermostat(self) -> bool:
@@ -514,4 +524,4 @@ class Node:
         :meth:`Controller.add_node_lifecycle_listener` will see the
         change without polling.
         """
-        await self._client.post_node_update(self.address, {"name": name, "nodeType": "node"})
+        await self._client.post_node_update(self.address, {"name": name, "nodeType": NodeType.NODE})

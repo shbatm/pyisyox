@@ -48,7 +48,9 @@ from pyisyox.client import (
     NetworkResourceRecord,
     NodePropertyValue,
     NodeRecord,
+    NodeType,
     ProgramRecord,
+    VariableField,
     VariableRecord,
 )
 from pyisyox.controller import Controller, ControllerNotConnectedError
@@ -81,6 +83,7 @@ from pyisyox.runtime import (
     ProgramStatusListener,
     StatusListener,
     SystemEventControl,
+    TriggerAction,
     Variable,
     WebSocketEventStream,
 )
@@ -127,6 +130,7 @@ __all__ = [
     "NodeLifecycleListener",
     "NodePropertyValue",
     "NodeRecord",
+    "NodeType",
     "PortalAuth",
     "Profile",
     "ProfileMergeResult",
@@ -141,7 +145,9 @@ __all__ = [
     "StatusListener",
     "SystemEventControl",
     "TLSVersionError",
+    "TriggerAction",
     "Variable",
+    "VariableField",
     "VariableRecord",
     "WebSocketEventStream",
     "build_sslcontext",

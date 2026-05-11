@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pyisyox.client import VariableField
+
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, VariableRecord
 
@@ -101,7 +103,9 @@ class Variable:
         without waiting for a WS frame.
         """
         new_value = int(value)
-        await self._client.post_variable_update(self._record.type_id, self._record.id, {"value": new_value})
+        await self._client.post_variable_update(
+            self._record.type_id, self._record.id, {VariableField.VALUE: new_value}
+        )
         self._record.value = new_value
 
     async def set_init(self, init: int) -> None:
@@ -111,7 +115,9 @@ class Variable:
         ``{"init": <int>}``.
         """
         new_init = int(init)
-        await self._client.post_variable_update(self._record.type_id, self._record.id, {"init": new_init})
+        await self._client.post_variable_update(
+            self._record.type_id, self._record.id, {VariableField.INIT: new_init}
+        )
         self._record.init = new_init
 
     async def rename(self, name: str) -> None:
@@ -120,7 +126,9 @@ class Variable:
         Wire shape: ``POST /api/variables/{type}/{id}`` with
         ``{"name": "<str>"}``.
         """
-        await self._client.post_variable_update(self._record.type_id, self._record.id, {"name": name})
+        await self._client.post_variable_update(
+            self._record.type_id, self._record.id, {VariableField.NAME: name}
+        )
         self._record.name = name
 
     def __repr__(self) -> str:

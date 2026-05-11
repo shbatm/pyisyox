@@ -37,6 +37,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
@@ -44,7 +45,24 @@ from xml.etree import ElementTree as ET
 import aiohttp
 
 from pyisyox.auth import Auth, AuthError
+from pyisyox.constants import NodeFlag
 from pyisyox.logging import LOG_VERBOSE
+from pyisyox.paths import (
+    CONFIG_PATH,
+    NETWORK_RESOURCE_ITEM_PATH,
+    NETWORKING_RESOURCES_PATH,
+    NODE_COMMAND_PATH,
+    NODE_ITEM_PATH,
+    NODES_PATH,
+    PROFILES_PATH,
+    PROGRAM_COMMAND_PATH,
+    PROGRAMS_PATH,
+    REST_NODES_PATH,
+    REST_STATUS_PATH,
+    TRIGGERS_PATH,
+    VARIABLE_ITEM_PATH,
+    VARIABLES_TYPE_PATH,
+)
 from pyisyox.redactor import redact_sensitive
 from pyisyox.schema import Profile
 
@@ -63,6 +81,37 @@ class HTTPError(ClientError):
         super().__init__(f"HTTP {status} from {url}")
         self.status = status
         self.url = url
+
+
+class NodeType(StrEnum):
+    """String discriminator the eisy requires in ``POST /api/nodes/{address}``
+    bodies — even though the address already disambiguates which kind
+    of object is being mutated. The same ``"node"`` / ``"group"`` /
+    ``"folder"`` vocabulary appears on lifecycle events, so this enum
+    doubles as the typed name for that wire vocabulary.
+
+    The legacy XML surface uses the numeric hierarchy codes instead
+    (``0`` notset / ``1`` node / ``2`` group / ``3`` folder) — see
+    :class:`pyisyox.constants.UDHierarchyNodeType`.
+    """
+
+    NODE = "node"
+    GROUP = "group"
+    FOLDER = "folder"
+
+
+class VariableField(StrEnum):
+    """Body keys accepted by ``POST /api/variables/{type}/{id}``.
+
+    The eisy only honours one key per request — :class:`VALUE`,
+    :class:`INIT`, or :class:`NAME`. The runtime
+    :class:`pyisyox.Variable` wrapper enforces that contract by
+    exposing one coroutine per key.
+    """
+
+    VALUE = "value"
+    INIT = "init"
+    NAME = "name"
 
 
 @dataclass(slots=True, frozen=True)
@@ -394,19 +443,19 @@ class IoXClient:
             vars_state_raw,
             networking_xml,
         ) = await asyncio.gather(
-            self._get_json("/rest/profiles?include=nodedefs,editors,linkdefs"),
-            self._get_json("/api/nodes"),
-            self._get_text("/rest/nodes"),
-            self._get_text("/rest/status"),
-            self._get_json("/api/programs"),
-            self._get_json("/api/triggers"),
-            self._get_json("/api/variables/1"),
-            self._get_json("/api/variables/2"),
+            self._get_json(PROFILES_PATH),
+            self._get_json(NODES_PATH),
+            self._get_text(REST_NODES_PATH),
+            self._get_text(REST_STATUS_PATH),
+            self._get_json(PROGRAMS_PATH),
+            self._get_json(TRIGGERS_PATH),
+            self._get_json(VARIABLES_TYPE_PATH.format(type_id="1")),
+            self._get_json(VARIABLES_TYPE_PATH.format(type_id="2")),
             # Networking module is optional — controllers without it
             # configured return an empty ``<NetConfig/>``. Tolerated by
             # the parser; we don't want a 404 here to abort load, so
             # we fall back to an empty document on HTTP errors.
-            self._get_text_or_empty("/rest/networking/resources"),
+            self._get_text_or_empty(NETWORKING_RESOURCES_PATH),
         )
 
         profile = Profile.load_from_json(profile_raw)
@@ -420,18 +469,22 @@ class IoXClient:
             nodes=nodes,
             groups=groups,
             folders=folders,
-            programs=parse_api_programs(_unwrap_data(programs_raw, source="/api/programs")),
-            triggers=_unwrap_data(triggers_raw, source="/api/triggers"),
+            programs=parse_api_programs(_unwrap_data(programs_raw, source=PROGRAMS_PATH)),
+            triggers=_unwrap_data(triggers_raw, source=TRIGGERS_PATH),
             variables={
-                "1": parse_api_variables_type(_unwrap_data(vars_int_raw, source="/api/variables/1"), "1"),
-                "2": parse_api_variables_type(_unwrap_data(vars_state_raw, source="/api/variables/2"), "2"),
+                "1": parse_api_variables_type(
+                    _unwrap_data(vars_int_raw, source=VARIABLES_TYPE_PATH.format(type_id="1")), "1"
+                ),
+                "2": parse_api_variables_type(
+                    _unwrap_data(vars_state_raw, source=VARIABLES_TYPE_PATH.format(type_id="2")), "2"
+                ),
             },
             network_resources=parse_rest_networking_resources(networking_xml),
         )
 
     async def _fetch_config(self) -> ControllerConfig:
         """``GET /api/config`` — minimal, used to confirm IoX 6+ + uuid."""
-        raw = await self._get_json("/api/config", authenticated=False)
+        raw = await self._get_json(CONFIG_PATH, authenticated=False)
         data = raw.get("data", raw)
         return ControllerConfig(
             uuid=str(data.get("uuid", "")),
@@ -531,7 +584,7 @@ class IoXClient:
             non-2xx.
         """
         encoded_addr = quote(address, safe="")
-        path_parts = [f"/rest/nodes/{encoded_addr}/cmd/{command_id}"]
+        path_parts = [NODE_COMMAND_PATH.format(address=encoded_addr, command=command_id)]
         path_parts.extend(str(p) for p in params)
         path = "/".join(path_parts)
         return await self._get_text(path)
@@ -558,7 +611,7 @@ class IoXClient:
         Raises:
             HTTPError on non-2xx; ClientError on malformed response.
         """
-        return await self._post_json(f"/api/variables/{var_type}/{var_id}", body)
+        return await self._post_json(VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id), body)
 
     async def run_program_command(self, program_id: str, command: str) -> str:
         """Send a program / folder command via the legacy REST endpoint.
@@ -572,7 +625,7 @@ class IoXClient:
         equivalent has been observed. The controller acknowledges
         receipt only — status changes flow back over the WebSocket.
         """
-        return await self._get_text(f"/rest/programs/{program_id}/{command}")
+        return await self._get_text(PROGRAM_COMMAND_PATH.format(program_id=program_id, command=command))
 
     async def run_network_resource(self, resource_id: str | int) -> str:
         """Fire a network resource by id.
@@ -582,7 +635,7 @@ class IoXClient:
         The controller acknowledges receipt only — it doesn't return
         the result of the underlying HTTP / TCP / UDP fire.
         """
-        return await self._get_text(f"/rest/networking/resources/{resource_id}")
+        return await self._get_text(NETWORK_RESOURCE_ITEM_PATH.format(resource_id=resource_id))
 
     async def post_node_update(self, address: str, body: dict[str, Any]) -> dict[str, Any]:
         """Issue ``POST /api/nodes/{address}`` with the supplied body.
@@ -597,7 +650,7 @@ class IoXClient:
         envelope).
         """
         encoded = quote(address, safe="")
-        return await self._post_json(f"/api/nodes/{encoded}", body)
+        return await self._post_json(NODE_ITEM_PATH.format(address=encoded), body)
 
     async def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         """Shared POST-JSON path with auth-recovery on 401.
@@ -642,6 +695,19 @@ def _coerce_prec(raw: Any) -> int:
     Returns ``0`` when the field is missing, blank, or non-numeric so
     the dataclass default holds; the controller occasionally omits the
     attribute entirely on properties without scaling.
+    """
+    if raw is None or raw == "":
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _flag_int(raw: Any) -> int:
+    """Coerce a wire-side ``flag`` value to ``int`` (a :class:`NodeFlag`
+    bitfield). The controller stringifies it (e.g. ``"128"``); returns
+    ``0`` when it's missing or non-numeric so bit tests are well-defined.
     """
     if raw is None or raw == "":
         return 0
@@ -698,14 +764,7 @@ def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
             precision=_coerce_prec(prop.get("prec")),
         )
 
-    # ``flag`` arrives stringified from the controller (e.g. ``"128"``
-    # for DEVICE_ROOT); coerce defensively in case a future firmware
-    # ships it as an int or omits it entirely.
-    raw_flag = item.get("flag", 0)
-    try:
-        flag_int = int(raw_flag)
-    except (TypeError, ValueError):
-        flag_int = 0
+    flag_int = _flag_int(item.get("flag"))
 
     return NodeRecord(
         address=str(item["address"]),
@@ -787,9 +846,12 @@ def parse_rest_nodes_groups_folders(
     nodedef lookup. Only ``<group>`` and ``<folder>`` elements
     contribute to the returned dicts.
 
-    The special "ISY" group (``flag="12"``) representing the
-    controller itself is filtered out — it has the controller's MAC
-    as its address and isn't a user-facing scene.
+    The ``flag`` attribute on ``<group>`` / ``<folder>`` is the same
+    :class:`pyisyox.constants.NodeFlag` bitfield used elsewhere (the
+    eisy stringifies it — ``"12"`` is ``IS_A_GROUP | ROOT``). The one
+    group with :attr:`~pyisyox.constants.NodeFlag.ROOT` set is the
+    controller-self pseudo-group (its address is the controller MAC,
+    not a user-facing scene) — it's filtered out here.
     """
     if not xml:
         return {}, {}
@@ -800,9 +862,8 @@ def parse_rest_nodes_groups_folders(
 
     groups: dict[str, GroupRecord] = {}
     for group_el in root.findall("group"):
-        flag = group_el.get("flag", "0")
-        if flag == "12":
-            # Controller-self group — skip.
+        if _flag_int(group_el.get("flag")) & NodeFlag.ROOT:
+            # The controller's own root group — not a user-facing scene.
             continue
         addr = group_el.findtext("address") or ""
         if not addr:
