@@ -49,11 +49,14 @@ def test_verbose_level_is_below_debug() -> None:
     assert LOG_VERBOSE < logging.DEBUG
 
 
-def test_verbose_level_name_registered() -> None:
-    """Calling ``enable_logging`` registers the custom 'VERBOSE' level
-    name with stdlib logging so log records render as VERBOSE rather
-    than 'Level 5'."""
-    enable_logging(LOG_VERBOSE)
+def test_verbose_level_name_registered_at_import_time() -> None:
+    """The 'VERBOSE' level name must be registered with stdlib logging
+    at module import — consumers like Home Assistant never call
+    ``enable_logging`` but still need the name resolved so
+    ``configuration.yaml`` ``logger: { logs: { pyisyox: verbose } }``
+    works and log records render as VERBOSE (not 'Level 5')."""
+    # Note: we don't call enable_logging here — the name must already
+    # be registered as a side-effect of `import pyisyox.logging`.
     assert logging.getLevelName(LOG_VERBOSE) == "VERBOSE"
 
 

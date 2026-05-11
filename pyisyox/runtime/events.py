@@ -18,8 +18,12 @@ Event control ids:
 
 * Property updates use the property id (e.g. ``"ST"``, ``"GV1"``) and
   populate ``node_address``.
-* System events use a leading underscore (``"_5"`` driver state,
-  ``"_28"`` Matter status, etc.) with empty ``node_address``.
+* System events use a leading underscore (``"_5"`` system status,
+  ``"_28"`` Matter status, etc.) with empty ``node_address``. The
+  documented codes are enumerated in :class:`SystemEventControl`;
+  consumers can either branch on the enum or render labels via
+  :meth:`SystemEventControl.label` (which passes unknown codes
+  through verbatim).
 
 This module is decoupled from the actual WebSocket reader so the
 dispatcher can be tested with synthetic frames; the WS loop lives in
@@ -44,16 +48,67 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-#: Control code for node-lifecycle frames (add / remove / rename).
-#: The action is the lifecycle verb; eventInfo carries the new node
-#: element on add, just the address on remove/rename.
-_NODE_LIFECYCLE_CONTROL = "_3"
+class SystemEventControl(StrEnum):
+    """IoX WebSocket "system" control codes (underscore-prefixed).
 
-#: Control code for program / variable / system frames. Action 0 is
-#: program-status; 6/7 are variable change/init; 3 is a freeform
-#: status push (currently surfaced verbatim, consumers parse if
-#: interested).
-_PROGRAM_OR_VAR_CONTROL = "_1"
+    Property updates use the property id (``"ST"``, ``"GV1"``, ...) with a
+    populated ``node_address``. System events use an underscore-prefixed
+    code with an empty ``node_address`` — this enum names the codes
+    we've observed and seen documented; unknown codes pass through as
+    raw strings via :meth:`label`.
+
+    Sources for the labelled codes: PyISY 3.x's
+    ``events/websocket.py`` (canonical mapping the legacy integration
+    has been routing on for years) and the pyisyox v6 dispatcher's
+    own internal handling.
+
+    Other codes seen on the wire but without authoritative labels are
+    intentionally not enumerated here — surfacing made-up names would
+    mislead consumers. Consumers can branch on raw strings for those
+    until UDI publishes more.
+    """
+
+    #: Periodic heartbeat from the controller (no payload).
+    HEARTBEAT = "_0"
+    #: Program-status frame (action ``"0"``), variable-change frame
+    #: (action ``"6"`` value / ``"7"`` init), or freeform trigger
+    #: status push. The action discriminates which.
+    TRIGGER = "_1"
+    #: Node lifecycle frame — add / remove / rename / enabled / revised.
+    #: Action carries the verb (see :class:`NodeLifecycleAction`);
+    #: ``<eventInfo>`` carries the new node element on add, just the
+    #: address on remove/rename.
+    NODE_LIFECYCLE = "_3"
+    #: System status — BUSY / IDLE / SAFE_MODE / WRITE_TO_EEPROM
+    #: state on the controller side.
+    SYSTEM_STATUS = "_5"
+    #: Progress report during long-running operations (device
+    #: programming, restore, Z-Wave inclusion, etc.).
+    PROGRESS = "_7"
+    #: Matter network status — observed on IoX 6 controllers with the
+    #: Matter module enabled.
+    MATTER_STATUS = "_28"
+
+    @classmethod
+    def label(cls, control: str) -> str:
+        """Friendly name for a system control code, or the raw code.
+
+        Helps log messages render ``system event: node_lifecycle =
+        ND`` instead of ``system event: _3 = ND`` for the codes we
+        know; unknown codes pass through verbatim so the log still
+        identifies them.
+        """
+        try:
+            return cls(control).name.lower()
+        except ValueError:
+            return control
+
+
+#: Action codes within :attr:`SystemEventControl.TRIGGER` (``_1``)
+#: frames. ``"0"`` is program-status (handled via
+#: ``_apply_program_status``); ``"6"``/``"7"`` are variable change/init
+#: (``_apply_variable_change``). Other action values are surfaced
+#: verbatim and consumers parse them if interested.
 _PROGRAM_STATUS_ACTION = "0"
 _VARIABLE_VALUE_ACTION = "6"
 _VARIABLE_INIT_ACTION = "7"
@@ -548,9 +603,9 @@ class EventDispatcher:
         # addition to the general event channel — the typed
         # NodeLifecycleEvent is more ergonomic for consumers driving
         # reload UX than re-parsing the raw frame.
-        if event.control == _NODE_LIFECYCLE_CONTROL:
+        if event.control == SystemEventControl.NODE_LIFECYCLE:
             self._emit_lifecycle(event, raw_frame)
-        elif event.control == _PROGRAM_OR_VAR_CONTROL:
+        elif event.control == SystemEventControl.TRIGGER:
             if event.action == _PROGRAM_STATUS_ACTION:
                 self._apply_program_status(event)
             elif event.action in (_VARIABLE_VALUE_ACTION, _VARIABLE_INIT_ACTION):
