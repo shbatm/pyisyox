@@ -3,30 +3,14 @@
 from __future__ import annotations
 
 import datetime
-from enum import IntEnum, IntFlag
-
-from pyisyox.util.backports import StrEnum
-
-UPDATE_INTERVAL = 0.5
+from enum import IntEnum, IntFlag, StrEnum
 
 # Time Constants / Strings
 EMPTY_TIME = datetime.datetime(year=1, month=1, day=1)
-ISY_EPOCH_OFFSET = 36524
 MILITARY_TIME = "%Y/%m/%d %H:%M:%S"
 STANDARD_TIME = "%Y/%m/%d %I:%M:%S %p"
 XML_STRPTIME = "%Y%m%d %H:%M:%S"
 XML_STRPTIME_YY = "%y%m%d %H:%M:%S"
-XML_TRUE = "true"
-XML_FALSE = "false"
-XML_ON = "<on />"
-XML_OFF = "<off />"
-
-POLL_TIME = 10
-RECONNECT_DELAY = 60
-SOCKET_BUFFER_SIZE = 4096
-THREAD_SLEEP_TIME = 30.0
-
-DEFAULT_DIR: str = ".output/"
 
 
 class EventStreamStatus(StrEnum):
@@ -46,7 +30,6 @@ class EventStreamStatus(StrEnum):
 
 
 ISY_VALUE_UNKNOWN = -1 * float("inf")
-ISY_PROP_NOT_SET = "-1"
 
 X10_COMMANDS: dict[str, int] = {
     "all_off": 1,
@@ -57,86 +40,8 @@ X10_COMMANDS: dict[str, int] = {
     "dim": 15,
 }
 
-ATTR_ACTION = "action"
-ATTR_CONTROL = "control"
-ATTR_DESC = "desc"
-ATTR_FLAG = "flag"
-ATTR_FORMATTED = "formatted"
-ATTR_ID = "id"
-ATTR_INIT = "init"
-ATTR_INSTANCE = "instance"
-ATTR_LAST_CHANGED = "last_changed"
-ATTR_LAST_UPDATE = "last_update"
-ATTR_NODE_DEF_ID = "nodeDefId"
-ATTR_PARENT = "parentId"
-ATTR_PRECISION = "prec"
-ATTR_SET = "set"
-ATTR_STATUS = "status"
-ATTR_STREAM_ID = "sid"
-ATTR_TS = "ts"
-ATTR_TYPE = "type_"
-ATTR_UNIT_OF_MEASURE = "uom"
-ATTR_VAL = "val"  # Used for Variables.
-ATTR_VALUE = "value"  # Used for everything else.
-ATTR_VAR = "var"
-
-DEFAULT_PRECISION = 0
-DEFAULT_UNIT_OF_MEASURE = ""
-
-CONFIG_NETWORKING = "Networking Module"
-CONFIG_PORTAL = "Portal Integration - UDI"
-
-TAG_ID = "id"
-TAG_ADDRESS = "address"
-TAG_CATEGORY = "cat"
-TAG_CONFIG = "config"
-TAG_DESC = "desc"
-TAG_DESCRIPTION = "description"
-TAG_DEVICE_TYPE = "devtype"
-TAG_DST = "DST"
+#: ``<enabled>`` element in profile / program XML.
 TAG_ENABLED = "enabled"
-TAG_EVENT_INFO = "eventInfo"
-TAG_FAMILY = "family"
-TAG_FEATURE = "feature"
-TAG_FIRMWARE = "app_full_version"
-TAG_FOLDER = "folder"
-TAG_FORMATTED = "fmtAct"
-TAG_GENERIC = "gen"
-TAG_GROUP = "group"
-TAG_INSTALLED = "isInstalled"
-TAG_IS_LOAD = "isLoad"
-TAG_LATITUDE = "Lat"
-TAG_LINK = "link"
-TAG_LOCATION = "location"
-TAG_LONGITUDE = "Long"
-TAG_MFG = "mfg"
-TAG_MILITARY_TIME = "IsMilitary"
-TAG_NAME = "name"
-TAG_NET_RULE = "NetRule"
-TAG_NODE = "node"
-TAG_NODE_DEFS = "nodedefs"
-TAG_NTP = "NTP"
-TAG_PARENT = "parent"
-TAG_PARAMETER = "parameter"
-TAG_PRGM_FINISH = "f"
-TAG_PRGM_RUN = "r"
-TAG_PRGM_RUNNING = "running"
-TAG_PRGM_STATUS = "s"
-TAG_PRIMARY_NODE = "pnode"
-TAG_PRODUCT = "product"
-TAG_PROGRAM = "program"
-TAG_PROPERTY = "property"
-TAG_PROPERTIES = "properties"
-TAG_ROOT = "root"
-TAG_SIZE = "size"
-TAG_SPOKEN = "spoken"
-TAG_SUNRISE = "Sunrise"
-TAG_SUNSET = "Sunset"
-TAG_TYPE = "type"
-TAG_TZ_OFFSET = "TMZOffset"
-TAG_VALUE = "value"
-TAG_VARIABLE = "e"
-TAG_VARIABLES = "variables"
 
 
 class Protocol(StrEnum):
@@ -152,14 +57,23 @@ class Protocol(StrEnum):
     NODE_FOLDER = "node_folder"
     PROGRAM = "program"
     STATE_VAR = "state_variable"
+    UPB = "upb"
+    MATTER = "matter"
     ZIGBEE = "zigbee"
     ZWAVE = "zwave"
+    #: Family id present but not one we map to a known device protocol
+    #: (RCS, Brultech, NCD, UDI, group families, folders, …).
+    UNKNOWN = "unknown"
 
 
 class NodeFamily(StrEnum):
     """Node family string enum.
 
-    Referenced from ISY-WSDK-5.0.4/WSDL/family.xsd
+    IDs 0-9 come from ``ISY-WSDK-5.0.4/WSDL/family.xsd`` (still the
+    latest published WSDL). 10 (Node Server / PG3) and 12-15 are IoX 6
+    additions confirmed against eisy hardware: 12 is the Z-Matter
+    radio acting as a Z-Wave controller, 15 the same radio acting as
+    a Matter/Thread controller, 13 the folder family.
     """
 
     CORE = "0"
@@ -175,6 +89,7 @@ class NodeFamily(StrEnum):
     NODESERVER = "10"
     ZMATTER_ZWAVE = "12"
     FOLDER = "13"
+    MATTER = "15"
 
 
 PROP_BATTERY_LEVEL = "BATLVL"
@@ -187,35 +102,13 @@ PROP_ON_LEVEL = "OL"
 PROP_RAMP_RATE = "RR"
 PROP_SCHEDULE_MODE = "CLISMD"
 PROP_SETPOINT_COOL = "CLISPC"
+PROP_SETPOINT_COOL_DELTA = "CLISPCD"  # auto-changeover cool setpoint delta
 PROP_SETPOINT_HEAT = "CLISPH"
+PROP_SETPOINT_HEAT_DELTA = "CLISPHD"  # auto-changeover heat setpoint delta
 PROP_STATUS = "ST"
 PROP_TEMPERATURE = "CLITEMP"
 PROP_UOM = "UOM"
 PROP_ZWAVE_PREFIX = "ZW_"
-
-METHOD_COMMAND = "cmd"
-METHOD_GET = "get"
-METHOD_SET = "set"
-
-URL_CHANGE = "change"
-URL_CONFIG = "config"
-URL_DEFINITIONS = "definitions"
-URL_GET = "get"
-URL_MEMBERS = "members"
-URL_NETWORK = "networking"
-URL_NODE = "node"
-URL_NODES = "nodes"
-URL_NOTES = "notes"
-URL_PING = "ping"
-URL_PROGRAMS = "programs"
-URL_QUERY = "query"
-URL_RESOURCES = "resources"
-URL_STATUS = "status"
-URL_SUBFOLDERS = "subfolders"
-URL_VARIABLES = "vars"
-URL_ZWAVE = "zwave"
-URL_PROFILE_NS = "profiles/ns"
-URL_ZMATTER_ZWAVE = "zmatter/zwave"
 
 VAR_INTEGER = "1"
 VAR_STATE = "2"
@@ -242,13 +135,13 @@ CMD_OFF = "DOF"
 CMD_OFF_FAST = "DFOF"
 CMD_ON = "DON"
 CMD_ON_FAST = "DFON"
+CMD_QUERY = "QUERY"
 CMD_RESET = "RESET"
-CMD_RUN = "run"
-CMD_RUN_ELSE = "runElse"
-CMD_RUN_THEN = "runThen"
 CMD_SECURE = "SECMD"
-CMD_STOP = "stop"
 CMD_X10 = "X10"
+# Alarm-panel control verbs (Z-Wave / plugin alarm nodedefs).
+CMD_ALARM_ARM = "ARM"
+CMD_ALARM_DISARM = "DISARM"
 
 COMMAND_FRIENDLY_NAME: dict[str, str] = {
     "ADRPST": "auto_dr_processing_state",
@@ -402,6 +295,9 @@ COMMAND_FRIENDLY_NAME: dict[str, str] = {
     PROP_UOM: "unit_of_measure",
 }
 
+#: Control codes that represent a silent property/state update rather than
+#: a surfaced device command. Reference helper for consumers deciding which
+#: event frames to surface. (Kept pending issue #1.)
 EVENT_PROPS_IGNORED: list[str] = [
     CMD_BEEP,
     CMD_BRIGHTEN,
@@ -420,147 +316,21 @@ EVENT_PROPS_IGNORED: list[str] = [
     PROP_BUSY,
 ]
 
-COMMAND_NAME = {val: key for key, val in COMMAND_FRIENDLY_NAME.items()}
-
-
 # Special Units of Measure
 UOM_ISYV4_DEGREES = "degrees"
 UOM_ISYV4_NONE = "n/a"
 
+UOM_BOOLEAN = "2"  # 0 = False / 1 = True
 UOM_CLIMATE_MODES = "98"
 UOM_CLIMATE_MODES_ZWAVE = "67"
 UOM_DOUBLE_TEMP = "101"
 UOM_FAN_MODES = "99"
 UOM_INDEX = "25"
+UOM_ON_OFF = "78"  # 0 = Off / 100 = On
+UOM_OPEN_CLOSED = "79"  # 0 = Open / 100 = Closed
 UOM_PERCENTAGE = "51"
 UOM_RAW = "56"
 UOM_SECONDS = "57"
-
-UOM_FRIENDLY_NAME: dict[str, str] = {
-    "1": "A",
-    "2": "",  # Binary / On-Off
-    "3": "btu/h",
-    "4": "°C",
-    "5": "cm",
-    "6": "ft³",
-    "7": "ft³/min",
-    "8": "m³",
-    "9": "day",
-    "10": "days",
-    "12": "dB",
-    "13": "dB A",
-    "14": "°",
-    "16": "macroseismic",
-    "17": "°F",
-    "18": "ft",
-    "19": "hour",
-    "20": "hours",
-    "21": "%AH",
-    "22": "%RH",
-    "23": "inHg",
-    "24": "in/hr",
-    UOM_INDEX: "index",
-    "26": "K",
-    "27": "keyword",
-    "28": "kg",
-    "29": "kV",
-    "30": "kW",
-    "31": "kPa",
-    "32": "KPH",
-    "33": "kWh",
-    "34": "liedu",
-    "35": "L",
-    "36": "lx",
-    "37": "mercalli",
-    "38": "m",
-    "39": "m³/hr",
-    "40": "m/s",
-    "41": "mA",
-    "42": "ms",
-    "43": "mV",
-    "44": "min",
-    "45": "min",
-    "46": "mm/hr",
-    "47": "month",
-    "48": "MPH",
-    "49": "m/s",
-    "50": "Ω",
-    UOM_PERCENTAGE: "%",
-    "52": "lbs",
-    "53": "pf",
-    "54": "ppm",
-    "55": "pulse count",
-    "57": "s",
-    "58": "s",
-    "59": "S/m",
-    "60": "m_b",
-    "61": "M_L",
-    "62": "M_w",
-    "63": "M_S",
-    "64": "shindo",
-    "65": "SML",
-    "69": "gal",
-    "71": "UV index",
-    "72": "V",
-    "73": "W",
-    "74": "W/m²",
-    "75": "weekday",
-    "76": "°",
-    "77": "year",
-    "82": "mm",
-    "83": "km",
-    "85": "Ω",
-    "86": "kΩ",
-    "87": "m³/m³",
-    "88": "Water activity",
-    "89": "RPM",
-    "90": "Hz",
-    "91": "°",
-    "92": "° South",
-    "100": "",
-    "101": "° (x2)",
-    "102": "kWs",
-    "103": "$",
-    "104": "¢",
-    "105": "in",
-    "106": "mm/day",
-    "107": "",  # raw 1-byte unsigned value
-    "108": "",  # raw 2-byte unsigned value
-    "109": "",  # raw 3-byte unsigned value
-    "110": "",  # raw 4-byte unsigned value
-    "111": "",  # raw 1-byte signed value
-    "112": "",  # raw 2-byte signed value
-    "113": "",  # raw 3-byte signed value
-    "114": "",  # raw 4-byte signed value
-    "116": "mi",
-    "117": "mbar",
-    "118": "hPa",
-    "119": "Wh",
-    "120": "in/day",
-    "122": "μg/m³",  # Microgram per cubic meter
-    "123": "bq/m³",  # Becquerel per cubic meter
-    "124": "pCi/L",  # Picocuries per liter
-    "125": "pH",
-    "126": "bpm",  # Beats per Minute
-    "127": "mmHg",
-    "128": "J",
-    "129": "BMI",  # Body Mass Index
-    "130": "L/h",
-    "131": "dBm",
-    "132": "bpm",  # Breaths per minute
-    "133": "kHz",
-    "134": "m/²",
-    "135": "VA",  # Volt-Amp
-    "136": "var",  # VAR = Volt-Amp Reactive
-    "137": "",  # NTP DateTime - Number of seconds since 1900
-    "138": "psi",
-    "139": "°",
-    "140": "mg/L",
-    "141": "N",
-    "142": "gal/s",
-    "143": "gpm",
-    "144": "gph",
-}
 
 UOM_TO_STATES: dict[str, dict[str, str]] = {
     "11": {  # Deadbolt Status
@@ -797,34 +567,10 @@ INSTEON_RAMP_RATES: dict[str, float] = {
     "31": 0.1,
 }
 
-# Thermostat Types/Categories. 4.8 Trane, 5.3 venstar, 5.10 Insteon Wireless,
-#  5.0x0B, 0x0F, 0x10, 0x13, 0x14, 0x15 - Insteon (alt. frequencies)
-INSTEON_TYPE_THERMOSTAT: list[str] = [
-    "4.8",
-    "5.3",
-    "5.10",
-    "5.11",
-    "5.14",
-    "5.15",
-    "5.16",
-    "5.17",
-    "5.18",
-    "5.19",
-    "5.20",
-    "5.21",
-]
-ZWAVE_CAT_THERMOSTAT: list[str] = ["140"]
-
-# Other special categories or types
-INSTEON_TYPE_LOCK: list[str] = ["4.64"]
-ZWAVE_CAT_LOCK: list[str] = ["111"]
-
-INSTEON_TYPE_DIMMABLE: list[str] = ["1."]
-INSTEON_SUBNODE_DIMMABLE: str = " 1"
-ZWAVE_CAT_DIMMABLE: list[str] = ["109", "119", "186"]
-
-# Insteon Battery Devices - States are ignored when checking the status of a group.
-INSTEON_STATELESS_TYPE: list[str] = ["0.16.", "0.17.", "0.18.", "16."]  # Not Used
+# Insteon battery / stateless devices — motion sensors, RemoteLincs,
+# binary-alarm nodedefs, etc. Their ``ST`` is not a persistent state, so
+# ``runtime.Group`` skips these members when aggregating a scene's on/off
+# state (see ``pyisyox.runtime.group``).
 INSTEON_STATELESS_NODEDEFID: list[str] = [
     "BinaryAlarm",
     "BinaryAlarm_ADV",
@@ -972,69 +718,27 @@ NODE_CATEGORIES: dict[str, str] = {
 }
 
 
-class NodeChangeAction(StrEnum):
-    """Node change actions enum."""
-
-    CLEAR_ERROR = "CE"
-    FOLDER_ADDED = "FD"
-    FOLDER_REMOVED = "FR"
-    FOLDER_RENAMED = "FN"
-    GROUP_ADDED = "GD"
-    GROUP_REMOVED = "GR"
-    GROUP_RENAMED = "GN"
-    NET_RENAMED = "WR"
-    NODE_ADDED = "ND"
-    NODE_ENABLED = "EN"
-    NODE_ERROR = "NE"
-    NODE_MOVED = "MV"
-    NODE_REMOVED_FROM_GROUP = "RG"
-    NODE_REMOVED = "NR"
-    NODE_RENAMED = "NN"
-    NODE_REVISED = "RV"
-    PARENT_CHANGED = "PC"
-    PENDING_DEVICE_OP = "WH"
-    PROGRAMMING_DEVICE = "WD"
-    DEVICE_WRITING = "_7A"
-    DEVICE_MEMORY = "_7M"
-
-
-# Node Change Code: (Description, EventInfo Tags)
-NODE_CHANGED_ACTIONS: dict[NodeChangeAction, list[str]] = {
-    NodeChangeAction.CLEAR_ERROR: [],
-    NodeChangeAction.FOLDER_ADDED: [],
-    NodeChangeAction.FOLDER_REMOVED: [],
-    NodeChangeAction.FOLDER_RENAMED: ["newName"],
-    NodeChangeAction.GROUP_ADDED: ["groupName", "groupType"],
-    NodeChangeAction.GROUP_REMOVED: [],
-    NodeChangeAction.GROUP_RENAMED: ["newName"],
-    NodeChangeAction.NET_RENAMED: [],
-    NodeChangeAction.NODE_ADDED: ["nodeName", "nodeType"],
-    NodeChangeAction.NODE_ENABLED: ["enabled"],
-    NodeChangeAction.NODE_ERROR: [],
-    NodeChangeAction.NODE_MOVED: ["movedNode", "linkType"],
-    NodeChangeAction.NODE_REMOVED_FROM_GROUP: ["removedNode"],
-    NodeChangeAction.NODE_REMOVED: [],
-    NodeChangeAction.NODE_RENAMED: ["newName"],
-    NodeChangeAction.NODE_REVISED: [],
-    NodeChangeAction.PARENT_CHANGED: ["node", "nodeType", "parent", "parentType"],
-    NodeChangeAction.PENDING_DEVICE_OP: [],
-    NodeChangeAction.PROGRAMMING_DEVICE: [],
-    NodeChangeAction.DEVICE_WRITING: ["message"],
-    NodeChangeAction.DEVICE_MEMORY: ["memory", "cmd1", "cmd2", "value"],
-}
-
-
 class SystemStatus(StrEnum):
-    """System Status Enum."""
+    """System Status Enum — the ``<action>`` value on ``_5`` event frames."""
 
     NOT_BUSY = "0"
     BUSY = "1"
     IDLE = "2"
     SAFE_MODE = "3"
 
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name for a system-status value, or the
+        raw value verbatim if it isn't one we know.
 
-# Node Link Types
-NODE_IS_CONTROLLER = 0x10
+        Mirrors :meth:`pyisyox.runtime.SystemEventControl.label` so the
+        two compose cleanly in log lines
+        (``system_status = not_busy``).
+        """
+        try:
+            return cls(value).name.lower()
+        except ValueError:
+            return value
 
 
 class NodeFlag(IntFlag):
@@ -1054,158 +758,6 @@ DEV_CMD_MEMORY_WRITE = "0x2E"
 DEV_BL_ADDR = "0x0264"
 DEV_OL_ADDR = "0x0032"
 DEV_RR_ADDR = "0x0021"
-
-BACKLIGHT_SUPPORT: dict[str, str] = {
-    "DimmerMotorSwitch": UOM_PERCENTAGE,
-    "DimmerMotorSwitch_ADV": UOM_PERCENTAGE,
-    "DimmerLampSwitch": UOM_PERCENTAGE,
-    "DimmerLampSwitch_ADV": UOM_PERCENTAGE,
-    "DimmerSwitchOnly": UOM_PERCENTAGE,
-    "DimmerSwitchOnly_ADV": UOM_PERCENTAGE,
-    "KeypadDimmer": UOM_INDEX,
-    "KeypadDimmer_ADV": UOM_INDEX,
-    "RelayLampSwitch": UOM_PERCENTAGE,
-    "RelayLampSwitch_ADV": UOM_PERCENTAGE,
-    "RelaySwitchOnlyPlusQuery": UOM_PERCENTAGE,
-    "RelaySwitchOnlyPlusQuery_ADV": UOM_PERCENTAGE,
-    "RelaySwitchOnly": UOM_PERCENTAGE,
-    "RelaySwitchOnly_ADV": UOM_PERCENTAGE,
-    "KeypadRelay": UOM_INDEX,
-    "KeypadRelay_ADV": UOM_INDEX,
-    "KeypadButton": UOM_INDEX,
-    "KeypadButton_ADV": UOM_INDEX,
-}
-
-BACKLIGHT_INDEX: list[str] = [
-    "On  0 / Off 0",
-    "On  1 / Off 0",
-    "On  2 / Off 0",
-    "On  3 / Off 0",
-    "On  4 / Off 0",
-    "On  5 / Off 0",
-    "On  6 / Off 0",
-    "On  7 / Off 0",
-    "On  8 / Off 0",
-    "On  9 / Off 0",
-    "On 10 / Off 0",
-    "On 11 / Off 0",
-    "On 12 / Off 0",
-    "On 13 / Off 0",
-    "On 14 / Off 0",
-    "On 15 / Off 0",
-    "On  0 / Off 1",
-    "On  1 / Off 1",
-    "On  2 / Off 1",
-    "On  3 / Off 1",
-    "On  4 / Off 1",
-    "On  5 / Off 1",
-    "On  6 / Off 1",
-    "On  7 / Off 1",
-    "On  8 / Off 1",
-    "On  9 / Off 1",
-    "On 10 / Off 1",
-    "On 11 / Off 1",
-    "On 12 / Off 1",
-    "On 13 / Off 1",
-    "On 14 / Off 1",
-    "On 15 / Off 1",
-    "On  0 / Off 2",
-    "On  1 / Off 2",
-    "On  2 / Off 2",
-    "On  3 / Off 2",
-    "On  4 / Off 2",
-    "On  5 / Off 2",
-    "On  6 / Off 2",
-    "On  7 / Off 2",
-    "On  8 / Off 2",
-    "On  9 / Off 2",
-    "On 10 / Off 2",
-    "On 11 / Off 2",
-    "On 12 / Off 2",
-    "On 13 / Off 2",
-    "On 14 / Off 2",
-    "On 15 / Off 2",
-    "On  0 / Off 3",
-    "On  1 / Off 3",
-    "On  2 / Off 3",
-    "On  3 / Off 3",
-    "On  4 / Off 3",
-    "On  5 / Off 3",
-    "On  6 / Off 3",
-    "On  7 / Off 3",
-    "On  8 / Off 3",
-    "On  9 / Off 3",
-    "On 10 / Off 3",
-    "On 11 / Off 3",
-    "On 12 / Off 3",
-    "On 13 / Off 3",
-    "On 14 / Off 3",
-    "On 15 / Off 3",
-    "On  0 / Off 4",
-    "On  1 / Off 4",
-    "On  2 / Off 4",
-    "On  3 / Off 4",
-    "On  4 / Off 4",
-    "On  5 / Off 4",
-    "On  6 / Off 4",
-    "On  7 / Off 4",
-    "On  8 / Off 4",
-    "On  9 / Off 4",
-    "On 10 / Off 4",
-    "On 11 / Off 4",
-    "On 12 / Off 4",
-    "On 13 / Off 4",
-    "On 14 / Off 4",
-    "On 15 / Off 4",
-    "On  0 / Off 5",
-    "On  1 / Off 5",
-    "On  2 / Off 5",
-    "On  3 / Off 5",
-    "On  4 / Off 5",
-    "On  5 / Off 5",
-    "On  6 / Off 5",
-    "On  7 / Off 5",
-    "On  8 / Off 5",
-    "On  9 / Off 5",
-    "On 10 / Off 5",
-    "On 11 / Off 5",
-    "On 12 / Off 5",
-    "On 13 / Off 5",
-    "On 14 / Off 5",
-    "On 15 / Off 5",
-    "On  0 / Off 6",
-    "On  1 / Off 6",
-    "On  2 / Off 6",
-    "On  3 / Off 6",
-    "On  4 / Off 6",
-    "On  5 / Off 6",
-    "On  6 / Off 6",
-    "On  7 / Off 6",
-    "On  8 / Off 6",
-    "On  9 / Off 6",
-    "On 10 / Off 6",
-    "On 11 / Off 6",
-    "On 12 / Off 6",
-    "On 13 / Off 6",
-    "On 14 / Off 6",
-    "On 15 / Off 6",
-    "On  0 / Off 7",
-    "On  1 / Off 7",
-    "On  2 / Off 7",
-    "On  3 / Off 7",
-    "On  4 / Off 7",
-    "On  5 / Off 7",
-    "On  6 / Off 7",
-    "On  7 / Off 7",
-    "On  8 / Off 7",
-    "On  9 / Off 7",
-    "On 10 / Off 7",
-    "On 11 / Off 7",
-    "On 12 / Off 7",
-    "On 13 / Off 7",
-    "On 14 / Off 7",
-    "On 15 / Off 7",
-]
 
 
 class UDHierarchyNodeType(IntEnum):
