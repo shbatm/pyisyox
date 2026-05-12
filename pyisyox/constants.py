@@ -5,26 +5,12 @@ from __future__ import annotations
 import datetime
 from enum import IntEnum, IntFlag, StrEnum
 
-UPDATE_INTERVAL = 0.5
-
 # Time Constants / Strings
 EMPTY_TIME = datetime.datetime(year=1, month=1, day=1)
-ISY_EPOCH_OFFSET = 36524
 MILITARY_TIME = "%Y/%m/%d %H:%M:%S"
 STANDARD_TIME = "%Y/%m/%d %I:%M:%S %p"
 XML_STRPTIME = "%Y%m%d %H:%M:%S"
 XML_STRPTIME_YY = "%y%m%d %H:%M:%S"
-XML_TRUE = "true"
-XML_FALSE = "false"
-XML_ON = "<on />"
-XML_OFF = "<off />"
-
-POLL_TIME = 10
-RECONNECT_DELAY = 60
-SOCKET_BUFFER_SIZE = 4096
-THREAD_SLEEP_TIME = 30.0
-
-DEFAULT_DIR: str = ".output/"
 
 
 class EventStreamStatus(StrEnum):
@@ -44,7 +30,6 @@ class EventStreamStatus(StrEnum):
 
 
 ISY_VALUE_UNKNOWN = -1 * float("inf")
-ISY_PROP_NOT_SET = "-1"
 
 X10_COMMANDS: dict[str, int] = {
     "all_off": 1,
@@ -55,86 +40,8 @@ X10_COMMANDS: dict[str, int] = {
     "dim": 15,
 }
 
-ATTR_ACTION = "action"
-ATTR_CONTROL = "control"
-ATTR_DESC = "desc"
-ATTR_FLAG = "flag"
-ATTR_FORMATTED = "formatted"
-ATTR_ID = "id"
-ATTR_INIT = "init"
-ATTR_INSTANCE = "instance"
-ATTR_LAST_CHANGED = "last_changed"
-ATTR_LAST_UPDATE = "last_update"
-ATTR_NODE_DEF_ID = "nodeDefId"
-ATTR_PARENT = "parentId"
-ATTR_PRECISION = "prec"
-ATTR_SET = "set"
-ATTR_STATUS = "status"
-ATTR_STREAM_ID = "sid"
-ATTR_TS = "ts"
-ATTR_TYPE = "type_"
-ATTR_UNIT_OF_MEASURE = "uom"
-ATTR_VAL = "val"  # Used for Variables.
-ATTR_VALUE = "value"  # Used for everything else.
-ATTR_VAR = "var"
-
-DEFAULT_PRECISION = 0
-DEFAULT_UNIT_OF_MEASURE = ""
-
-CONFIG_NETWORKING = "Networking Module"
-CONFIG_PORTAL = "Portal Integration - UDI"
-
-TAG_ID = "id"
-TAG_ADDRESS = "address"
-TAG_CATEGORY = "cat"
-TAG_CONFIG = "config"
-TAG_DESC = "desc"
-TAG_DESCRIPTION = "description"
-TAG_DEVICE_TYPE = "devtype"
-TAG_DST = "DST"
+#: ``<enabled>`` element in profile / program XML.
 TAG_ENABLED = "enabled"
-TAG_EVENT_INFO = "eventInfo"
-TAG_FAMILY = "family"
-TAG_FEATURE = "feature"
-TAG_FIRMWARE = "app_full_version"
-TAG_FOLDER = "folder"
-TAG_FORMATTED = "fmtAct"
-TAG_GENERIC = "gen"
-TAG_GROUP = "group"
-TAG_INSTALLED = "isInstalled"
-TAG_IS_LOAD = "isLoad"
-TAG_LATITUDE = "Lat"
-TAG_LINK = "link"
-TAG_LOCATION = "location"
-TAG_LONGITUDE = "Long"
-TAG_MFG = "mfg"
-TAG_MILITARY_TIME = "IsMilitary"
-TAG_NAME = "name"
-TAG_NET_RULE = "NetRule"
-TAG_NODE = "node"
-TAG_NODE_DEFS = "nodedefs"
-TAG_NTP = "NTP"
-TAG_PARENT = "parent"
-TAG_PARAMETER = "parameter"
-TAG_PRGM_FINISH = "f"
-TAG_PRGM_RUN = "r"
-TAG_PRGM_RUNNING = "running"
-TAG_PRGM_STATUS = "s"
-TAG_PRIMARY_NODE = "pnode"
-TAG_PRODUCT = "product"
-TAG_PROGRAM = "program"
-TAG_PROPERTY = "property"
-TAG_PROPERTIES = "properties"
-TAG_ROOT = "root"
-TAG_SIZE = "size"
-TAG_SPOKEN = "spoken"
-TAG_SUNRISE = "Sunrise"
-TAG_SUNSET = "Sunset"
-TAG_TYPE = "type"
-TAG_TZ_OFFSET = "TMZOffset"
-TAG_VALUE = "value"
-TAG_VARIABLE = "e"
-TAG_VARIABLES = "variables"
 
 
 class Protocol(StrEnum):
@@ -202,30 +109,6 @@ PROP_STATUS = "ST"
 PROP_TEMPERATURE = "CLITEMP"
 PROP_UOM = "UOM"
 PROP_ZWAVE_PREFIX = "ZW_"
-
-METHOD_COMMAND = "cmd"
-METHOD_GET = "get"
-METHOD_SET = "set"
-
-URL_CHANGE = "change"
-URL_CONFIG = "config"
-URL_DEFINITIONS = "definitions"
-URL_GET = "get"
-URL_MEMBERS = "members"
-URL_NETWORK = "networking"
-URL_NODE = "node"
-URL_NODES = "nodes"
-URL_NOTES = "notes"
-URL_PING = "ping"
-URL_PROGRAMS = "programs"
-URL_QUERY = "query"
-URL_RESOURCES = "resources"
-URL_STATUS = "status"
-URL_SUBFOLDERS = "subfolders"
-URL_VARIABLES = "vars"
-URL_ZWAVE = "zwave"
-URL_PROFILE_NS = "profiles/ns"
-URL_ZMATTER_ZWAVE = "zmatter/zwave"
 
 VAR_INTEGER = "1"
 VAR_STATE = "2"
@@ -412,6 +295,9 @@ COMMAND_FRIENDLY_NAME: dict[str, str] = {
     PROP_UOM: "unit_of_measure",
 }
 
+#: Control codes that represent a silent property/state update rather than
+#: a surfaced device command. Reference helper for consumers deciding which
+#: event frames to surface. (Kept pending issue #1.)
 EVENT_PROPS_IGNORED: list[str] = [
     CMD_BEEP,
     CMD_BRIGHTEN,
@@ -429,9 +315,6 @@ EVENT_PROPS_IGNORED: list[str] = [
     CMD_X10,
     PROP_BUSY,
 ]
-
-COMMAND_NAME = {val: key for key, val in COMMAND_FRIENDLY_NAME.items()}
-
 
 # Special Units of Measure
 UOM_ISYV4_DEGREES = "degrees"
@@ -684,34 +567,13 @@ INSTEON_RAMP_RATES: dict[str, float] = {
     "31": 0.1,
 }
 
-# Thermostat Types/Categories. 4.8 Trane, 5.3 venstar, 5.10 Insteon Wireless,
-#  5.0x0B, 0x0F, 0x10, 0x13, 0x14, 0x15 - Insteon (alt. frequencies)
-INSTEON_TYPE_THERMOSTAT: list[str] = [
-    "4.8",
-    "5.3",
-    "5.10",
-    "5.11",
-    "5.14",
-    "5.15",
-    "5.16",
-    "5.17",
-    "5.18",
-    "5.19",
-    "5.20",
-    "5.21",
-]
-ZWAVE_CAT_THERMOSTAT: list[str] = ["140"]
-
-# Other special categories or types
-INSTEON_TYPE_LOCK: list[str] = ["4.64"]
-ZWAVE_CAT_LOCK: list[str] = ["111"]
-
-INSTEON_TYPE_DIMMABLE: list[str] = ["1."]
-INSTEON_SUBNODE_DIMMABLE: str = " 1"
-ZWAVE_CAT_DIMMABLE: list[str] = ["109", "119", "186"]
-
-# Insteon Battery Devices - States are ignored when checking the status of a group.
-INSTEON_STATELESS_TYPE: list[str] = ["0.16.", "0.17.", "0.18.", "16."]  # Not Used
+# Insteon battery / stateless devices — motion sensors, RemoteLincs,
+# binary-alarm nodedefs, etc. Their ``ST`` is not a persistent state, so
+# group-aggregation logic should skip these members when deciding whether
+# a scene is "all on". Not yet wired into ``runtime.Group`` — kept as the
+# reference table for that. Type prefixes match on the leading dotted
+# segments of ``Node.type_``.
+INSTEON_STATELESS_TYPE: list[str] = ["0.16.", "0.17.", "0.18.", "16."]
 INSTEON_STATELESS_NODEDEFID: list[str] = [
     "BinaryAlarm",
     "BinaryAlarm_ADV",
@@ -880,10 +742,6 @@ class SystemStatus(StrEnum):
             return cls(value).name.lower()
         except ValueError:
             return value
-
-
-# Node Link Types
-NODE_IS_CONTROLLER = 0x10
 
 
 class NodeFlag(IntFlag):
