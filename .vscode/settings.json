@@ -1,30 +1,27 @@
 {
-  "python.linting.pylintEnabled": true,
-  "python.linting.enabled": true,
-  "python.formatting.provider": "black",
+  "python.testing.pytestArgs": ["--no-cov"],
   "editor.formatOnPaste": false,
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "editor.defaultFormatter": "charliermarsh.ruff",
   "files.trimTrailingWhitespace": true,
-  "python.linting.flake8Enabled": false,
   "cSpell.words": [
+    "aiohttp",
     "automodule",
     "BACKOFF",
-    "dateutil",
     "eisy",
     "nodedefs",
     "Polisy",
     "pyisyox",
     "qualname",
     "websession",
-    "xmltodict",
     "Zigbee"
   ],
-  "editor.formatOnSaveMode": "file",
-  "editor.defaultFormatter": "ms-python.black-formatter",
-  "python.linting.mypyEnabled": true,
-  "python.linting.pycodestyleEnabled": false,
-  "python.linting.pydocstyleEnabled": true,
   "editor.quickSuggestions": {
     "other": true,
     "comments": true,

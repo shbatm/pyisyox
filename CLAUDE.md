@@ -4,390 +4,363 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**PyISYoX** is a Python library for asynchronous communication with Universal Devices ISY/IoX controllers. It supports:
+**PyISYoX** is an async Python client for Universal Devices' **eisy** /
+**Polisy** controllers running **IoX 6.0.0+**. It connects, loads the
+device tree (nodes, scenes, programs, variables, network resources),
+and keeps it live via a WebSocket event stream.
 
-- ISY994 (legacy hardware family)
-- ISY-on-Anything (IoX) hardware: eisy, Polisy
-- Protocols: Insteon, X10, Z-Wave, Zigbee/Matter (via supported hardware)
+- **In scope:** eisy / Polisy on IoX 6+. Insteon, X10, Z-Wave,
+  Zigbee/Matter (whatever the hardware supports).
+- **Out of scope:** original ISY-994 hardware and pre-6.0 firmware —
+  consumers needing those should use the upstream
+  [`pyisy`](https://github.com/automicus/PyISY) (v3.x) library.
 
-The library enables monitoring and control of nodes, programs, variables, node servers, and networking modules with automatic real-time updates via WebSocket or TCP event streams.
+**Lineage:** rewritten by [@shbatm](https://github.com/shbatm) from
+[PyISY](https://github.com/automicus/PyISY) (Ryan Kraus & Greg Laabs),
+driven by the needs of the Home Assistant ISY integration. No
+affiliation with Universal Devices, Inc.
 
-**Lineage**: PyISYoX originated from [PyISY](https://github.com/automicus/PyISY) (by Ryan Kraus & Greg Laabs), rewritten by [@shbatm] based on requirements from the [Home Assistant ISY994 Integration](https://www.home-assistant.io/integrations/isy994/).
-
-**Important**: This project is maintained independently and has no affiliation with Universal Devices, Inc.
+> **Branch note:** `main` still carries the legacy v3.x-shaped layout
+> (`isy.py`, `connection.py`, `nodes/`, `helpers/xml.py`, …). **The v6
+> rewrite lives on `dev`** and that is where PRs go. The repo's default
+> branch is `main`, so a `Closes #N` line in a PR body does **not**
+> auto-close the issue on merge — close referenced issues manually
+> after merging to `dev`. The maintainer rebase-merges
+> (`gh pr merge N --rebase`) to keep per-commit history.
 
 ## Requirements
 
-- **Minimum Python version**: 3.10
-- **Dependencies**: aiohttp, python-dateutil, requests, colorlog, xmltodict
+- **Python 3.10+**
+- **Dependencies:** `aiohttp`, `python-dateutil`, `requests`,
+  `colorlog`, `xmltodict`
 
 ## Development Setup
 
-### Initial Setup
-
 ```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Install pre-commit hooks
-pre-commit install
-
-# Install library in editable mode
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt -r requirements.txt
 pip install -e .
+pre-commit install
 ```
 
-### Testing the Module
+> **Worktree gotcha:** pre-commit's `mypy` / `pylint` hooks run via
+> `script/run-in-env.sh`, which activates `./.venv/bin/activate` if it
+> exists (else falls back to `/opt/venv/bin/`). A fresh `git worktree`
+> has no `.venv`, so those hooks fail with `command not found` and the
+> commit aborts. Create a `.venv` in the worktree once (the block
+> above) to fix it.
+
+### Connecting to a real controller from the shell
 
 ```bash
-# Quick test - connect and print node summary
-python3 -m pyisyox http://polisy.local:8080 admin password
-
-# With all options
-python3 -m pyisyox http://your-isy:80 username password --nodes --programs --variables --networking --node-servers
+# Portal (JWT) auth is selected when the username looks like an email:
+python3 -m pyisyox https://eisy.local:443 me@example.com 'password'
+# Local (HTTP basic) auth otherwise; -q skips the WebSocket stream:
+python3 -m pyisyox https://eisy.local:8443 admin 'password' -q
+# -d/--debug logs parsed event frames; -v/--verbose adds raw WS frames + /api/* payloads.
 ```
 
-### DevContainer Support
+`pyisyox/__main__.py` is a thin CLI wrapper over the library — handy
+for connecting from a shell, watching the event stream, or checking
+credentials. Embedding consumers (Home Assistant, hacs-udi-iox)
+construct `pyisyox.Controller` directly instead.
 
-A VSCode DevContainer is available for consistent development. On container start, the `examples/` folder is created (not committed to repo) for testing with your ISY connection details.
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=pyisyox
-```
-
-## Code Quality
-
-### Linting & Formatting
+### Tests, linting, type-checking
 
 ```bash
-# Format and lint (ruff handles both formatting and import sorting)
+pytest                       # or: pytest --cov=pyisyox
 ruff check pyisyox --fix
 ruff format pyisyox
-
-# Type checking with mypy
 mypy pyisyox
-
-# Run pylint
 pylint pyisyox
 ```
 
-### Pre-commit Hooks
+Pre-commit also runs `codespell`, `yamllint`, and `prettier`. CI on a
+PR: `Run tests (3.11 / 3.13 / 3.14)`, `pre-commit`, and `claude-review`
+(the review takes ~4–5 min; the rest ~30–40 s each).
 
-- **ruff**: Formatting, import sorting, and linting (replaces black and isort)
-- **codespell**: Spell checking (ISY-specific terms ignored via pyproject.toml `[tool.codespell]`)
-- **yamllint**: YAML validation
-- **prettier**: JSON/YAML/markdown formatting
-- **mypy**: Type checking
-- **pylint**: Code quality checks
+### Docs
+
+Sphinx sources under `docs/`; build with `cd docs && make html`
+(needs `pip install -r docs/requirements.txt`). Regenerate the API
+stubs with `make apidoc`. Docs are **not** on CI; ~200 suppressed
+warnings are expected. Published at
+<https://pyisyox.readthedocs.io>.
 
 ## Architecture
 
-### Core Components
+The public surface is intentionally small and layered. From most to
+least "glue":
 
-**ISY Class (`isy.py`)**: Main controller interface
+### `Controller` (`controller.py`) — the top-level handle
 
-- Entry point for all ISY interactions
-- Manages connections, initialization, and shutdown
-- Coordinates all platform modules (nodes, programs, variables, etc.)
-- Handles event stream setup (WebSocket or legacy TCP)
-- Properties: `connected`, `auto_update`, `uuid`, `hostname`
-- Methods: `initialize()`, `shutdown()`, `query()`, `send_x10_cmd()`
+- Constructed with a base URL + an `Auth` strategy (no network calls
+  yet): `Controller(url, PortalAuth(email, pw))`.
+- `await controller.connect()` — validates the connection
+  (`/rest/config`), loads the profile, loads all platforms in parallel,
+  and (unless `start_websocket=False`) starts the WebSocket reader.
+- `await controller.stop()` — stops the WS, best-effort logout, closes
+  the session if owned. Idempotent.
+- **Read accessors** (populated by the load, mutated by the
+  dispatcher): `.config`, `.profile`, `.nodes` (`dict[str, Node]`),
+  `.groups`, `.folders`, `.programs`, `.program_folders`, `.triggers`,
+  `.variables` (`dict[type, dict[id, Variable]]`),
+  `.network_resources`, `.connected`, `.websocket`, `.base_url`.
+- **Mutators:** `send_program_command`, `run_network_resource`,
+  `set_variable_value` / `set_variable_init` / `rename_variable`,
+  `rename_node` / `rename_group` / `rename_folder`.
+- **Event subscription:** `add_event_listener`,
+  `add_status_listener`, `add_node_lifecycle_listener`,
+  `add_program_status_listener` — each returns an unsubscribe callable.
+- **Refresh:** `refresh()` re-runs the full load;
+  `refresh_profile()` re-fetches `/rest/profiles` and reports a
+  `ProfileMergeResult`.
+- **Testing seam:** `feed_event_frame(raw)` pushes a raw WS frame
+  through the dispatcher without a live socket.
 
-**Connection Class (`connection.py`)**: HTTP/HTTPS communication
+See [`docs/connection-flow.md`](docs/connection-flow.md) for the full
+connect sequence, endpoint list, retry logic, and event routing.
 
-- Manages aiohttp sessions with connection pooling
-- Handles authentication, retries, and backoff
-- Enforces connection limits:
-  - ISY994: 2 HTTPS / 5 HTTP concurrent
-  - IoX: 20 HTTPS / 50 HTTP concurrent
-- `ISYConnectionInfo`: Dataclass holding URL, auth, WebSocket details
-- `test_connection()`: Validates connectivity and retrieves config
+### Auth strategies (`auth.py`)
 
-**Configuration (`configuration.py`)**: ISY configuration data
+- `PortalAuth(email, password)` — JWT bearer; the **recommended
+  default**. Logs in against the UD portal, refreshes the access token
+  as needed, posts `/api/jwt/logout` on close.
+- `LocalAuth(username, password)` — HTTP basic; a feature-degraded
+  fallback. No logout.
+- `Auth` — the shared base / protocol.
+- `AuthError` on failure.
 
-- Parses and stores ISY system configuration
-- `ConfigurationData`: uuid, name, model, firmware, platform, networking status
-- Auto-detects ISY994 vs IoX platform
+### HTTP client + load records (`client.py`)
 
-### Connection Flow & Initialization
+- `IoXClient` — the thin REST/WS HTTP layer the `Controller` drives
+  internally. Produces the typed record dataclasses below; consumers
+  rarely touch it directly.
+- Record dataclasses: `ControllerConfig`, `NodeRecord`,
+  `NodePropertyValue`, `GroupRecord`, `FolderRecord`, `ProgramRecord`,
+  `VariableRecord`, `NetworkResourceRecord`; aggregate `LoadResult`.
+- `parse_*` functions turn the REST XML into those records.
+- Wire-vocabulary enums used in mutation request bodies: `NodeType`,
+  `VariableField`.
+- Errors: `ClientError`, `HTTPError`.
 
-**For a detailed explanation of how connections are established**, see [Connection Flow Documentation](docs/connection-flow.md).
+### REST / WS paths (`paths.py`)
 
-**Quick Summary**:
+Every endpoint path is centralised here — fixed paths as string
+constants, parametric paths as `.format(...)` templates. The
+`Controller` / `IoXClient` use them internally; they're public for
+anyone building against the raw wire surface. (This replaced the old
+scattered `URL_*` constants in `constants.py`.)
 
-1. **Initialization Phase** - Create `ISY` object with `ISYConnectionInfo` (no network calls yet)
-2. **Connection Testing** - `await isy.initialize()` calls `/rest/config` to validate credentials
-3. **Parallel Platform Loading** - All platforms load concurrently via `asyncio.gather()`:
-   - Nodes: `/rest/nodes` + `/rest/status` (2 calls)
-   - Programs: `/rest/programs?subfolders=true` (1 call)
-   - Variables: `/rest/vars/definitions/{1,2}` + `/rest/vars/get/{1,2}` (4 calls)
-   - Clock: `/rest/time` (1 call)
-   - Networking: `/rest/networking/resources` (1 call, if enabled)
-   - Node Servers: `/rest/profiles/ns` (1 call, if enabled)
-4. **Event Stream Setup** - WebSocket (`ws://.../rest/subscribe`) or TCP for real-time updates
+### Runtime wrappers (`runtime/`)
 
-**Total Initial Load**: 1 config call + 8-11 parallel platform calls (11-12 total)
+Thin objects that wrap a record + the profile + the client. Each
+shares its underlying record with the controller's loaded state, so a
+dispatcher update is visible through the wrapper immediately.
 
-**Performance**: Connection limits enforced via semaphore:
+- **`Node` (`runtime/node.py`)** — the primary device handle.
+  - Structural: `address`, `name`, `nodedef_id`, `family_id`,
+    `instance_id`, `type`, `parent_address`, `primary_address`,
+    `enabled`, `flag` / `has_flag(...)`, `nodedef`.
+  - State: `properties` (`dict[str, NodePropertyValue]`), `status`
+    (shortcut to the primary `ST` value). Values are **UOM-normalised
+    to their nodedef editor's canonical unit** on read — e.g. an Insteon
+    dimmer reports `OL`/`ST` as a UOM-100 0-255 byte, but the `I_OL`
+    editor (and the `/cmd` write surface) speak UOM-51 0-100%, so
+    `properties["OL"].value` is the percentage. Conversions live in
+    `runtime/_normalize.py` (`_CONVERSIONS` is intentionally tiny —
+    only genuinely mismatched pairs); a reported UOM that already
+    matches one of the editor's ranges passes through untouched. The
+    underlying `NodeRecord.properties` keeps the raw reported form.
+  - Introspection (all derived from the nodedef / type triple /
+    properties — **no hardcoded type-prefix tables**): `protocol`,
+    `is_thermostat`, `is_lock`, `is_fan`, `is_dimmable`,
+    `is_battery_node`. (No `parent_node` helper — do
+    `controller.nodes.get(node.parent_address)`; keeps `Node`
+    decoupled from `Controller`.)
+  - `send_command(cmd_id, *params)` — looks the command up in the
+    node's `NodeDef.cmds.accepts`, validates each param against the
+    editor it references via the bidirectional codec in
+    `schema/editor.py` (enum names → raw ints; subset / range enforced;
+    out-of-range raises **before** any HTTP), then issues
+    `GET /rest/nodes/{addr}/cmd/{cmd}[/{value}/{uom}...]`. Each param is
+    sent as `/{value}/{uom}` — the UOM is the one the param's editor
+    declares (its first range) — so the controller does any device-side
+    scaling itself (this is the convention the eisy web UI uses, e.g.
+    `/cmd/DON/75/51`, `/cmd/OL/75/51`, `/cmd/BL/10/25`). Params whose
+    editor carries no real unit (UOM `"0"` / unset) are sent bare.
+  - Ergonomic wrappers — one-liners over `send_command` (validation
+    still goes through the codec): `set_climate_mode`,
+    `set_climate_setpoint_heat` / `_cool`, `set_fan_mode`,
+    `secure_lock` / `secure_unlock`, `set_on_level`, `set_ramp_rate`,
+    `set_backlight`, `start_manual_dimming` / `stop_manual_dimming`,
+    `rename`. **Not** included: composite climate setpoint with
+    min-gap (HA policy — stays in the consumer) and runtime
+    "not a thermostat" guards (let `EditorCodecError` raise).
+  - `NodeCommandError` on a command the nodedef doesn't accept.
+- **`Group` (`runtime/group.py`)** — an IoX scene.
+  `member_addresses`, `controller_addresses`; `group_all_on` /
+  `group_any_on` computed on access from the controller's node
+  registry — **stateless members (Insteon battery devices: motion
+  sensors, RemoteLincs, binary-alarm nodedefs — `nodedef_id` in
+  `INSTEON_STATELESS_NODEDEFID`) are skipped** so they don't drag the
+  aggregate to False; a member missing from the registry makes
+  `group_all_on` False (defensive). `rename`.
+- **`Folder` / `ProgramFolder`** — organisational nodes.
+- **`Program` (`runtime/program.py`)** + `ProgramCommand` —
+  status + `run_then` / `run_else` / `enable` / `disable` etc. via the
+  `ProgramCommand` enum.
+- **`Variable` (`runtime/variable.py`)** — `value`, `init`,
+  `precision`; `set_value` / `set_init` / `rename`.
+- **`NetworkResource` (`runtime/network_resource.py`)** — `run()`.
 
-- ISY994: 2 HTTPS / 5 HTTP concurrent
-- IoX: 20 HTTPS / 50 HTTP concurrent (auto-upgraded)
+### Event pipeline (`runtime/events.py`, `runtime/ws.py`)
 
-See [Connection Flow Documentation](docs/connection-flow.md) for complete endpoint sequence, retry logic, event routing, and connection state machine details.
+IoX 6 sends `<Event>` frames over a WebSocket with `<control>` (a
+property id like `ST`, or an underscore-prefixed system code like
+`_7`), `<action>`, `<node>`, and `<eventInfo>`.
 
-### Platform Modules
+- `WebSocketEventStream` — the auto-reconnecting reader; exposes
+  health (`status` / `connected` / `last_event_at`).
+- `EventDispatcher` — parses frames, updates the matching record, and
+  fans out to listeners. `Event` is the parsed frame; lifecycle and
+  program-status events have their own types (`NodeLifecycleEvent`,
+  `ProgramStatusEvent`).
+- **System-event vocabulary** (the _ISY994 Developer Cookbook_ §8.5
+  plus IoX-6 additions) as `StrEnum`s, each with a `.label(value)`
+  classmethod: `SystemEventControl`, `TriggerAction`,
+  `ProgressAction`, `SystemConfigAction`, `InternetAccessStatus`,
+  `SecuritySystemAction`, `DeviceLinkerAction`, `NodeLifecycleAction`,
+  `DeviceWriteAction` (`_7A`/`_7M` device-write sub-codes that ride
+  through on `_7` progress frames). `describe_system_event(control,
+action)` renders a frame's pair into a friendly
+  `"control_label = action_label"` string.
+  - `NODE_LIFECYCLE_EVENT_INFO_TAGS` /
+    `DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS` map each verb/sub-code to
+    the `<eventInfo>` child element names it carries — reference
+    metadata; pyisyox itself only parses `<node>` on `NODE_ADDED`.
+- Listener type aliases (exported for typing): `EventListener`,
+  `NodeLifecycleListener`, `ProgramStatusListener`, `StatusListener`.
 
-Each platform follows a similar pattern with collection classes and entity classes:
+### Schema (`schema/`)
 
-**Nodes (`nodes/`)**: Physical and virtual devices
+The decoded `/rest/profiles` blob — nodedefs, editors, commands,
+linkdefs, UOMs.
 
-- `Nodes`: Collection class, manages all nodes and groups
-- `Node`: Individual device (Insteon, Z-Wave, etc.)
-- `Group`: ISY scene (collection of nodes)
-- `NodeBase`: Base class with common node functionality
-- `Folder`: Organizational folder structure
-- Key properties: `status`, `uom`, `precision`, `formatted`, `parent_node`
-- Node families: Insteon, Z-Wave, Zigbee, Node Server, UPB, Brultech, NCD, etc.
+- `Profile` (`schema/profile.py`) — the top-level container, with
+  `find_nodedef(...)` / `find_editor(...)`. `ProfileMergeResult`
+  reports what changed on a refresh.
+- `schema/nodedef.py`, `schema/editor.py`, `schema/cmd.py`,
+  `schema/linkdef.py`, `schema/uom.py` — the typed dataclasses.
+- `schema/editor.py` carries the **bidirectional value codec**:
+  `Editor.encode` validates/encodes a display value to the raw wire
+  int (handling `prec`-scaled editors symmetrically with the read-side
+  halving), `Editor.decode` goes the other way. `Node.send_command`
+  leans on this; out-of-range raises `EditorCodecError`.
 
-**Programs (`programs/`)**: ISY programs (conditions/actions)
+### Classifier (`classifier.py`)
 
-- `Programs`: Collection class
-- `Program`: Individual program with status and actions
-- `ProgramDetail`: Metadata (last_edited, last_run, enabled)
-- `Folder`: Program folder structure
+`classify(nodedef, ...)` → `ClassificationResult` — a nodedef →
+HA-platform fallback classification (`ControllablePlatform` /
+`ReadingPlatform` / `Reading`). Used when a node's nodedef doesn't map
+to a more specific handler.
 
-**Variables (`variables/`)**: ISY variables (integer/state)
+### `constants.py`
 
-- `Variables`: Collection class with separate integer/state containers
-- `Variable`: Individual variable
-- Properties: `status` (current value), `initial`, `precision`, `variable_id`
+After the string-constants audit it carries only **live** values plus
+**wire-documentation** constants (kept even when currently unused, as
+in-code reference for consumers): `CMD_*` command ids, `PROP_*`
+property ids, `X10_COMMANDS`, the `UOM_*` tables + `UOM_TO_STATES`,
+climate/thermostat tables (`UOM_CLIMATE_MODES`,
+`UOM_CLIMATE_MODES_ZWAVE`, `CLIMATE_SETPOINT_MIN_GAP`),
+`INSTEON_RAMP_RATES`, `INSTEON_STATELESS_NODEDEFID`,
+the device-address constants, and the various enums. (The
+`BACKLIGHT_SUPPORT` / `BACKLIGHT_INDEX` tables were removed — derive
+backlight support, scale, and option labels from the `BL`
+accept-command's editor.) Endpoint paths now live in `paths.py`, not
+here.
 
-**Node Servers (`node_servers.py`)**: Polyglot node server support
+### Other modules
 
-- `NodeServers`: Manages node server definitions
-- `NodeDef`: Device definitions from node servers
-- Used for custom device types beyond standard Insteon/Z-Wave
+- `exceptions.py` — `ISYConnectionError`, `ISYInvalidAuthError`,
+  `ISYMaxConnections`, `ISYResponseParseError`, `ISYStreamDataError`,
+  `ISYStreamDisconnected`, plus `ControllerNotConnectedError`
+  (re-exported from `controller.py`).
+- `helpers/session.py` — `build_sslcontext`, `TLSVersionError`
+  (eisy ships a self-signed cert; verification is off by default).
+- `logging.py` — `enable_logging(level)` and the `LOG_VERBOSE` level.
+- `redactor.py` — scrubs secrets from log output.
+- `util/` — small internal helpers.
 
-**Networking (`networking.py`)**: Network resources
-
-- `NetworkResources`: Collection of network commands
-- `NetworkCommand`: Individual network resource (HTTP GET/POST, etc.)
-
-**Clock (`clock.py`)**: ISY system clock/time
-
-- `Clock`: ISY time information
-- Properties: `datetime`, `tz_offset`, `is_dst`, `sunrise`, `sunset`
-
-### Event System
-
-**Event Architecture**:
-
-- All entities inherit from `Entity` class with event emission
-- Event emitters use `EventEmitter` (pub/sub pattern)
-- Event listeners use `EventListener` (subscription handle)
-- Events flow: ISY → Event Stream → Router → Entity Updates
-
-**Event Streams** (`events/`):
-
-- `WebSocketClient` (`websocket.py`): Preferred for IoX, auto-reconnect
-- `EventStream` (`tcpsocket.py`): Legacy TCP stream for ISY994
-- `EventReader` (`eventreader.py`): Parses event XML
-- `EventRouter` (`router.py`): Routes events to appropriate handlers using match/case
-
-**Event Types** (`helpers/events.py`):
-
-- `NodeChangedEvent`: Node status/property changes
-- `SystemStatus`: ISY system status (BUSY, IDLE, SAFE_MODE, etc.)
-- `EventStreamStatus`: Stream connection status
-
-### Helper Modules (`helpers/`)
-
-**Entity System** (`entity.py`, `entity_platform.py`):
-
-- `Entity`: Base class for all ISY objects (nodes, programs, variables)
-- `EntityStatus`: Status information wrapper
-- Generic type system using TypeVars for status types
-
-**Models** (`models.py`):
-
-- `NodeProperty`: Auxiliary node properties (on_level, ramp_rate, etc.)
-- `ZWaveProperties`: Z-Wave specific properties and parameters
-- `ZWaveParameter`: Individual Z-Wave parameter
-
-**Session Management** (`session.py`):
-
-- `get_new_client_session()`: Creates aiohttp session with proper config
-- `get_sslcontext()`: SSL/TLS context for secure connections
-- Handles custom TLS versions if specified
-
-**XML Parsing** (`xml.py`):
-
-- `parse_xml()`: Main XML parser using xmltodict
-- Helper functions: `value_from_xml()`, `attr_from_xml()`, `attr_from_element()`
-
-**Events** (`events.py`):
-
-- `EventEmitter`: Publisher class for event notifications
-- `EventListener`: Subscriber handle for event subscriptions
-- Thread-safe event dispatching
-
-### Constants (`constants.py`)
-
-**Critical constants** (extensive file, 900+ lines):
-
-- **URLs**: REST API endpoints (`URL_NODES`, `URL_PROGRAMS`, `URL_VARIABLES`, etc.)
-- **Commands**: Device commands (`CMD_ON`, `CMD_OFF`, `CMD_DIM`, etc.)
-- **Properties**: Node properties (`PROP_STATUS`, `PROP_ON_LEVEL`, `PROP_RAMP_RATE`, etc.)
-- **UOM**: Units of Measure mappings (temperature, percentage, power, etc.)
-- **State Mappings**: `UOM_TO_STATES` for translating numeric values to states
-- **Device Types**: Insteon types, Z-Wave categories, node families
-- **Protocols**: Insteon, Z-Wave, Zigbee, Node Server, etc.
-- **System Status**: BUSY, IDLE, SAFE_MODE, WRITE_TO_EEPROM, etc.
-
-## Usage Patterns
-
-### Basic Connection
+## Usage
 
 ```python
-from pyisyox import ISY
-from pyisyox.connection import ISYConnectionInfo
+from pyisyox import Controller, PortalAuth
 
-connection_info = ISYConnectionInfo(
-    "http://polisy.local:8080",
-    "admin",
-    "password"
-)
+async def main():
+    controller = Controller("https://eisy.local:443", PortalAuth("me@example.com", "pw"))
+    await controller.connect()
+    try:
+        # Control a device — editor-validated:
+        await controller.nodes["3D 7D 87 1"].send_command("DON", 75)
+        await controller.nodes["3D 7D 87 1"].set_climate_setpoint_heat(68)
 
-isy = ISY(connection_info, use_websocket=True)
-
-await isy.initialize(
-    nodes=True,
-    programs=True,
-    variables=True,
-    networking=False,
-    node_servers=False
-)
+        # Subscribe to all status changes:
+        unsub = controller.add_status_listener(lambda evt: print(evt))
+        ...
+        unsub()
+    finally:
+        await controller.stop()
 ```
 
-### Event Subscription
+## Common Workflows
 
-```python
-def node_changed_handler(event, key):
-    print(f"Node {event.address} changed: {event.action}")
+### Adding a runtime command wrapper
 
-# Subscribe to node events
-listener = isy.nodes.status_events.subscribe(
-    node_changed_handler,
-    key="my_listener"
-)
+1. Add the named command id to `constants.py` (`CMD_*` / `PROP_*`) if
+   it isn't already there.
+2. Add a one-liner method on `runtime/node.py` (or `group.py`) that
+   delegates to `send_command` — no validation logic; the editor codec
+   is the source of truth.
+3. Add a one-call test in `tests/test_runtime/` asserting the URL it
+   produces.
 
-# Unsubscribe later
-listener.unsubscribe()
-```
+### Adding / changing event handling
 
-### Controlling Devices
+1. If it's a new system `<control>` / `<action>` code, add it to the
+   relevant `StrEnum` in `runtime/events.py` (and its `*_EVENT_INFO_TAGS`
+   map if it carries `<eventInfo>`). Codes seen on hardware but not in
+   the cookbook also get logged to `~/src/pyisyox-undocumented-event-codes.md`
+   for UDI.
+2. Add routing/parsing in `EventDispatcher` if the frame needs to
+   mutate a record.
+3. Cover it in `tests/test_runtime/test_events.py` /
+   `test_lifecycle.py` — `feed_event_frame` is the seam.
 
-```python
-# Turn on a node
-await isy.nodes["1A 2B 3C 1"].turn_on()
+### Adding a node-introspection helper
 
-# Set dimmer level
-await isy.nodes["1A 2B 3C 1"].turn_on(val=128)  # 50%
+Derive it from data already on the `Node` (nodedef `cmds.accepts`, the
+type triple, `properties`) — **not** a hardcoded type-prefix list.
+That keeps it protocol-agnostic and PG3-plugin-friendly. Add fixtures
 
-# Run a program
-await isy.programs["My Program"].run_then()
+- assertions in `tests/test_runtime/test_node_introspection.py`.
 
-# Set a variable
-await isy.variables[2][5].set_value(100)  # Type 2, ID 5
-```
+## Deferred / out of scope
 
-## Breaking Changes (v3.2.0+)
-
-**Important for upgrading**:
-
-- Minimum Python 3.10 (was 3.9)
-- Minimum ISY firmware 4.3
-- `_id` → `_address` (use `address` property)
-- Properties are read-only: use `update_status()`, not direct assignment
-- Module reorganization: helpers moved to subfolders
-- Renamed properties: `prec` → `precision`, `type` → `type_`, `init` → `initial`, `vid` → `variable_id`
-
-## Code Style
-
-Follows standard Python conventions with Home Assistant influence:
-
-- **ruff-format** for formatting (line length 110, target Python 3.10+)
-- **ruff** for linting and import sorting (replaces separate black, isort)
-- **Pylint** with Home Assistant config (complexity checks mostly disabled)
-- **Type hints** enforced with mypy
-- **Docstrings** recommended (Google style)
-
-## Documentation
-
-- **ReadTheDocs**: https://pyisyox.readthedocs.io (partial, being updated)
-- **Docs source**: `docs/` directory with Sphinx
-- **Build docs**: `cd docs && make html`
-- **API documentation**: Auto-generated from docstrings
-
-## Testing & Quality Assurance
-
-### Test Configuration
-
-- **Framework**: pytest with asyncio support
-- **Test paths**: `tests/`
-- **Async mode**: auto
-- **Logging**: Custom format with timestamps
-
-### Type Checking
-
-- **mypy** configured with strict settings
-- Type stubs included (`py.typed` marker)
-- Required for: `python-dateutil`, `PyYAML`
-
-## Integration with hacs-isy994
-
-The `../hacs-isy994` repository uses PyISYoX as its core library:
-
-- Home Assistant custom component wraps PyISYoX
-- Test beta PyISYoX features before merging to HA Core
-- Co-development supported via DevContainer mounts
-
-When developing both:
-
-1. Mount both repos in DevContainer
-2. Install PyISYoX in editable mode: `pip3 install -e /workspaces/PyISY`
-3. Test changes in hacs-isy994 immediately
-
-## Common Development Workflows
-
-### Adding a New Node Type
-
-1. Add constants to `constants.py` (type codes, UOM mappings)
-2. Update `Node` class in `nodes/node.py` if special handling needed
-3. Test with real ISY device or mock data
-4. Update hacs-isy994 filters in `const.py` for Home Assistant integration
-
-### Adding Event Handling
-
-1. Define event in `helpers/events.py` or `helpers/models.py`
-2. Add routing logic in `events/router.py` (match/case statement)
-3. Subscribe to events in consuming code via `EventEmitter`
-
-### Debugging Connection Issues
-
-- Enable verbose logging: `enable_logging(level=LOG_VERBOSE)`
-- Check connection limits (ISY994 is strict: max 2 HTTPS connections)
-- Use `python3 -m pyisyox` with `--debug` flag
-- Monitor ISY admin console for connection errors
+- **Z-Wave parameter & lock-code wire surface** — different endpoints
+  (`/rest/(zmatter/)?zwave/node/<addr>/...`), needs a live capture on
+  Z-Wave hardware. Tracked as an issue; a `Node.zwave` namespace will
+  land once the wire shape is confirmed.
+- **Composite climate setpoint (heat+cool with min-gap), retry /
+  debounce policy, HA-platform decision trees** — consumer policy, by
+  design. They stay in the consumer (e.g. the Home Assistant
+  integration), not in pyisyox.
 
 ## External Resources
 
-- **GitHub**: https://github.com/shbatm/pyisyox
-- **PyPI**: https://pypi.org/project/pyisyox/
-- **UDI Developer Resources**: https://www.universal-devices.com/developers/
-- **ISY REST API**: Documented in ISY admin console
+- **GitHub:** <https://github.com/shbatm/pyisyox>
+- **PyPI:** <https://pypi.org/project/pyisyox/>
+- **Docs:** <https://pyisyox.readthedocs.io>
+- **UDI developer resources:** <https://www.universal-devices.com/developers/>
+- **ISY994 Developer Cookbook** — §8.5 (WebSocket event structures),
+  §8.6 (REST). Pre-IoX-6 but still the authoritative wire reference.

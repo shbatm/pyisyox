@@ -1,0 +1,21 @@
+{
+  "successful": true,
+  "data": [
+    {
+      "id": "3",
+      "val": 100,
+      "init": 100,
+      "prec": 0,
+      "name": "Integer_3",
+      "ts": "2026-05-07T21:16:44.000Z"
+    },
+    {
+      "id": "10",
+      "val": 0,
+      "init": 0,
+      "prec": 0,
+      "name": "Integer_10",
+      "ts": "2026-05-07T21:16:44.000Z"
+    }
+  ]
+}

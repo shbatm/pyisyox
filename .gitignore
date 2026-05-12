@@ -56,6 +56,8 @@ coverage.xml
 
 # Django stuff:
 *.log
+# Captured WS event fixtures need to be kept under tests/fixtures/.
+!tests/fixtures/**/*.log
 
 # Sphinx documentation
 docs/_build/
@@ -72,3 +74,4 @@ example/
 
 ruff_cache/
 .claude/
+.venv/
