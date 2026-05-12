@@ -495,42 +495,89 @@ def describe_system_event(control: str, action: str) -> str:
     return f"{control_label} = {action_label}"
 
 
-def _log_event(event: Event) -> None:
-    """Emit a human-readable ``DEBUG`` line for one parsed frame.
+def _scalar(text: str) -> str | bool:
+    """Coerce an XML leaf's text for log rendering — ``"true"`` /
+    ``"false"`` become real booleans (matches how the eisy means them);
+    everything else stays a string (no int-guessing — ``"007"`` ≠ ``7``)."""
+    low = text.lower()
+    if low == "true":
+        return True
+    if low == "false":
+        return False
+    return text
 
-    Node-property updates are left to consumers — they hold the
-    entity/name mapping and log those in their own vocabulary (HA logs
-    state changes, etc.). This covers the *system* event stream that
-    otherwise disappears into the registry without a trace:
 
-    * ``_0`` heartbeat — rendered as a one-liner with the
-      next-heartbeat interval (useful for spotting a stalled stream).
-    * Everything else — ``describe_system_event`` gives the friendly
-      ``control = action`` label (``system_status = busy``,
-      ``node_lifecycle = pending_device_op``, ``system_config =
-      batch_mode_updated``, ...) and the raw ``<eventInfo>`` payload is
-      appended verbatim so the wire detail the label can't carry —
-      Z-Wave / Matter config dicts, batch-mode ``<status>``,
-      info-string text, billing totals, the subscription key, the
-      programming node — is still in the log. Unrecognised controls
-      (``_26`` & friends) fall through to ``_26 = 2 …`` with their
-      payload, same as PyISY 3.x's catch-all ``"<code> control
-      event: …"`` line.
+def _xml_to_obj(el: ET.Element) -> object:
+    """Recursively turn an ``<eventInfo>`` child element into a
+    JSON-friendly value for human-readable logging.
 
-    Callers gate on ``_LOGGER.isEnabledFor(DEBUG)`` so the
-    ``describe_system_event`` / string-join work is skipped entirely
-    when debug logging is off.
+    * leaf with text → the (scalar-coerced) text
+    * element with attributes → dict with ``@attr`` keys, ``#text`` for
+      any body text, and one key per child
+    * empty self-closing element (``<on/>``, ``<nr/>``) → ``True`` — a
+      presence flag
     """
-    if not event.is_system:
-        return
+    obj: dict[str, object] = {f"@{k}": v for k, v in el.attrib.items()}
+    for child in el:
+        obj[child.tag] = _xml_to_obj(child)
+    text = (el.text or "").strip()
+    if text:
+        if obj:
+            obj["#text"] = _scalar(text)
+        else:
+            return _scalar(text)
+    if obj:
+        return obj
+    return True
+
+
+def _compact_event_info(event_info: str) -> str | None:
+    """Render an ``<eventInfo>`` payload as a compact, readable blob.
+
+    Well-formed XML fragments (variable / program / lifecycle / Matter /
+    Z-Wave payloads) become a JSON object — ``{"loglevel": "0",
+    "connected": true}`` instead of ``<loglevel>0</loglevel>
+    <connected>true</connected>``. Non-XML payloads (``_7`` controller
+    logs carry CDATA, the subscription key is a bare string) fall back
+    to whitespace-collapsed text. ``None`` when there's nothing to show.
+    """
+    if not event_info:
+        return None
+    try:
+        root = ET.fromstring(f"<eventInfo>{event_info}</eventInfo>")  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError:
+        collapsed = " ".join(event_info.split())
+        return collapsed or None
+    obj = {child.tag: _xml_to_obj(child) for child in root}
+    if obj:
+        return json.dumps(obj, default=str)
+    text = (root.text or "").strip()
+    return " ".join(text.split()) or None
+
+
+def _log_system_event(event: Event) -> None:
+    """``DEBUG`` line for a *system* event the dispatcher doesn't route
+    to its own handler — heartbeats, ``system_status`` / config toggles,
+    the ``_1`` trigger sub-events we don't act on (key / info-string /
+    get-status / schedule), and the protocol-driver / billing / Matter /
+    Z-Wave / portal frames.
+
+    ``describe_system_event`` supplies the friendly ``control = action``
+    label; :func:`_compact_event_info` adds the payload as a JSON blob
+    when there is one. Routed frames (lifecycle, program-status,
+    variable-change) get their own purpose-built line from the handler
+    that decodes them — see :meth:`EventDispatcher._emit_lifecycle` etc.
+    Callers gate this on ``_LOGGER.isEnabledFor(DEBUG)``.
+    """
     if event.control == SystemEventControl.HEARTBEAT:
         _LOGGER.debug("ISY heartbeat (next within %ss)", event.action or "?")
         return
     parts = [describe_system_event(event.control, event.action)]
     if event.node_address:
         parts.append(f"node={event.node_address}")
-    if event.event_info:
-        parts.append(event.event_info)
+    extra = _compact_event_info(event.event_info)
+    if extra:
+        parts.append(extra)
     _LOGGER.debug("System event: %s", " ".join(parts))
 
 
@@ -989,21 +1036,31 @@ class EventDispatcher:
         event = parse_event_frame(raw_frame)
         if event is None:
             return None
-        if _LOGGER.isEnabledFor(logging.DEBUG):
-            _log_event(event)
+        # Routed frames (node property / lifecycle / program-status /
+        # variable-change) get a purpose-built DEBUG line from the
+        # handler that decodes them; anything else — heartbeats,
+        # system-status, the trigger sub-events we don't act on, the
+        # protocol-driver / billing / Matter / Z-Wave frames — gets the
+        # generic `_log_system_event` line. Property updates aren't
+        # logged here: consumers hold the entity/name mapping and log
+        # state changes in their own vocabulary.
         if event.is_node_property:
             self._apply_property_update(event)
         # Lifecycle frames go through their own listener channel in
         # addition to the general event channel — the typed
         # NodeLifecycleEvent is more ergonomic for consumers driving
         # reload UX than re-parsing the raw frame.
-        if event.control == SystemEventControl.NODE_LIFECYCLE:
+        elif event.control == SystemEventControl.NODE_LIFECYCLE:
             self._emit_lifecycle(event, raw_frame)
-        elif event.control == SystemEventControl.TRIGGER:
-            if event.action == TriggerAction.PROGRAM_STATUS:
-                self._apply_program_status(event)
-            elif event.action in (TriggerAction.VARIABLE_VALUE, TriggerAction.VARIABLE_INIT):
-                self._apply_variable_change(event)
+        elif event.control == SystemEventControl.TRIGGER and event.action == TriggerAction.PROGRAM_STATUS:
+            self._apply_program_status(event)
+        elif event.control == SystemEventControl.TRIGGER and event.action in (
+            TriggerAction.VARIABLE_VALUE,
+            TriggerAction.VARIABLE_INIT,
+        ):
+            self._apply_variable_change(event)
+        elif _LOGGER.isEnabledFor(logging.DEBUG):
+            _log_system_event(event)
         for listener in tuple(self._listeners):
             try:
                 listener(event)
@@ -1013,6 +1070,14 @@ class EventDispatcher:
 
     def _emit_lifecycle(self, event: Event, raw_frame: str) -> None:
         """Build a :class:`NodeLifecycleEvent` and fan to lifecycle listeners."""
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            extra = _compact_event_info(event.event_info)
+            _LOGGER.debug(
+                "Node lifecycle: %s on %s%s",
+                NodeLifecycleAction.label(event.action),
+                event.node_address or "(controller)",
+                f" {extra}" if extra else "",
+            )
         if not self._lifecycle_listeners:
             return
         try:
@@ -1117,12 +1182,16 @@ class EventDispatcher:
 
         if event.action == TriggerAction.VARIABLE_VALUE:
             record.value = new_value
+            field = "value"
         else:  # TriggerAction.VARIABLE_INIT
             record.init = new_value
+            field = "init"
 
         ts_text = (var_elem.findtext("ts") or "").strip()
         if ts_text:
             record.ts = ts_text
+
+        _LOGGER.debug("Variable %s.%s %s updated to %s", type_id, var_id, field, new_value)
 
     def _apply_program_status(self, event: Event) -> None:
         """Decode a program-status frame and update the matching record.
@@ -1185,6 +1254,13 @@ class EventDispatcher:
             # Stored as the wire string so consumers can compare or
             # parse; the typed ProgramStatusEvent carries the int form.
             record.running = str(running_int)
+
+        _LOGGER.debug(
+            "Program %s status -> %s%s",
+            record.address,
+            new_status,
+            f" (running={running_int})" if running_int is not None else "",
+        )
 
         if not self._program_status_listeners:
             return
