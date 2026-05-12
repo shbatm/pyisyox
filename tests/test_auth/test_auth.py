@@ -61,6 +61,7 @@ class FakeSession:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.headers: list[dict[str, str]] = []
         self._responses: list[_FakeResponse] = []
 
     def queue(self, status: int, body: dict[str, Any] | None = None) -> None:
@@ -73,11 +74,8 @@ class FakeSession:
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
     ) -> _FakeResponse:
-        # Record url + body; headers ignored for assertion simplicity but
-        # accepted so PortalAuth.close (which sets Authorization) doesn't
-        # raise TypeError and get swallowed by its broad except.
-        del headers
         self.calls.append((url, json or {}))
+        self.headers.append(dict(headers or {}))
         if not self._responses:
             raise RuntimeError(f"no scripted response for POST {url}")
         return self._responses.pop(0)
@@ -342,6 +340,51 @@ async def test_portal_auth_close_swallows_logout_errors() -> None:
     await auth.close(sess, "https://eisy")  # must not raise
 
     assert auth.tokens is None
+
+
+@pytest.mark.asyncio
+async def test_portal_auth_close_refreshes_stale_token_before_logout() -> None:
+    """A WebSocket-only consumer's access token is usually expired by
+    shutdown (proactive refresh only fires on REST calls). close() must
+    refresh first so the logout call carries a live bearer — posting an
+    expired one is what produced the intermittent 404/500 at shutdown."""
+    auth = PortalAuth("u@x", "p")
+    sess = FakeSession()
+    # Login: access token expires in 10 s (inside the 60 s leeway).
+    sess.queue(200, _login_body(time.time() + 10, time.time() + 30 * 86400))
+    await auth.authenticate(sess, "https://eisy")
+    stale_access = auth.tokens.access_token if auth.tokens else None
+
+    # Refresh then logout.
+    sess.queue(200, _login_body(time.time() + 3600, time.time() + 30 * 86400))
+    sess.queue(200, {"successful": True, "data": None})
+    await auth.close(sess, "https://eisy")
+
+    assert auth.tokens is None
+    paths = [url.rsplit("/", 1)[-1] for url, _ in sess.calls]
+    assert paths == ["login", "refresh", "logout"]
+    # The logout call used the post-refresh bearer, not the stale one.
+    logout_url, _ = sess.calls[-1]
+    assert logout_url.endswith("/api/jwt/logout")
+    assert sess.headers[-1]["Authorization"] != f"Bearer {stale_access}"
+
+
+@pytest.mark.asyncio
+async def test_portal_auth_close_skips_logout_when_refresh_fails() -> None:
+    """If the pre-logout refresh is rejected the refresh token is already
+    dead (or the controller is unreachable) — nothing to invalidate, so
+    skip the logout call; still clear local state."""
+    auth = PortalAuth("u@x", "p")
+    sess = FakeSession()
+    sess.queue(200, _login_body(time.time() + 10, time.time() + 30 * 86400))
+    await auth.authenticate(sess, "https://eisy")
+
+    sess.queue(401)  # refresh rejected
+    await auth.close(sess, "https://eisy")  # must not raise
+
+    assert auth.tokens is None
+    paths = [url.rsplit("/", 1)[-1] for url, _ in sess.calls]
+    assert paths == ["login", "refresh"]  # no logout round-trip
 
 
 @pytest.mark.asyncio
