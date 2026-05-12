@@ -82,9 +82,7 @@ def _make_node(record: NodeRecord, profile: Profile, session: FakeSession | None
         ("", Protocol.UNKNOWN),  # no family id
     ],
 )
-def test_protocol_classifies_by_family_id(
-    real_profile: Profile, family_id: str, expected: Protocol
-) -> None:
+def test_protocol_classifies_by_family_id(real_profile: Profile, family_id: str, expected: Protocol) -> None:
     node = _make_node(_make_record(family_id=family_id), real_profile)
     result = node.protocol
     assert result is expected
@@ -203,9 +201,7 @@ def test_primary_address_resolves_from_pnode(real_profile: Profile) -> None:
     device-primary address for multi-button physicals (KeypadLinc,
     RemoteLinc, FanLinc). Returns the primary only when this node is a
     sub-button (``pnode != address``)."""
-    sub_button = _make_node(
-        _make_record(address="AA BB CC 2", pnode="AA BB CC 1"), real_profile
-    )
+    sub_button = _make_node(_make_record(address="AA BB CC 2", pnode="AA BB CC 1"), real_profile)
     assert sub_button.primary_address == "AA BB CC 1"
 
 
@@ -213,9 +209,7 @@ def test_primary_address_none_for_device_root(real_profile: Profile) -> None:
     """The device primary has ``pnode == address`` — surface as ``None`` so
     consumers can use ``primary_address is not None`` as a sub-button
     indicator. ``pnode`` absent is treated the same way."""
-    root_with_self_pnode = _make_node(
-        _make_record(address="AA BB CC 1", pnode="AA BB CC 1"), real_profile
-    )
+    root_with_self_pnode = _make_node(_make_record(address="AA BB CC 1", pnode="AA BB CC 1"), real_profile)
     assert root_with_self_pnode.primary_address is None
 
     root_without_pnode = _make_node(_make_record(pnode=None), real_profile)
@@ -300,25 +294,25 @@ def _pin_get(session: FakeSession, path: str) -> None:
 @pytest.mark.asyncio
 async def test_set_climate_mode_routes_to_climd_with_enum(real_profile: Profile) -> None:
     session = FakeSession(BASE)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLIMD/1")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLIMD/1/98")
     node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile, session)
     await node.set_climate_mode("Heat")
-    assert any("/cmd/CLIMD/1" in path for _, path, _ in session.calls)
+    assert any("/cmd/CLIMD/1/98" in path for _, path, _ in session.calls)
 
 
 @pytest.mark.asyncio
 async def test_set_climate_mode_accepts_int(real_profile: Profile) -> None:
     session = FakeSession(BASE)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLIMD/2")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLIMD/2/98")
     node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile, session)
     await node.set_climate_mode(2)
-    assert any("/cmd/CLIMD/2" in path for _, path, _ in session.calls)
+    assert any("/cmd/CLIMD/2/98" in path for _, path, _ in session.calls)
 
 
 @pytest.mark.asyncio
 async def test_set_fan_mode_routes_to_clifs(real_profile: Profile) -> None:
     session = FakeSession(BASE)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLIFS/8")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLIFS/8/99")
     node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile, session)
     await node.set_fan_mode("Auto")
     assert any("/cmd/CLIFS/" in path for _, path, _ in session.calls)
@@ -384,7 +378,7 @@ def test_is_dimmable_false_when_st_property_missing_from_nodedef(real_profile: P
 async def test_set_climate_setpoint_heat_routes_to_clisph(real_profile: Profile) -> None:
     session = FakeSession(BASE)
     node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile, session)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLISPH/70")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLISPH/70/14")
     await node.set_climate_setpoint_heat(70)
     assert any("/cmd/CLISPH/" in path for _, path, _ in session.calls)
 
@@ -393,7 +387,7 @@ async def test_set_climate_setpoint_heat_routes_to_clisph(real_profile: Profile)
 async def test_set_climate_setpoint_cool_routes_to_clispc(real_profile: Profile) -> None:
     session = FakeSession(BASE)
     node = _make_node(_make_record(nodedef_id="Thermostat"), real_profile, session)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLISPC/70")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/CLISPC/70/14")
     await node.set_climate_setpoint_cool(70)
     assert any("/cmd/CLISPC/" in path for _, path, _ in session.calls)
 
@@ -402,7 +396,7 @@ async def test_set_climate_setpoint_cool_routes_to_clispc(real_profile: Profile)
 async def test_set_on_level_routes_to_ol(real_profile: Profile) -> None:
     session = FakeSession(BASE)
     node = _make_node(_make_record(nodedef_id="DimmerLampSwitch"), real_profile, session)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/OL/50")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/OL/50/51")
     await node.set_on_level(50)
     assert any("/cmd/OL/" in path for _, path, _ in session.calls)
 
@@ -411,7 +405,7 @@ async def test_set_on_level_routes_to_ol(real_profile: Profile) -> None:
 async def test_set_ramp_rate_routes_to_rr(real_profile: Profile) -> None:
     session = FakeSession(BASE)
     node = _make_node(_make_record(nodedef_id="DimmerLampSwitch"), real_profile, session)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/RR/5")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/RR/5/25")
     await node.set_ramp_rate(5)
     assert any("/cmd/RR/" in path for _, path, _ in session.calls)
 
@@ -420,7 +414,7 @@ async def test_set_ramp_rate_routes_to_rr(real_profile: Profile) -> None:
 async def test_set_backlight_routes_to_bl(real_profile: Profile) -> None:
     session = FakeSession(BASE)
     node = _make_node(_make_record(nodedef_id="DimmerLampSwitch"), real_profile, session)
-    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/BL/50")
+    _pin_get(session, "/rest/nodes/AA%20BB%20CC%201/cmd/BL/50/51")
     await node.set_backlight(50)
     assert any("/cmd/BL/" in path for _, path, _ in session.calls)
 

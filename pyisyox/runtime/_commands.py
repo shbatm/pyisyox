@@ -43,7 +43,7 @@ def encode_command_params(
     command_id: str,
     params: Sequence[float | str],
     target_label: str,
-) -> tuple[int, ...]:
+) -> tuple[tuple[int, str], ...]:
     """Look up ``command_id`` on ``nodedef`` and encode each parameter.
 
     Args:
@@ -62,8 +62,11 @@ def encode_command_params(
             tell which surface raised.
 
     Returns:
-        A tuple of encoded integer parameters, ready to splat into
-        ``IoXClient.send_node_command``.
+        A tuple of ``(raw_value, uom)`` pairs — one per supplied
+        parameter — where ``uom`` is the unit the parameter's editor
+        declares (its first range's UOM). ``uom`` is ``""`` for editors
+        that carry no real unit. Callers send each parameter as
+        ``/{raw_value}/{uom}`` (dropping the UOM segment when empty).
 
     Raises:
         NodeCommandError: When the nodedef is missing, the command id
@@ -97,12 +100,12 @@ def _encode(
     profile: Profile,
     family_id: str,
     instance_id: str,
-) -> tuple[int, ...]:
+) -> tuple[tuple[int, str], ...]:
     if len(params) > len(command.parameters):
         raise NodeCommandError(
             f"command {command.id!r} accepts {len(command.parameters)} parameter(s); got {len(params)}"
         )
-    encoded: list[int] = []
+    encoded: list[tuple[int, str]] = []
     for idx, param_def in enumerate(command.parameters):
         if idx >= len(params):
             if not param_def.optional:
@@ -118,9 +121,14 @@ def _encode(
                 f"not found in family {family_id!r} instance {instance_id!r}"
             )
         try:
-            encoded.append(editor.encode(params[idx]))
+            raw_value = editor.encode(params[idx])
         except EditorCodecError as exc:
             raise NodeCommandError(
                 f"command {command.id!r} parameter {idx} (editor {param_def.editor_id!r}): {exc}"
             ) from exc
+        # First range's UOM is the input/display convention the /cmd
+        # surface expects appended (e.g. I_OL → "51"). range_for() with
+        # no hint already picks the first range, matching encode() above.
+        uom = editor.range_for().uom if editor.ranges else ""
+        encoded.append((raw_value, uom))
     return tuple(encoded)

@@ -163,7 +163,15 @@ dispatcher update is visible through the wrapper immediately.
     `instance_id`, `type`, `parent_address`, `primary_address`,
     `enabled`, `flag` / `has_flag(...)`, `nodedef`.
   - State: `properties` (`dict[str, NodePropertyValue]`), `status`
-    (shortcut to the primary `ST` value).
+    (shortcut to the primary `ST` value). Values are **UOM-normalised
+    to their nodedef editor's canonical unit** on read — e.g. an Insteon
+    dimmer reports `OL`/`ST` as a UOM-100 0-255 byte, but the `I_OL`
+    editor (and the `/cmd` write surface) speak UOM-51 0-100%, so
+    `properties["OL"].value` is the percentage. Conversions live in
+    `runtime/_normalize.py` (`_CONVERSIONS` is intentionally tiny —
+    only genuinely mismatched pairs); a reported UOM that already
+    matches one of the editor's ranges passes through untouched. The
+    underlying `NodeRecord.properties` keeps the raw reported form.
   - Introspection (all derived from the nodedef / type triple /
     properties — **no hardcoded type-prefix tables**): `protocol`,
     `is_thermostat`, `is_lock`, `is_fan`, `is_dimmable`,
@@ -174,7 +182,13 @@ dispatcher update is visible through the wrapper immediately.
     node's `NodeDef.cmds.accepts`, validates each param against the
     editor it references via the bidirectional codec in
     `schema/editor.py` (enum names → raw ints; subset / range enforced;
-    out-of-range raises **before** any HTTP), then POSTs.
+    out-of-range raises **before** any HTTP), then issues
+    `GET /rest/nodes/{addr}/cmd/{cmd}[/{value}/{uom}...]`. Each param is
+    sent as `/{value}/{uom}` — the UOM is the one the param's editor
+    declares (its first range) — so the controller does any device-side
+    scaling itself (this is the convention the eisy web UI uses, e.g.
+    `/cmd/DON/75/51`, `/cmd/OL/75/51`, `/cmd/BL/10/25`). Params whose
+    editor carries no real unit (UOM `"0"` / unset) are sent bare.
   - Ergonomic wrappers — one-liners over `send_command` (validation
     still goes through the codec): `set_climate_mode`,
     `set_climate_setpoint_heat` / `_cool`, `set_fan_mode`,

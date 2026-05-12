@@ -289,10 +289,13 @@ async def test_feed_event_frame_updates_node_property() -> None:
     )
     assert event is not None
 
-    # Re-fetch the runtime Node — properties dict reflects the WS update.
+    # Re-fetch the runtime Node — properties dict reflects the WS update,
+    # UOM-normalised to the nodedef editor's canonical unit: the frame
+    # reported the raw UOM-100 byte 255, surfaced as UOM-51 100%.
     node_after = controller.nodes["3D 7D 87 1"]
     assert node_after.properties["ST"].formatted == "On"
-    assert node_after.properties["ST"].value == "255"
+    assert node_after.properties["ST"].value == "100"
+    assert node_after.properties["ST"].uom == "51"
 
     await controller.stop()
 
