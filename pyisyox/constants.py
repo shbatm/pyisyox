@@ -569,11 +569,8 @@ INSTEON_RAMP_RATES: dict[str, float] = {
 
 # Insteon battery / stateless devices — motion sensors, RemoteLincs,
 # binary-alarm nodedefs, etc. Their ``ST`` is not a persistent state, so
-# group-aggregation logic should skip these members when deciding whether
-# a scene is "all on". Not yet wired into ``runtime.Group`` — kept as the
-# reference table for that. Type prefixes match on the leading dotted
-# segments of ``Node.type_``.
-INSTEON_STATELESS_TYPE: list[str] = ["0.16.", "0.17.", "0.18.", "16."]
+# ``runtime.Group`` skips these members when aggregating a scene's on/off
+# state (see ``pyisyox.runtime.group``).
 INSTEON_STATELESS_NODEDEFID: list[str] = [
     "BinaryAlarm",
     "BinaryAlarm_ADV",
