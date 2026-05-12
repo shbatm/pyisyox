@@ -30,11 +30,23 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from pyisyox.client import NodeType
-from pyisyox.constants import PROP_STATUS
+from pyisyox.constants import INSTEON_STATELESS_NODEDEFID, PROP_STATUS
 
 if TYPE_CHECKING:
     from pyisyox.client import GroupRecord, IoXClient, NodeRecord
     from pyisyox.schema.profile import Profile
+
+#: Member nodedefs whose ``ST`` isn't a persistent state — motion
+#: sensors, RemoteLincs, binary-alarm devices, etc. Skipped when
+#: aggregating a scene's on/off state so a momentary or absent reading
+#: from one of these doesn't drag :attr:`Group.group_all_on` to False.
+_STATELESS_NODEDEF_IDS = frozenset(INSTEON_STATELESS_NODEDEFID)
+
+
+def _is_on(record: NodeRecord) -> bool:
+    """True iff this node currently reports a non-zero ``ST``."""
+    st = record.properties.get(PROP_STATUS)
+    return st is not None and str(st.value) not in ("", "0")
 
 
 class Group:
@@ -137,19 +149,25 @@ class Group:
         """
         return self._record.controller_addresses
 
+    def _is_stateless(self, record: NodeRecord) -> bool:
+        return record.nodedef_id in _STATELESS_NODEDEF_IDS
+
     @property
     def group_all_on(self) -> bool:
-        """True iff every member node currently reports an "on" state.
+        """True iff every stateful member node currently reports an "on" state.
 
-        Computed on access from the controller's node registry. Returns
-        ``False`` when:
+        Computed on access from the controller's node registry. Stateless
+        members — motion sensors, RemoteLincs, binary-alarm devices, see
+        :data:`_STATELESS_NODEDEF_IDS` — are excluded; their ``ST`` isn't
+        a persistent state. Returns ``False`` when:
 
         * the group was constructed without a node-registry reference
           (the optional ``nodes`` arg to :meth:`from_record`);
-        * any member is not currently in the registry (defensive — the
-          member may have been removed since load and the controller
+        * the group has no stateful members;
+        * any stateful member is not currently in the registry (defensive
+          — the member may have been removed since load and the controller
           hasn't surfaced the lifecycle event yet);
-        * any member's ``ST`` property is missing or zero.
+        * any stateful member's ``ST`` property is missing or zero.
 
         Cheap: ``O(N)`` where N is the member count, only computed
         when read. No event-subscription plumbing — the underlying
@@ -158,31 +176,34 @@ class Group:
         """
         if self._nodes is None or not self._record.member_addresses:
             return False
+        saw_stateful = False
         for addr in self._record.member_addresses:
             record = self._nodes.get(addr)
             if record is None:
                 return False
-            st = record.properties.get(PROP_STATUS)
-            if st is None or str(st.value) in ("", "0"):
+            if self._is_stateless(record):
+                continue
+            saw_stateful = True
+            if not _is_on(record):
                 return False
-        return True
+        return saw_stateful
 
     @property
     def group_any_on(self) -> bool:
-        """True iff at least one member node currently reports an "on" state.
+        """True iff at least one stateful member node currently reports "on".
 
         Companion to :attr:`group_all_on`; this is the aggregation HA
         scene-switch consumers want for their ``is_on`` — the legacy
         ``pyisy.Group.status`` did the same thing (non-zero on any
-        responder).
+        stateful responder). Stateless members and members not currently
+        in the registry are skipped — see :data:`_STATELESS_NODEDEF_IDS`.
 
         Returns ``False`` when:
 
         * the group was constructed without a node-registry reference;
         * the group has no members;
-        * every present member's ``ST`` property is missing or zero
-          (missing members are skipped, not treated as 'off' — see
-          :attr:`group_all_on` for the strict variant).
+        * every present stateful member's ``ST`` property is missing or
+          zero.
 
         Cheap: ``O(N)`` where N is the member count, only computed
         when read.
@@ -191,10 +212,9 @@ class Group:
             return False
         for addr in self._record.member_addresses:
             record = self._nodes.get(addr)
-            if record is None:
+            if record is None or self._is_stateless(record):
                 continue
-            st = record.properties.get(PROP_STATUS)
-            if st is not None and str(st.value) not in ("", "0"):
+            if _is_on(record):
                 return True
         return False
 

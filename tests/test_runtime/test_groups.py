@@ -16,6 +16,7 @@ from pyisyox.client import (
     NodeRecord,
     parse_rest_nodes_groups_folders,
 )
+from pyisyox.constants import INSTEON_STATELESS_NODEDEFID
 from pyisyox.runtime import Folder, Group
 from pyisyox.schema import Profile
 from tests.test_client.conftest import FakeSession
@@ -522,6 +523,77 @@ def test_group_any_on_false_when_no_members() -> None:
         member_addresses=(),
     )
     group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes={})
+    assert group.group_any_on is False
+
+
+# Stateless-member handling -------------------------------------------
+#
+# Battery / stateless members (motion sensors, RemoteLincs, binary-alarm
+# nodedefs — see INSTEON_STATELESS_NODEDEFID) don't carry a persistent ST,
+# so they're excluded from both aggregations.
+
+
+def _stateless_record(addr: str, st_value: str) -> NodeRecord:
+    return NodeRecord(
+        address=addr,
+        name=addr,
+        nodedef_id=INSTEON_STATELESS_NODEDEFID[0],
+        family_id="1",
+        instance_id="1",
+        properties={"ST": NodePropertyValue(id="ST", value=st_value, formatted="")},
+    )
+
+
+def test_group_all_on_ignores_stateless_member_off() -> None:
+    """A stateless member reading 0 (or nothing) must not drag the
+    scene's all-on aggregation to False."""
+    nodes: dict[str, NodeRecord] = {
+        "M1": _record_with_st("M1", "255"),
+        "S1": _stateless_record("S1", "0"),
+    }
+    record = GroupRecord(
+        address="G",
+        name="Lamp + Motion Sensor",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "S1"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_all_on is True
+
+
+def test_group_all_on_false_when_only_stateless_members() -> None:
+    """A scene with no stateful members can't be 'all on' — don't return
+    True vacuously."""
+    nodes: dict[str, NodeRecord] = {"S1": _stateless_record("S1", "255")}
+    record = GroupRecord(
+        address="G",
+        name="Sensors Only",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("S1",),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_all_on is False
+
+
+def test_group_any_on_ignores_stateless_member_on() -> None:
+    """A momentarily-on stateless member doesn't make the scene 'any on'."""
+    nodes: dict[str, NodeRecord] = {
+        "M1": _record_with_st("M1", "0"),
+        "S1": _stateless_record("S1", "255"),
+    }
+    record = GroupRecord(
+        address="G",
+        name="Off Lamp + Triggered Sensor",
+        nodedef_id="InsteonDimmer",
+        family_id="6",
+        instance_id="1",
+        member_addresses=("M1", "S1"),
+    )
+    group = Group.from_record(record, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
     assert group.group_any_on is False
 
 
