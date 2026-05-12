@@ -129,19 +129,20 @@ class TriggerAction(StrEnum):
 class NodeLifecycleAction(StrEnum):
     """Verbs the eisy emits via ``<control>_3</control>`` events.
 
-    The wire codes here are the canonical UDI set published in the
-    IoX REST docs and the ISY-994's notification table — the
-    upstream PyISY 3.x ``constants.py`` keeps the same mapping.
-    Real captures additionally observe ``WD`` and ``CE`` on PG3
-    nodes; they're undocumented but pyisyox surfaces them so
-    consumers can react.
+    The wire codes are the canonical UDI set from the IoX REST docs
+    and the ISY-994's notification table — PyISY 3.x's ``constants.py``
+    keeps the same mapping. ``<eventInfo>`` child tags per verb are in
+    :data:`NODE_LIFECYCLE_EVENT_INFO_TAGS`.
 
-    ``EN`` carries an ``enabled`` boolean in ``<eventInfo>`` —
-    there's no separate ``DI`` verb on the wire; the same code
-    handles both transitions.
+    ``EN`` carries an ``enabled`` boolean in ``<eventInfo>`` — there's
+    no separate ``DI`` verb on the wire; the same code handles both
+    transitions.
     """
 
-    #: Node added (new device joined the controller).
+    # --- node verbs ---------------------------------------------------
+    #: Node added (new device joined the controller). ``<eventInfo>``
+    #: also carries the full ``<node>`` element — see
+    #: :attr:`NodeLifecycleEvent.node_xml`.
     NODE_ADDED = "ND"
     #: Node removed (device deleted from the controller).
     NODE_REMOVED = "NR"
@@ -155,16 +156,85 @@ class NodeLifecycleAction(StrEnum):
     PARENT_CHANGED = "PC"
     #: Node enabled/disabled — direction is in ``eventInfo.enabled``.
     NODE_ENABLED = "EN"
-    #: Pending device operation (queued change awaiting commit).
+    #: Pending device operation queued, awaiting commit. On Insteon a
+    #: write (e.g. changing backlight level) surfaces ``WH`` first, then
+    #: :attr:`PROPERTY_SAVED` (``WD``) once the value lands on the device.
     PENDING_DEVICE_OP = "WH"
+    #: A queued device write completed and the property is now saved on
+    #: the device (the ``WH`` → ``WD`` pair on an Insteon backlight/ramp/
+    #: on-level write). Also observed standalone from PG3 plugin nodes
+    #: reporting a property; ``<eventInfo>`` carries a ``<message>``.
+    #: (PyISY 3.x labelled this verb ``PROGRAMMING_DEVICE``.)
+    PROPERTY_SAVED = "WD"
     #: Node revised (UPB / firmware-style revision).
     NODE_REVISED = "RV"
     #: Node communication error (device unreachable).
     NODE_ERROR = "NE"
-    #: Property reported — observed on PG3 plugin nodes; undocumented.
-    PROPERTY_REPORTED = "WD"
-    #: Configuration error — observed on PG3 plugin nodes; undocumented.
+    #: Configuration error — observed on PG3 plugin nodes. (PyISY 3.x
+    #: read ``CE`` as ``CLEAR_ERROR`` instead; the meaning is
+    #: ambiguous and may be context-dependent.)
     CONFIG_ERROR = "CE"
+
+    # --- folder verbs -------------------------------------------------
+    #: Folder added.
+    FOLDER_ADDED = "FD"
+    #: Folder removed.
+    FOLDER_REMOVED = "FR"
+    #: Folder renamed — ``<eventInfo>`` carries ``<newName>``.
+    FOLDER_RENAMED = "FN"
+
+    # --- scene/group verbs --------------------------------------------
+    #: Scene (group) added — ``<eventInfo>`` carries ``<groupName>`` /
+    #: ``<groupType>``.
+    GROUP_ADDED = "GD"
+    #: Scene (group) removed.
+    GROUP_REMOVED = "GR"
+    #: Scene (group) renamed — ``<eventInfo>`` carries ``<newName>``.
+    GROUP_RENAMED = "GN"
+
+    # --- networking verb ----------------------------------------------
+    #: A networking-module resource was renamed. Doesn't affect the
+    #: node registry.
+    NET_RENAMED = "WR"
+
+
+#: ``<eventInfo>`` child element names carried by each lifecycle verb
+#: (per the UDI notification table). An empty tuple means the frame
+#: carries only the node address. Reference metadata for consumers that
+#: want to parse the payload — pyisyox itself only parses the ``<node>``
+#: element on ``NODE_ADDED`` (see ``NodeLifecycleEvent.node_xml``).
+NODE_LIFECYCLE_EVENT_INFO_TAGS: dict[NodeLifecycleAction, tuple[str, ...]] = {
+    NodeLifecycleAction.NODE_ADDED: ("nodeName", "nodeType"),  # plus the full <node> element
+    NodeLifecycleAction.NODE_REMOVED: (),
+    NodeLifecycleAction.NODE_RENAMED: ("newName",),
+    NodeLifecycleAction.NODE_MOVED: ("movedNode", "linkType"),
+    NodeLifecycleAction.NODE_REMOVED_FROM_GROUP: ("removedNode",),
+    NodeLifecycleAction.PARENT_CHANGED: ("node", "nodeType", "parent", "parentType"),
+    NodeLifecycleAction.NODE_ENABLED: ("enabled",),
+    NodeLifecycleAction.PENDING_DEVICE_OP: (),
+    NodeLifecycleAction.PROPERTY_SAVED: ("message",),
+    NodeLifecycleAction.NODE_REVISED: (),
+    NodeLifecycleAction.NODE_ERROR: (),
+    NodeLifecycleAction.CONFIG_ERROR: (),
+    NodeLifecycleAction.FOLDER_ADDED: (),
+    NodeLifecycleAction.FOLDER_REMOVED: (),
+    NodeLifecycleAction.FOLDER_RENAMED: ("newName",),
+    NodeLifecycleAction.GROUP_ADDED: ("groupName", "groupType"),
+    NodeLifecycleAction.GROUP_REMOVED: (),
+    NodeLifecycleAction.GROUP_RENAMED: ("newName",),
+    NodeLifecycleAction.NET_RENAMED: (),
+}
+
+#: Device-write progress sub-codes seen on ``_7`` (PROGRESS) frames —
+#: *not* ``_3`` lifecycle verbs. Reference metadata only; the
+#: dispatcher doesn't route ``_7`` frames yet, so consumers wanting
+#: these branch on the raw frame. Keyed by the literal action value.
+#: (PyISY 3.x exposed these as ``NodeChangeAction.DEVICE_WRITING`` /
+#: ``DEVICE_MEMORY``.)
+DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS: dict[str, tuple[str, ...]] = {
+    "_7A": ("message",),  # device-writing progress message
+    "_7M": ("memory", "cmd1", "cmd2", "value"),  # raw Insteon memory write
+}
 
 
 @dataclass(slots=True, frozen=True)
@@ -199,19 +269,22 @@ class NodeLifecycleEvent:
 
     @property
     def requires_reload(self) -> bool:
-        """True for verbs that invalidate the cached node registry.
+        """True for verbs that invalidate the cached node/group/folder registry.
 
-        Reload-worthy: ``ND`` (added), ``NR`` (removed), ``NN`` (renamed —
-        the display name baked into the registry is now stale), ``EN``
-        (enabled/disabled — the entity may need reloading because its
-        properties change shape), ``RV`` (revised — UPB-style firmware
-        update changes the property table), ``RG`` (removed from scene —
-        scene membership changed).
+        Reload-worthy: ``ND`` / ``NR`` / ``NN`` (node added/removed/renamed
+        — the registry's set or display names are stale), ``EN``
+        (enabled/disabled — the entity's property shape may change),
+        ``RV`` (revised — UPB-style firmware update changes the property
+        table), ``RG`` (removed from scene — membership changed), and the
+        folder/scene tree verbs ``FD`` / ``FR`` / ``FN`` / ``GD`` / ``GR``
+        / ``GN`` (the ``groups`` / ``folders`` registries are stale).
 
         Softer signals — informational, don't trigger reload UX:
         ``MV`` (added to scene), ``PC`` (parent changed), ``WH`` (pending
-        op), ``WD`` (PG3 property report), ``CE`` (PG3 config error),
-        ``NE`` (comm error — device is just unreachable, no shape change).
+        op), ``WD`` (device write completed / PG3 property report), ``CE``
+        (config error), ``NE`` (comm error — device just unreachable, no
+        shape change), ``WR`` (a networking resource was renamed — doesn't
+        touch nodes).
         """
         return self.action in {
             NodeLifecycleAction.NODE_ADDED,
@@ -220,6 +293,12 @@ class NodeLifecycleEvent:
             NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,
             NodeLifecycleAction.NODE_ENABLED,
             NodeLifecycleAction.NODE_REVISED,
+            NodeLifecycleAction.FOLDER_ADDED,
+            NodeLifecycleAction.FOLDER_REMOVED,
+            NodeLifecycleAction.FOLDER_RENAMED,
+            NodeLifecycleAction.GROUP_ADDED,
+            NodeLifecycleAction.GROUP_REMOVED,
+            NodeLifecycleAction.GROUP_RENAMED,
         }
 
 

@@ -60,6 +60,12 @@ intersphinx_mapping = {
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
 
+# Don't dump the (sometimes large, multi-line) repr of module-level
+# data members — the value of a lookup dict / path template is noise
+# on a doc page, and a multi-line repr trips docutils' indentation
+# parser. The ``#:`` doc comments carry the meaning anyway.
+autodoc_default_options = {"no-value": True}
+
 # The package re-exports symbols at the top level (e.g. ``pyisyox.Node``)
 # alongside their submodule home (``pyisyox.runtime.node.Node``); both
 # get autodoc'd, which trips the "more than one target" warning on

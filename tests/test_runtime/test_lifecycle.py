@@ -4,10 +4,31 @@ from __future__ import annotations
 
 from pyisyox.client import NodeRecord
 from pyisyox.runtime.events import (
+    DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS,
+    NODE_LIFECYCLE_EVENT_INFO_TAGS,
     EventDispatcher,
     NodeLifecycleAction,
     NodeLifecycleEvent,
 )
+
+
+def test_lifecycle_event_info_tags_cover_every_verb() -> None:
+    """Every NodeLifecycleAction member has an eventInfo-tag entry, and
+    the table doesn't reference verbs that aren't in the enum."""
+    assert set(NODE_LIFECYCLE_EVENT_INFO_TAGS) == set(NodeLifecycleAction)
+    # Spot-check a few documented payloads.
+    assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.NODE_RENAMED] == ("newName",)
+    assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.GROUP_ADDED] == ("groupName", "groupType")
+    assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.PROPERTY_SAVED] == ("message",)
+
+
+def test_device_write_progress_codes_are_underscore_prefixed() -> None:
+    """The _7-frame sub-codes are documented but kept out of
+    NodeLifecycleAction (they arrive on PROGRESS frames, not _3)."""
+    assert set(DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS) == {"_7A", "_7M"}
+    for code in DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS:
+        assert code.startswith("_")
+        assert code not in set(NodeLifecycleAction)
 
 
 def _node_added_frame() -> str:
@@ -133,14 +154,21 @@ def test_lifecycle_requires_reload_taxonomy() -> None:
         NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,  # RG (scene-edit)
         NodeLifecycleAction.NODE_ENABLED,  # EN — covers both directions
         NodeLifecycleAction.NODE_REVISED,  # RV
+        NodeLifecycleAction.FOLDER_ADDED,  # FD
+        NodeLifecycleAction.FOLDER_REMOVED,  # FR
+        NodeLifecycleAction.FOLDER_RENAMED,  # FN
+        NodeLifecycleAction.GROUP_ADDED,  # GD
+        NodeLifecycleAction.GROUP_REMOVED,  # GR
+        NodeLifecycleAction.GROUP_RENAMED,  # GN
     }
     soft_actions = {
         NodeLifecycleAction.NODE_MOVED,  # MV (added to scene)
         NodeLifecycleAction.PARENT_CHANGED,  # PC
         NodeLifecycleAction.PENDING_DEVICE_OP,  # WH
-        NodeLifecycleAction.PROPERTY_REPORTED,  # WD (PG3, undocumented)
-        NodeLifecycleAction.CONFIG_ERROR,  # CE (PG3, undocumented)
+        NodeLifecycleAction.PROPERTY_SAVED,  # WD (write completed / PG3 report)
+        NodeLifecycleAction.CONFIG_ERROR,  # CE
         NodeLifecycleAction.NODE_ERROR,  # NE — comm error, no shape change
+        NodeLifecycleAction.NET_RENAMED,  # WR — networking resource, not nodes
     }
     for act in reload_actions:
         ev = NodeLifecycleEvent(action=act, node_address="X", raw_action=act, seqnum=0)
