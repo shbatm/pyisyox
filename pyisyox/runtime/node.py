@@ -446,12 +446,24 @@ class Node:
                 the command's parameter count (or be zero for
                 parameterless commands like ``DOF``).
 
+        When the node has **no resolved nodedef** (e.g. dynamically
+        provisioned Z-Wave / Z-Matter nodes, whose ``UZW*`` nodedefs
+        aren't published in ``/rest/profiles``), there is nothing to
+        validate against — the command and any params are passed
+        through verbatim (numeric params coerced to ``int``, no UOM
+        segment). This keeps such nodes controllable; the cost is no
+        client-side validation.
+
         Raises:
-            NodeCommandError: When the nodedef is unresolved, the
-                command id isn't on this node's accept list, the
-                parameter count is wrong, or any parameter fails
-                editor validation.
+            NodeCommandError: When the command id isn't on this node's
+                accept list, the parameter count is wrong, or any
+                parameter fails editor validation. (Not raised for
+                nodedef-less nodes — see above.)
         """
+        if self._nodedef is None:
+            passthrough: list[int | str] = [int(p) if isinstance(p, (int, float)) else p for p in params]
+            await self._client.send_node_command(self.address, command_id, *passthrough)
+            return
         encoded = encode_command_params(
             nodedef=self._nodedef,
             profile=self._profile,

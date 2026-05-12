@@ -762,15 +762,28 @@ def parse_api_nodes(raw: dict[str, Any]) -> dict[str, NodeRecord]:
 def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
     """Translate one ``/api/nodes`` element into a :class:`NodeRecord`.
 
-    ``family`` arrives as either ``None`` (native, family/instance default
-    to ``"1"``) or ``{"_": "<id>", "instance": "<inst>"}``.
+    ``family`` on ``/api/nodes`` JSON arrives in three shapes:
+
+    * **absent** — native Insteon nodes omit it; family / instance default
+      to ``"1"``.
+    * **bare scalar** — built-in non-Insteon families give a plain string
+      (or int), e.g. ``"4"`` for Z-Wave or ``"12"`` for Z-Matter-Z-Wave.
+      Built-in families have a single profile instance keyed ``"1"`` (the
+      profile carries ``family 4 / instance 1``, not ``4 / 4``), so the
+      instance is ``"1"`` — only PG3 plugin families carry a distinct
+      instance (their slot id).
+    * **mapping** — PG3 plugin nodes give ``{"_": "<id>", "instance":
+      "<slot>"}`` (the instance is the plugin slot, distinct from the id).
     """
     family = item.get("family")
     if isinstance(family, dict):
         family_id = str(family.get("_", "1"))
         instance_id = str(family.get("instance", family_id))
-    else:
+    elif family in (None, ""):
         family_id = "1"
+        instance_id = "1"
+    else:
+        family_id = str(family)
         instance_id = "1"
 
     parent = item.get("parent")
