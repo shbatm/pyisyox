@@ -50,33 +50,36 @@ async def main(args: argparse.Namespace) -> int:
         verify_ssl=args.verify_ssl,
     )
     try:
-        await controller.connect(start_websocket=args.events)
-    except Exception:  # pylint: disable=broad-except
-        _LOGGER.exception("Failed to connect — check URL, credentials, and network")
-        await controller.stop()
-        return 1
-
-    _LOGGER.info(
-        "Connected to %s (uuid=%s, version=%s)", args.url, controller.config.uuid, controller.config.version
-    )
-    _LOGGER.info("Loaded %d node(s)", len(controller.nodes))
-    for address, node in controller.nodes.items():
-        nodedef_id = node.nodedef_id or "—"
-        prop_summary = ", ".join(
-            f"{pid}={prop.formatted or prop.value}" for pid, prop in list(node.properties.items())[:3]
-        )
-        _LOGGER.info("  [%s] %s (%s) %s", address, node.name, nodedef_id, prop_summary)
-
-    if args.events:
-        _LOGGER.info("Event stream running — press Ctrl-C to exit")
         try:
-            while True:
-                await asyncio.sleep(60)
-        except KeyboardInterrupt:
-            _LOGGER.info("Caught Ctrl-C; shutting down")
+            await controller.connect(start_websocket=args.events)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.exception("Failed to connect — check URL, credentials, and network")
+            return 1
 
-    await controller.stop()
-    return 0
+        _LOGGER.info(
+            "Connected to %s (uuid=%s, version=%s)",
+            args.url,
+            controller.config.uuid,
+            controller.config.version,
+        )
+        _LOGGER.info("Loaded %d node(s)", len(controller.nodes))
+        for address, node in controller.nodes.items():
+            nodedef_id = node.nodedef_id or "—"
+            prop_summary = ", ".join(
+                f"{pid}={prop.formatted or prop.value}" for pid, prop in list(node.properties.items())[:3]
+            )
+            _LOGGER.info("  [%s] %s (%s) %s", address, node.name, nodedef_id, prop_summary)
+
+        if args.events:
+            _LOGGER.info("Event stream running — press Ctrl-C to exit")
+            try:
+                while True:
+                    await asyncio.sleep(60)
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                _LOGGER.info("Caught Ctrl-C; shutting down")
+        return 0
+    finally:
+        await controller.stop()
 
 
 def parse_args() -> argparse.Namespace:
