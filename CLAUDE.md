@@ -274,8 +274,10 @@ property ids, `X10_COMMANDS`, the `UOM_*` tables + `UOM_TO_STATES`,
 climate/thermostat tables (`UOM_CLIMATE_MODES`,
 `UOM_CLIMATE_MODES_ZWAVE`, `CLIMATE_SETPOINT_MIN_GAP`),
 `INSTEON_RAMP_RATES`, `INSTEON_STATELESS_NODEDEFID`,
-`BACKLIGHT_SUPPORT` / `BACKLIGHT_INDEX`, the device-address constants,
-and the various enums. Endpoint paths now live in `paths.py`, not
+the device-address constants, and the various enums. (The
+`BACKLIGHT_SUPPORT` / `BACKLIGHT_INDEX` tables were removed — derive
+backlight support, scale, and option labels from the `BL`
+accept-command's editor.) Endpoint paths now live in `paths.py`, not
 here.
 
 ### Other modules
