@@ -22,14 +22,22 @@ contributions, not a single platform pick:
 * ``triggers`` — every command in ``cmds.sends`` (the node *emits* these
   events; e.g., an Insteon ``OnOffControl`` paddle that sends ``DON``/
   ``DOF`` on press becomes a HA ``device_trigger`` source).
-* ``buttons`` — plugin-defined commands in ``cmds.accepts`` that aren't
-  part of the controllable platform's command set and aren't ``QUERY``
-  (which every node implicitly accepts). Surface as HA ``button`` entities.
+* ``buttons`` — accept commands pressable with **no arguments**:
+  parameterless, or every parameter ``optional`` (the controller fills in
+  defaults — Insteon ``BEEP`` is the canonical case: one optional
+  ``level`` param). Excludes ``QUERY`` (implicit on every node) and any
+  command claimed by the controllable platform. Surface as HA ``button``
+  entities — press = send the verb with zero args.
+* ``parameterized_commands`` — accept commands with at least one
+  *required* parameter (same QUERY / controllable exclusions). These
+  can't be plain buttons: each parameter carries an ``editor`` ref whose
+  shape drives what input entity it needs. Consumers that don't yet
+  handle them can ignore this bucket.
 * ``readings`` — one entity per property, after filtering out properties
   already represented by the controllable platform (e.g., ``ST``/``OL``/
   ``RR`` on a light are the light's state, not separate sensors).
 
-One HA *device* per node aggregates entities from all four buckets.
+One HA *device* per node aggregates entities from all five buckets.
 """
 
 from __future__ import annotations
@@ -89,7 +97,14 @@ class ClassificationResult:
             controllable platform (so they aren't double-counted as
             buttons). Empty when ``controllable`` is ``None``.
         triggers: Commands the node emits — surface as ``device_trigger``.
-        buttons: Plugin-defined accept commands — one ``button`` entity each.
+        buttons: Accept commands pressable with zero args (parameterless,
+            or all parameters ``optional``) — one fire-and-forget
+            ``button`` entity each. Excludes ``QUERY`` and
+            controllable-claimed cmds.
+        parameterized_commands: Accept commands with at least one required
+            parameter. Not plain buttons; left for consumers that map
+            parameter editors to input entities. Same QUERY / controllable
+            exclusions as ``buttons``.
         readings: Per-property reading entities.
     """
 
@@ -97,6 +112,7 @@ class ClassificationResult:
     controllable_command_ids: frozenset[str] = field(default_factory=frozenset)
     triggers: list[Command] = field(default_factory=list)
     buttons: list[Command] = field(default_factory=list)
+    parameterized_commands: list[Command] = field(default_factory=list)
     readings: list[Reading] = field(default_factory=list)
 
 
@@ -219,16 +235,22 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
 
     Returns:
         A :class:`ClassificationResult` with controllable / triggers /
-        buttons / readings populated.
+        buttons / parameterized_commands / readings populated.
     """
     accept_ids = frozenset(c.id for c in nodedef.cmds.accepts)
     controllable, controllable_cmd_ids = _detect_controllable(accept_ids, nodedef.properties)
 
     triggers = list(nodedef.cmds.sends)
 
-    buttons = [
+    candidate_cmds = [
         c for c in nodedef.cmds.accepts if c.id not in _QUERY_CMDS and c.id not in controllable_cmd_ids
     ]
+    # A command is button-shaped when it can be sent with no positional
+    # args: parameterless, or every parameter ``optional`` (controller
+    # applies defaults — e.g. Insteon BEEP's optional ``level``).
+    # ``all([])`` is True, so parameterless commands fall through here.
+    buttons = [c for c in candidate_cmds if all(p.optional for p in c.parameters)]
+    parameterized_commands = [c for c in candidate_cmds if not all(p.optional for p in c.parameters)]
 
     readings = [
         _classify_property(prop, find_editor)
@@ -240,5 +262,6 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
         controllable_command_ids=controllable_cmd_ids,
         triggers=triggers,
         buttons=buttons,
+        parameterized_commands=parameterized_commands,
         readings=readings,
     )

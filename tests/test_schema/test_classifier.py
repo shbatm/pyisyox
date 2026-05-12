@@ -13,7 +13,7 @@ from pyisyox.classifier import (
     classify,
 )
 from pyisyox.schema import Editor, Profile
-from pyisyox.schema.cmd import Command
+from pyisyox.schema.cmd import Command, CommandParameter
 from pyisyox.schema.nodedef import NodeCommands, NodeDef, NodeProperty
 
 
@@ -84,8 +84,11 @@ def test_insteon_thermostat_is_climate(profile: Profile) -> None:
     assert {"CLISPC", "CLISPH", "CLIMD", "CLIFS"} <= res.controllable_command_ids
     assert {"BRT", "DIM"} <= res.controllable_command_ids, "thermostat BRT/DIM = setpoint nudge"
 
+    # BEEP carries one *optional* level param, so it's still pressable with
+    # zero args → stays a button alongside the parameterless SETTIME/WDU.
     button_ids = {c.id for c in res.buttons}
-    assert button_ids == {"BEEP", "SETTIME", "WDU"}, "thermostat-specific verbs become buttons"
+    assert button_ids == {"BEEP", "SETTIME", "WDU"}, "zero-arg thermostat verbs become buttons"
+    assert res.parameterized_commands == [], "no thermostat accept has a required param"
 
 
 def test_insteon_dimmer_is_light_with_filtered_state(profile: Profile) -> None:
@@ -151,6 +154,42 @@ def test_plugin_verb_with_no_controllable_still_becomes_button() -> None:
     res = classify(nd)
     assert res.controllable is None
     assert [c.id for c in res.buttons] == ["RESET"]
+    assert res.parameterized_commands == []
+
+
+def test_zero_arg_vs_required_param_accept_split() -> None:
+    """Accept commands split on whether they're sendable with zero args.
+    Parameterless verbs and ones whose parameters are *all* ``optional``
+    (controller applies defaults — BEEP-style) become plain ``buttons``;
+    a command with at least one *required* parameter lands in
+    ``parameterized_commands`` (its editor would drive an input entity —
+    not in scope for a button)."""
+
+    nd = NodeDef(
+        id="mixed_cmds",
+        family_id="20",
+        instance_id="5",
+        cmds=NodeCommands(
+            accepts=[
+                Command(id="RESET", name="Reset"),  # parameterless
+                Command(
+                    id="BEEP",
+                    name="Beep",
+                    parameters=[CommandParameter(editor_id="I_BEEP_255", optional=True)],
+                ),  # all-optional → still a button
+                Command(
+                    id="SET_LEVEL",
+                    name="Set Level",
+                    parameters=[CommandParameter(editor_id="I_PCT")],  # required
+                ),
+                Command(id="QUERY", name="Query"),
+            ]
+        ),
+    )
+    res = classify(nd)
+    assert res.controllable is None
+    assert {c.id for c in res.buttons} == {"RESET", "BEEP"}
+    assert [c.id for c in res.parameterized_commands] == ["SET_LEVEL"]
 
 
 def test_button_node_with_send_and_accept_overlap() -> None:
