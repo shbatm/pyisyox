@@ -1,14 +1,19 @@
-"""Smoke-test CLI: connect to an eisy and print a node summary.
+"""Command-line entry point: connect to an eisy / Polisy, print a node
+summary, and (by default) hold the WebSocket event stream open.
 
 Run with ``python3 -m pyisyox <url> <email|admin> <password>``. The
 URL determines the auth mode — port ``:443`` triggers PortalAuth (JWT
 bearer); port ``:8443`` triggers LocalAuth (HTTP basic). Pass
-``--no-events`` to skip starting the WebSocket reader.
+``--no-events`` to skip starting the WebSocket reader. Logging
+defaults to ``INFO``; ``-d/--debug`` adds parsed event frames + the
+lifecycle / reconnect chatter, ``-v/--verbose`` additionally dumps raw
+WS frames and full ``/api/*`` payloads.
 
-This module is deliberately small. It exists for ad-hoc verification
-against a real controller, not as the consumer-facing API. Real
-applications (Home Assistant, hacs-isy994) construct
-:class:`pyisyox.Controller` directly.
+It's a thin wrapper over the library — handy for connecting to a
+controller from the shell, watching the event stream, or sanity-
+checking credentials. Applications embedding pyisyox (Home Assistant,
+hacs-udi-iox) construct :class:`pyisyox.Controller` directly rather
+than shelling out to this.
 """
 
 from __future__ import annotations
@@ -84,17 +89,23 @@ async def main(args: argparse.Namespace) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="pyisyox smoke-test CLI",
+        description="Connect to an eisy / Polisy, print a node summary, and watch the event stream",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("url", help="Controller URL (e.g. https://eisy.local:443)")
     parser.add_argument("username", help="Portal email or local admin username")
     parser.add_argument("password", help="Portal or local admin password")
     parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Debug logging (parsed event frames, lifecycle, reconnects)",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="Verbose logging",
+        help="Verbose logging — raw WS frames + full /api/* payloads; implies --debug",
     )
     parser.add_argument(
         "-q",
@@ -120,5 +131,11 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     cli_args = parse_args()
-    enable_logging(LOG_VERBOSE if cli_args.verbose else logging.INFO)
+    if cli_args.verbose:
+        log_level = LOG_VERBOSE
+    elif cli_args.debug:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+    enable_logging(log_level)
     sys.exit(asyncio.run(main(cli_args)))
