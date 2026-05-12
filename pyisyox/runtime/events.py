@@ -495,6 +495,45 @@ def describe_system_event(control: str, action: str) -> str:
     return f"{control_label} = {action_label}"
 
 
+def _log_event(event: Event) -> None:
+    """Emit a human-readable ``DEBUG`` line for one parsed frame.
+
+    Node-property updates are left to consumers — they hold the
+    entity/name mapping and log those in their own vocabulary (HA logs
+    state changes, etc.). This covers the *system* event stream that
+    otherwise disappears into the registry without a trace:
+
+    * ``_0`` heartbeat — rendered as a one-liner with the
+      next-heartbeat interval (useful for spotting a stalled stream).
+    * Everything else — ``describe_system_event`` gives the friendly
+      ``control = action`` label (``system_status = busy``,
+      ``node_lifecycle = pending_device_op``, ``system_config =
+      batch_mode_updated``, ...) and the raw ``<eventInfo>`` payload is
+      appended verbatim so the wire detail the label can't carry —
+      Z-Wave / Matter config dicts, batch-mode ``<status>``,
+      info-string text, billing totals, the subscription key, the
+      programming node — is still in the log. Unrecognised controls
+      (``_26`` & friends) fall through to ``_26 = 2 …`` with their
+      payload, same as PyISY 3.x's catch-all ``"<code> control
+      event: …"`` line.
+
+    Callers gate on ``_LOGGER.isEnabledFor(DEBUG)`` so the
+    ``describe_system_event`` / string-join work is skipped entirely
+    when debug logging is off.
+    """
+    if not event.is_system:
+        return
+    if event.control == SystemEventControl.HEARTBEAT:
+        _LOGGER.debug("ISY heartbeat (next within %ss)", event.action or "?")
+        return
+    parts = [describe_system_event(event.control, event.action)]
+    if event.node_address:
+        parts.append(f"node={event.node_address}")
+    if event.event_info:
+        parts.append(event.event_info)
+    _LOGGER.debug("System event: %s", " ".join(parts))
+
+
 @dataclass(slots=True, frozen=True)
 class NodeLifecycleEvent:
     """A high-level summary of a ``<control>_3</control>`` lifecycle frame.
@@ -950,6 +989,8 @@ class EventDispatcher:
         event = parse_event_frame(raw_frame)
         if event is None:
             return None
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _log_event(event)
         if event.is_node_property:
             self._apply_property_update(event)
         # Lifecycle frames go through their own listener channel in

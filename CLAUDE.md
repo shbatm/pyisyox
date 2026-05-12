@@ -50,18 +50,20 @@ pre-commit install
 > commit aborts. Create a `.venv` in the worktree once (the block
 > above) to fix it.
 
-### Smoke-testing against a real controller
+### Connecting to a real controller from the shell
 
 ```bash
 # Portal (JWT) auth is selected when the username looks like an email:
 python3 -m pyisyox https://eisy.local:443 me@example.com 'password'
 # Local (HTTP basic) auth otherwise; -q skips the WebSocket stream:
 python3 -m pyisyox https://eisy.local:8443 admin 'password' -q
+# -d/--debug logs parsed event frames; -v/--verbose adds raw WS frames + /api/* payloads.
 ```
 
-`pyisyox/__main__.py` is a deliberately tiny CLI for ad-hoc
-verification — not the consumer API. Real consumers construct
-`pyisyox.Controller` directly.
+`pyisyox/__main__.py` is a thin CLI wrapper over the library — handy
+for connecting from a shell, watching the event stream, or checking
+credentials. Embedding consumers (Home Assistant, hacs-udi-iox)
+construct `pyisyox.Controller` directly instead.
 
 ### Tests, linting, type-checking
 
