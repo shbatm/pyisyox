@@ -99,9 +99,9 @@ class SystemEventControl(StrEnum):
     INTERNET_ACCESS = "_6"
     #: Progress report during long-running operations (device
     #: programming, restore, device-adder). ``<action>`` 1 / 2.1 / 2.2
-    #: / 2.3; see :class:`ProgressAction`. (PyISY 3.x also surfaced the
-    #: ``_7A`` / ``_7M`` device-write sub-codes — see
-    #: :data:`DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS`.)
+    #: / 2.3; see :class:`ProgressAction`. The ``_7A`` / ``_7M``
+    #: device-write sub-codes also ride through on this control — see
+    #: :class:`DeviceWriteAction`.
     PROGRESS = "_7"
     #: Security-system event — connected / disconnected / armed-* /
     #: disarmed. See :class:`SecuritySystemAction`.
@@ -285,6 +285,32 @@ class DeviceLinkerAction(StrEnum):
         return _enum_label(cls, value)
 
 
+class DeviceWriteAction(StrEnum):
+    """Device-write sub-codes that ride through on ``_7``
+    (:attr:`SystemEventControl.PROGRESS`) frames — PyISY 3.x surfaced
+    these as ``NodeChangeAction.DEVICE_WRITING`` / ``DEVICE_MEMORY``.
+
+    Unlike the other action enums, these are *control-value* sub-codes
+    (they have the ``_`` prefix and arrive in the ``<control>`` slot),
+    not ``<action>`` values — the dispatcher doesn't route them; they
+    pass through as plain control events. ``<eventInfo>`` child tags per
+    code are in :data:`DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS`.
+    """
+
+    #: Device-writing progress message — ``<eventInfo>`` carries
+    #: ``<message>``.
+    PROGRESS = "_7A"
+    #: Raw Insteon memory write — ``<eventInfo>`` carries ``<memory>`` /
+    #: ``<cmd1>`` / ``<cmd2>`` / ``<value>``. ``hacs-udi-iox``'s
+    #: backlight entities subscribe to this to catch memory-write echoes.
+    MEMORY = "_7M"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
+
+
 class NodeLifecycleAction(StrEnum):
     """Verbs the eisy emits via ``<control>_3</control>`` events —
     *ISY994 Developer Cookbook* §8.5.5 ("Node Changed/Updated"). PyISY
@@ -410,14 +436,13 @@ NODE_LIFECYCLE_EVENT_INFO_TAGS: dict[NodeLifecycleAction, tuple[str, ...]] = {
     NodeLifecycleAction.NET_RENAMED: (),
 }
 
-#: Device-write progress sub-codes PyISY 3.x surfaced (as
-#: ``NodeChangeAction.DEVICE_WRITING`` / ``DEVICE_MEMORY``). They have
-#: an underscore prefix and aren't ``_3`` lifecycle verbs; the
-#: dispatcher doesn't route them. Reference metadata only — keyed by
-#: the literal action value, valued with the ``<eventInfo>`` child tags.
-DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS: dict[str, tuple[str, ...]] = {
-    "_7A": ("message",),  # device-writing progress message
-    "_7M": ("memory", "cmd1", "cmd2", "value"),  # raw Insteon memory write
+#: ``<eventInfo>`` child tags carried by each :class:`DeviceWriteAction`
+#: control code. The dispatcher doesn't route these — reference metadata
+#: for consumers that subscribe to ``_7A`` / ``_7M`` control events
+#: directly.
+DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS: dict[DeviceWriteAction, tuple[str, ...]] = {
+    DeviceWriteAction.PROGRESS: ("message",),
+    DeviceWriteAction.MEMORY: ("memory", "cmd1", "cmd2", "value"),
 }
 
 #: ``SystemEventControl`` member → the action-code enum that decodes
