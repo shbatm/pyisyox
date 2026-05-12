@@ -88,6 +88,7 @@ from pyisyox.runtime import (
     TriggerAction,
     Variable,
     WebSocketEventStream,
+    describe_system_event,
 )
 from pyisyox.schema.profile import Profile, ProfileMergeResult
 
@@ -156,6 +157,7 @@ __all__ = [
     "WebSocketEventStream",
     "build_sslcontext",
     "classify",
+    "describe_system_event",
 ]
 __author__ = "shbatm"
 __email__ = "support@shbatm.com"

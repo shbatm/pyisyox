@@ -21,6 +21,7 @@ from pyisyox.runtime.events import (
     ProgramStatusListener,
     SystemEventControl,
     TriggerAction,
+    describe_system_event,
     parse_event_frame,
 )
 from pyisyox.runtime.folder import Folder
@@ -55,5 +56,6 @@ __all__ = [
     "TriggerAction",
     "Variable",
     "WebSocketEventStream",
+    "describe_system_event",
     "parse_event_frame",
 ]
