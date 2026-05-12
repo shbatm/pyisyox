@@ -8,6 +8,7 @@ node registry.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -273,6 +274,25 @@ def test_dispatcher_overlays_property_into_node_record() -> None:
     assert prop.value == "255"
     assert prop.formatted == "On"
     assert prop.uom == "100"
+
+
+def test_dispatcher_logs_property_update_at_debug(caplog: pytest.LogCaptureFixture) -> None:
+    """A node-property frame gets a DEBUG line (the raw WS frame itself
+    only logs at VERBOSE) — using the controller's formatted value plus
+    the raw value / uom for context."""
+    nodes = {"3D 7D 87 1": _make_record("3D 7D 87 1")}
+    dispatcher = EventDispatcher(nodes)
+    xml = (
+        '<Event seqnum="1"><control>OL</control>'
+        '<action uom="100" prec="0">191</action>'
+        "<node>3D 7D 87 1</node>"
+        "<fmtAct>75%</fmtAct><fmtName>On Level</fmtName></Event>"
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="pyisyox.runtime.events"):
+        dispatcher.feed(xml)
+
+    assert "Node 3D 7D 87 1 OL -> 75% (raw=191, uom=100)" in caplog.text
 
 
 def test_dispatcher_propagates_prec_into_node_record() -> None:

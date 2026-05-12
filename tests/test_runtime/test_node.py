@@ -71,6 +71,28 @@ def test_node_exposes_record_fields(real_profile: Profile) -> None:
     assert node.properties["ST"].formatted == "Off"
 
 
+def test_node_properties_normalize_byte_to_percent(real_profile: Profile) -> None:
+    """A DimmerLampSwitch reports ``OL``/``ST`` as a UOM-100 0-255 byte,
+    but the ``I_OL`` editor (and the /cmd surface) speak UOM-51 0-100% —
+    ``Node.properties`` surfaces the normalised percentage."""
+    record = _make_record(
+        nodedef_id="DimmerLampSwitch",
+        properties={
+            "OL": NodePropertyValue(id="OL", value="191", formatted="75%", uom="100"),
+            "ST": NodePropertyValue(id="ST", value="255", formatted="On", uom="100"),
+        },
+    )
+    node = Node.from_record(record, real_profile, _make_client(FakeSession(BASE)))
+
+    assert node.properties["OL"].value == "75"
+    assert node.properties["OL"].uom == "51"
+    assert node.properties["ST"].value == "100"
+    assert node.status is not None
+    assert node.status.value == "100"
+    # underlying record is left untouched (normalisation is on read)
+    assert record.properties["OL"].value == "191"
+
+
 def test_node_unresolved_nodedef_returns_none(real_profile: Profile) -> None:
     record = _make_record(nodedef_id="NoSuchType", family_id="1", instance_id="1")
     node = Node.from_record(record, real_profile, _make_client(FakeSession(BASE)))
@@ -97,17 +119,17 @@ async def test_send_command_dof_no_params(real_profile: Profile) -> None:
 
 @pytest.mark.asyncio
 async def test_send_command_don_with_optional_level(real_profile: Profile) -> None:
-    """KeypadDimmer DON command takes an optional I_OL parameter (0-100).
-    Verify the level appears as the URL's last path segment."""
+    """KeypadDimmer DON takes an optional I_OL_PARAM parameter (0-100%,
+    UOM 51). Verify the value and its UOM trail the URL as ``/75/51``."""
     record = _make_record()
     session = FakeSession(BASE)
-    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/DON/75", 200, "<ok/>")
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/DON/75/51", 200, "<ok/>")
     node = Node.from_record(record, real_profile, _make_client(session))
 
     await node.send_command("DON", 75)
 
     _, path, _ = session.calls[0]
-    assert path.endswith("/cmd/DON/75")
+    assert path.endswith("/cmd/DON/75/51")
 
 
 @pytest.mark.asyncio
@@ -116,13 +138,13 @@ async def test_send_command_thermostat_clismode_via_enum_name(real_profile: Prof
     and translate it via the editor codec to the integer 1."""
     record = _make_record(nodedef_id="Thermostat", family_id="1", instance_id="1")
     session = FakeSession(BASE)
-    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/CLIMD/1", 200, "<ok/>")
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/CLIMD/1/98", 200, "<ok/>")
     node = Node.from_record(record, real_profile, _make_client(session))
 
     await node.send_command("CLIMD", "Heat")
 
     _, path, _ = session.calls[0]
-    assert path.endswith("/cmd/CLIMD/1")
+    assert path.endswith("/cmd/CLIMD/1/98")
 
 
 @pytest.mark.asyncio
@@ -328,31 +350,33 @@ async def test_client_set_node_enabled_quotes_address() -> None:
     assert path == "/rest/nodes/3D%207D%2087%201/disable"
 
 
-# --- set_on_level (raw byte, codec-bypassed) -----------------------------
+# --- set_on_level (percent + UOM via the editor codec) -------------------
 
 
 @pytest.mark.asyncio
-async def test_set_on_level_sends_raw_byte(real_profile: Profile) -> None:
-    """``set_on_level`` sends the value verbatim to ``/cmd/OL/{val}`` —
-    the ``I_OL`` editor's ``max=100`` (the display slider) does *not*
-    clamp it, so the 0-255 byte an Insteon dimmer wants gets through."""
+async def test_set_on_level_sends_percent_with_uom(real_profile: Profile) -> None:
+    """``set_on_level`` routes through ``send_command(OL, …)`` — the
+    ``I_OL`` editor (UOM 51) validates 0-100 and the value is sent as
+    ``/cmd/OL/{val}/51``; the controller does the device-side scaling."""
     record = _make_record(nodedef_id="DimmerLampSwitch", family_id="1", instance_id="1")
     session = FakeSession(BASE)
-    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/OL/255", 200, "<ok/>")
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/OL/75/51", 200, "<ok/>")
     node = Node.from_record(record, real_profile, _make_client(session))
 
-    await node.set_on_level(255)
+    await node.set_on_level(75)
 
     method, path, _ = session.calls[0]
     assert method == "GET"
-    assert path == "/rest/nodes/3D%207D%2087%201/cmd/OL/255"
+    assert path == "/rest/nodes/3D%207D%2087%201/cmd/OL/75/51"
 
 
 @pytest.mark.asyncio
 async def test_set_on_level_rejects_out_of_range(real_profile: Profile) -> None:
+    """The ``I_OL`` editor's ``max=100`` rejects an out-of-range value
+    before any HTTP call fires."""
     record = _make_record(nodedef_id="DimmerLampSwitch", family_id="1", instance_id="1")
     session = FakeSession(BASE)
     node = Node.from_record(record, real_profile, _make_client(session))
-    with pytest.raises(NodeCommandError, match="out of range 0-255"):
+    with pytest.raises(NodeCommandError, match="above max"):
         await node.set_on_level(300)
     assert session.calls == [], "must short-circuit before HTTP"

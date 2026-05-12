@@ -563,7 +563,7 @@ class IoXClient:
             _LOGGER.debug("optional endpoint %s unavailable: %s", path, exc)
             return ""
 
-    async def send_node_command(self, address: str, command_id: str, *params: int) -> str:
+    async def send_node_command(self, address: str, command_id: str, *params: int | str) -> str:
         """Issue ``GET /rest/nodes/{addr}/cmd/{cmd}[/{p1}[/{p2}...]]``.
 
         The legacy XML command surface is still the only command path
@@ -575,9 +575,11 @@ class IoXClient:
         Args:
             address: Wire address of the target node.
             command_id: IoX command id (e.g. ``"DON"``).
-            *params: Already-encoded integer parameters (the runtime
-                :meth:`Node.send_command` runs the editor codec; this
-                client method trusts its input).
+            *params: Already-encoded path segments (the runtime
+                :meth:`Node.send_command` runs the editor codec and
+                interleaves each value with its UOM — ``75, "51"`` →
+                ``.../DON/75/51``; this client method just stringifies
+                and joins what it's given).
 
         Returns:
             The text body of the response — typically a small

@@ -163,6 +163,40 @@ def test_lifecycle_listener_ignores_property_events() -> None:
     assert received == []
 
 
+def test_node_enabled_frame_updates_record_and_event() -> None:
+    """An ``EN`` lifecycle frame flips ``NodeRecord.enabled`` in place
+    (so ``Node.enabled`` tracks admin-console / REST changes) and the
+    emitted event carries the parsed direction."""
+    record = _stub_record("3D 7D 87 1")
+    assert record.enabled is True
+    dispatcher = EventDispatcher({"3D 7D 87 1": record})
+    received: list[NodeLifecycleEvent] = []
+    dispatcher.add_lifecycle_listener(received.append)
+
+    dispatcher.feed(
+        '<Event seqnum="7"><control>_3</control><action>EN</action>'
+        "<node>3D 7D 87 1</node><eventInfo><enabled>false</enabled></eventInfo></Event>"
+    )
+    assert record.enabled is False
+    assert received[-1].action is NodeLifecycleAction.NODE_ENABLED
+    assert received[-1].enabled is False
+
+    dispatcher.feed(
+        '<Event seqnum="8"><control>_3</control><action>EN</action>'
+        "<node>3D 7D 87 1</node><eventInfo><enabled>true</enabled></eventInfo></Event>"
+    )
+    assert record.enabled is True
+    assert received[-1].enabled is True
+
+
+def test_node_enabled_frame_without_flag_leaves_record_untouched() -> None:
+    record = _stub_record("X")
+    record.enabled = False
+    dispatcher = EventDispatcher({"X": record})
+    dispatcher.feed('<Event seqnum="1"><control>_3</control><action>EN</action><node>X</node></Event>')
+    assert record.enabled is False  # no <enabled> → no change
+
+
 def test_lifecycle_unsubscribe_stops_delivery() -> None:
     dispatcher = EventDispatcher({})
     received: list[NodeLifecycleEvent] = []

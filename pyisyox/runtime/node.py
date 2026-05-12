@@ -48,9 +48,11 @@ from pyisyox.constants import (
     Protocol,
 )
 from pyisyox.runtime._commands import NodeCommandError, encode_command_params
+from pyisyox.runtime._normalize import normalize_property_value
 
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
+    from pyisyox.schema.editor import Editor
     from pyisyox.schema.nodedef import NodeDef
     from pyisyox.schema.profile import Profile
 
@@ -193,21 +195,49 @@ class Node:
         """Whether the eisy considers this node active."""
         return self._record.enabled
 
+    def _editor_for_property(self, prop_id: str) -> Editor | None:
+        """Resolve the editor governing ``prop_id`` on this node's nodedef.
+
+        ``None`` when the nodedef is unresolved, doesn't define the
+        property, or references an editor the profile doesn't carry.
+        """
+        if self._nodedef is None:
+            return None
+        slot = self._nodedef.properties.get(prop_id)
+        if slot is None or not slot.editor_id:
+            return None
+        return self._profile.find_editor(slot.editor_id, self.family_id, self.instance_id)
+
     @property
     def properties(self) -> dict[str, NodePropertyValue]:
         """Live property values, keyed by property id (e.g. ``"ST"``).
 
         For native nodes these are merged from ``/api/nodes`` + the
         ``/rest/status`` overlay during initial load. Plugin nodes get
-        all values from ``/rest/status``. WebSocket events update them
-        in place at runtime via :class:`pyisyox.runtime.EventDispatcher`.
+        all values from ``/rest/status``. WebSocket events update the
+        underlying record in place at runtime via
+        :class:`pyisyox.runtime.EventDispatcher`.
+
+        Each value is normalised to its nodedef editor's canonical UOM
+        before being returned — e.g. an Insteon dimmer that reports
+        ``OL``/``ST`` as a UOM-100 0-255 byte is surfaced here as the
+        UOM-51 0-100% value its ``I_OL`` editor (and the ``/cmd`` write
+        surface) uses. Values whose reported UOM already matches the
+        editor pass through unchanged. The returned dict is freshly
+        built on each access; mutate the controller's state via commands,
+        not by writing here.
         """
-        return self._record.properties
+        record_props = self._record.properties
+        return {
+            pid: normalize_property_value(npv, self._editor_for_property(pid))
+            for pid, npv in record_props.items()
+        }
 
     @property
     def status(self) -> NodePropertyValue | None:
         """Shortcut for :attr:`properties`\\ ``[PROP_STATUS]`` — the
-        node's primary status reading (``"ST"``).
+        node's primary status reading (``"ST"``), UOM-normalised the
+        same way :attr:`properties` is.
 
         Returns ``None`` when the node hasn't reported ST yet (common
         for write-only Insteon controllers and plugin nodes that don't
@@ -216,7 +246,10 @@ class Node:
         the property keeps the structured shape so callers can also
         reach ``.uom``, ``.formatted``, etc.
         """
-        return self._record.properties.get(PROP_STATUS)
+        npv = self._record.properties.get(PROP_STATUS)
+        if npv is None:
+            return None
+        return normalize_property_value(npv, self._editor_for_property(PROP_STATUS))
 
     @property
     def nodedef(self) -> NodeDef | None:
@@ -398,6 +431,14 @@ class Node:
         out-of-range values raise :class:`NodeCommandError` before any
         HTTP traffic.
 
+        Each parameter is sent in the form ``/{value}/{uom}`` — the UOM
+        is the one the parameter's editor declares — so the controller
+        does any device-side scaling itself (this is the convention the
+        eisy web UI uses, e.g. ``/cmd/DON/75/51`` to set 75% on a
+        dimmer; ``/cmd/OL/75/51``; ``/cmd/BL/10/25``). Parameters whose
+        editor carries no real unit (UOM ``"0"`` / unset) are sent as a
+        bare ``/{value}`` with no UOM segment.
+
         Args:
             command_id: The IoX command id (e.g. ``"DON"``, ``"DOF"``,
                 ``"CLISPC"``, ``"DISCOVER"``).
@@ -420,7 +461,12 @@ class Node:
             params=params,
             target_label=f"node {self.address!r}",
         )
-        await self._client.send_node_command(self.address, command_id, *encoded)
+        wire_args: list[int | str] = []
+        for raw_value, uom in encoded:
+            wire_args.append(raw_value)
+            if uom and uom != "0":
+                wire_args.append(uom)
+        await self._client.send_node_command(self.address, command_id, *wire_args)
 
     # --- ergonomic wire-convention wrappers ---------------------------
     #
@@ -460,31 +506,22 @@ class Node:
         await self.send_command(CMD_SECURE, 0)
 
     async def set_on_level(self, val: int) -> None:
-        """Set the device's remembered on-level via the legacy ``OL`` command.
+        """Set the device's remembered on-level via the ``OL`` command.
 
-        ``val`` is the **device-native** encoding:
-
-        * **Insteon dimmers** — a 0-255 raw byte (the controller also
-          reports ``OL`` as a UOM-100 byte; ``255`` = 100%).
-        * **Z-Wave / Zigbee dimmers, KeypadLinc** — 0-100.
-
-        The profile's ``I_OL`` editor only describes the 0-100%
-        *display* slider (``max=100``), so it would wrongly reject the
-        0-255 byte the Insteon ``/cmd/OL`` endpoint expects — the editor
-        codec is therefore **not** applied here; the value is sent to
-        ``/rest/nodes/{addr}/cmd/OL/{val}`` verbatim. Callers working in
-        percentages scale to the device's encoding first (the consumer
-        knows whether the ``OL`` property reports as a byte).
+        ``val`` is the **percentage** ``0-100`` — the unit the ``I_OL``
+        editor (and therefore the ``/cmd/OL`` write surface) uses. The
+        command is sent as ``/cmd/OL/{val}/51`` and the controller does
+        any device-side scaling (Insteon dimmers internally store a
+        0-255 byte; ``75`` → byte ``191`` → reported back as
+        ``OL uom="100" 191``, which :attr:`properties` normalises back
+        to ``75`` for you).
 
         Raises:
-            NodeCommandError: when ``val`` is outside ``0-255`` (a
-                coarse sanity bound; the controller enforces the real
-                per-device range).
+            NodeCommandError: when this node's nodedef doesn't accept
+                ``OL``, or ``val`` falls outside the ``I_OL`` editor's
+                range (``0-100``).
         """
-        raw = int(val)
-        if not 0 <= raw <= 255:
-            raise NodeCommandError(f"node {self.address!r}: on-level {val!r} is out of range 0-255")
-        await self._client.send_node_command(self.address, PROP_ON_LEVEL, raw)
+        await self.send_command(PROP_ON_LEVEL, val)
 
     async def set_ramp_rate(self, val: int) -> None:
         """Set the device's ramp rate.
