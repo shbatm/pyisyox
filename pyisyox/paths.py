@@ -76,6 +76,15 @@ NODE_COMMAND_PATH = "/rest/nodes/{address}/cmd/{command}"
 #: (rename, etc.). ``address`` is URL-quoted.
 NODE_ITEM_PATH = "/api/nodes/{address}"
 
+#: ``GET /rest/nodes/{address}/enable`` — re-enable a node the
+#: controller had disabled. ``address`` is URL-quoted. Legacy ``/rest/``
+#: surface (no ``/api/*`` equivalent in captures), like ``/cmd/``.
+NODE_ENABLE_PATH = "/rest/nodes/{address}/enable"
+
+#: ``GET /rest/nodes/{address}/disable`` — disable a node (the
+#: controller stops polling / commanding it; it stays in the table).
+NODE_DISABLE_PATH = "/rest/nodes/{address}/disable"
+
 #: ``GET /rest/programs/{program_id}/{command}`` — program command
 #: (run / stop / enable / disable etc.). See
 #: :class:`pyisyox.runtime.program.ProgramCommand`.

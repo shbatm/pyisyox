@@ -52,6 +52,8 @@ from pyisyox.paths import (
     NETWORK_RESOURCE_ITEM_PATH,
     NETWORKING_RESOURCES_PATH,
     NODE_COMMAND_PATH,
+    NODE_DISABLE_PATH,
+    NODE_ENABLE_PATH,
     NODE_ITEM_PATH,
     NODES_PATH,
     PROFILES_PATH,
@@ -587,6 +589,19 @@ class IoXClient:
         path_parts = [NODE_COMMAND_PATH.format(address=encoded_addr, command=command_id)]
         path_parts.extend(str(p) for p in params)
         path = "/".join(path_parts)
+        return await self._get_text(path)
+
+    async def set_node_enabled(self, address: str, enabled: bool) -> str:
+        """Issue ``GET /rest/nodes/{addr}/{enable|disable}``.
+
+        Re-enables or disables a node on the controller (a disabled node
+        stays in the table but the controller stops polling / commanding
+        it). ``address`` is URL-quoted. Returns the response text body
+        (a small ``<RestResponse>`` envelope — callers don't usually
+        parse it; ``HTTPError`` covers non-2xx).
+        """
+        encoded_addr = quote(address, safe="")
+        path = (NODE_ENABLE_PATH if enabled else NODE_DISABLE_PATH).format(address=encoded_addr)
         return await self._get_text(path)
 
     async def post_variable_update(

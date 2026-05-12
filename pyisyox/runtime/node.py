@@ -525,3 +525,17 @@ class Node:
         change without polling.
         """
         await self._client.post_node_update(self.address, {"name": name, "nodeType": NodeType.NODE})
+
+    async def set_enabled(self, enabled: bool) -> None:
+        """Enable or disable this node on the controller.
+
+        Wire shape: ``GET /rest/nodes/{address}/{enable|disable}``. A
+        disabled node stays in the table but the controller stops
+        polling / commanding it. On success the local record's
+        :attr:`enabled` flag is updated optimistically (the controller
+        also emits a ``<control>_3</control>`` ``action="EN"`` lifecycle
+        event); on failure the underlying ``HTTPError`` propagates and
+        the flag is left untouched.
+        """
+        await self._client.set_node_enabled(self.address, enabled)
+        self._record.enabled = enabled
