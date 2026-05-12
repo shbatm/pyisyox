@@ -606,6 +606,11 @@ class NodeLifecycleEvent:
             text from ``<eventInfo>``. ``None`` for verbs that don't
             include the full element. Consumers wanting the parsed
             shape can pass this to :func:`parse_lifecycle_node_xml`.
+        enabled: For ``EN`` (``NODE_ENABLED``) actions, the new
+            enabled/disabled state from ``<eventInfo><enabled>`` — the
+            same value already written back to ``Node.enabled``. ``None``
+            for every other verb (and for ``EN`` frames that omit the
+            flag).
     """
 
     action: NodeLifecycleAction | str
@@ -613,6 +618,7 @@ class NodeLifecycleEvent:
     raw_action: str
     seqnum: int
     node_xml: str | None = None
+    enabled: bool | None = None
 
     @property
     def requires_reload(self) -> bool:
@@ -879,6 +885,27 @@ class ProgramStatusEvent:
 ProgramStatusListener = Callable[[ProgramStatusEvent], None]
 
 
+def _parse_lifecycle_enabled(event_info: str) -> bool | None:
+    """Pull the ``<enabled>`` flag off a ``NODE_ENABLED`` (``EN``) frame's
+    ``<eventInfo>`` — ``EN`` covers both directions, the boolean says which.
+
+    Returns ``None`` when the flag is absent or unparsable (the caller
+    then leaves the record's ``enabled`` state untouched).
+    """
+    if not event_info:
+        return None
+    try:
+        root = ET.fromstring(f"<eventInfo>{event_info}</eventInfo>")  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError:
+        return None
+    text = (root.findtext("enabled") or "").strip().lower()
+    if text in {"true", "1"}:
+        return True
+    if text in {"false", "0"}:
+        return False
+    return None
+
+
 def _extract_lifecycle_node_xml(raw_frame: str) -> str | None:
     """Pull the inner ``<node>...</node>`` element text out of a lifecycle
     frame's ``<eventInfo>``.
@@ -1072,7 +1099,20 @@ class EventDispatcher:
         return event
 
     def _emit_lifecycle(self, event: Event, raw_frame: str) -> None:
-        """Build a :class:`NodeLifecycleEvent` and fan to lifecycle listeners."""
+        """Build a :class:`NodeLifecycleEvent` and fan to lifecycle listeners.
+
+        For ``NODE_ENABLED`` (``EN``) frames the record's ``enabled`` flag
+        is updated in place first — so a node (de)activated from the admin
+        console / REST is reflected through ``Node.enabled`` even though no
+        listener acted on it.
+        """
+        enabled: bool | None = None
+        if event.action == NodeLifecycleAction.NODE_ENABLED:
+            enabled = _parse_lifecycle_enabled(event.event_info)
+            if enabled is not None:
+                record = self._nodes.get(event.node_address)
+                if record is not None:
+                    record.enabled = enabled
         if _LOGGER.isEnabledFor(logging.DEBUG):
             extra = _compact_event_info(event.event_info)
             _LOGGER.debug(
@@ -1094,6 +1134,7 @@ class EventDispatcher:
             raw_action=event.action,
             seqnum=event.seqnum,
             node_xml=node_xml,
+            enabled=enabled,
         )
         for listener in tuple(self._lifecycle_listeners):
             try:
