@@ -1119,6 +1119,15 @@ class EventDispatcher:
             name=event.formatted_name,
             precision=event.precision or 0,
         )
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            display = event.formatted_action.strip() or event.action
+            extras = []
+            if display != event.action:
+                extras.append(f"raw={event.action}")
+            if event.uom:
+                extras.append(f"uom={event.uom}")
+            suffix = f" ({', '.join(extras)})" if extras else ""
+            _LOGGER.debug("Node %s %s -> %s%s", event.node_address, event.control, display, suffix)
 
     def _apply_variable_change(self, event: Event) -> None:
         """Decode a variable-change frame and update the matching record.
