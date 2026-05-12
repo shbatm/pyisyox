@@ -65,6 +65,8 @@ from pyisyox.exceptions import (
 from pyisyox.helpers.session import TLSVersionError, build_sslcontext
 from pyisyox.logging import LOG_VERBOSE
 from pyisyox.runtime import (
+    DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS,
+    NODE_LIFECYCLE_EVENT_INFO_TAGS,
     Event,
     EventDispatcher,
     EventListener,
@@ -95,7 +97,9 @@ except PackageNotFoundError:
     __version__ = "unknown"
 
 __all__ = [
+    "DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS",
     "LOG_VERBOSE",
+    "NODE_LIFECYCLE_EVENT_INFO_TAGS",
     "Auth",
     "AuthError",
     "ClassificationResult",

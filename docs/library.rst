@@ -214,6 +214,15 @@ Event pipeline
     :members:
     :show-inheritance:
 
+``pyisyox.NODE_LIFECYCLE_EVENT_INFO_TAGS`` maps each
+:class:`~pyisyox.NodeLifecycleAction` verb to the ``<eventInfo>`` child
+element names it carries (empty tuple = the frame carries only the node
+address); ``pyisyox.DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS`` does the
+same for the ``_7A`` / ``_7M`` device-write progress sub-codes that
+ride on ``_7`` (PROGRESS) frames. Both are reference metadata —
+pyisyox itself only parses the ``<node>`` element on
+:attr:`~pyisyox.NodeLifecycleAction.NODE_ADDED`.
+
 .. autoclass:: pyisyox.ProgramStatusEvent
     :no-index:
     :members:
