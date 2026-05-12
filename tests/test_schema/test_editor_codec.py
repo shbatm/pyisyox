@@ -237,3 +237,21 @@ def test_uom_101_validates_min_max_against_displayed_value() -> None:
     assert ed.encode(120) == 240  # inclusive max
     with pytest.raises(EditorCodecError, match="above max"):
         ed.encode(121)
+
+
+def test_range_parses_step_hint() -> None:
+    """An editor range's ``step`` (when present) is parsed as a float; it's
+    a UI hint and doesn't affect encode/decode."""
+    ed = Editor.from_json(
+        {"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "step": 0.5, "min": 5.0, "max": 50.0}]}
+    )
+    assert ed.ranges[0].step == 0.5
+    # Codec behaviour is unchanged by the presence of step.
+    assert ed.encode(21.5) == 215
+    assert ed.decode(215) == "21.5"
+
+
+def test_range_step_defaults_to_none() -> None:
+    """Ranges without a ``step`` key report ``step is None``."""
+    ed = Editor.from_json({"id": "I_BL", "ranges": [{"uom": "51", "min": 0, "max": 100}]})
+    assert ed.ranges[0].step is None

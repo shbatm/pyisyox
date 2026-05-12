@@ -85,6 +85,12 @@ class EditorRange:
             ``[min, max]``. Empty when the full ``[min, max]`` range is valid.
         names: Mapping of raw integer → display name for enumerated values
             (e.g., ``{0: "Off", 1: "Heat", 2: "Cool"}``).
+        step: Increment hint for numeric (slider-shaped) ranges, in
+            *displayed* units — e.g. ``0.5`` on a half-degree setpoint
+            editor. ``None`` when the editor doesn't specify one (callers
+            then derive a step from ``precision``). Not used by the codec;
+            it's a UI hint, surfaced for consumers that build number
+            entities.
     """
 
     uom: str
@@ -93,12 +99,14 @@ class EditorRange:
     precision: int = 0
     subset: set[int] = field(default_factory=set)
     names: dict[int, str] = field(default_factory=dict)
+    step: float | None = None
 
     @classmethod
     def from_json(cls, raw: dict) -> EditorRange:
         """Build a range from a JSON object."""
         subset_raw = raw.get("subset")
         names_raw = raw.get("names", {}) or {}
+        step_raw = raw.get("step")
         return cls(
             uom=str(raw.get("uom", "0")),
             min=raw.get("min"),
@@ -106,6 +114,7 @@ class EditorRange:
             precision=int(raw.get("prec", 0)),
             subset=_parse_subset(subset_raw) if isinstance(subset_raw, str) else set(),
             names={int(k): v for k, v in names_raw.items()},
+            step=float(step_raw) if isinstance(step_raw, (int, float)) else None,
         )
 
     def is_valid(self, raw_value: int) -> bool:
