@@ -8,6 +8,7 @@ from pyisyox.client import NodeRecord
 from pyisyox.runtime.events import (
     DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS,
     NODE_LIFECYCLE_EVENT_INFO_TAGS,
+    DeviceWriteAction,
     EventDispatcher,
     NodeLifecycleAction,
     NodeLifecycleEvent,
@@ -64,12 +65,15 @@ def test_lifecycle_event_info_tags_cover_every_verb() -> None:
 
 
 def test_device_write_progress_codes_are_underscore_prefixed() -> None:
-    """The _7-frame sub-codes are documented but kept out of
+    """The _7-frame sub-codes are their own enum, kept out of
     NodeLifecycleAction (they arrive on PROGRESS frames, not _3)."""
-    assert set(DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS) == {"_7A", "_7M"}
-    for code in DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS:
+    assert set(DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS) == set(DeviceWriteAction)
+    assert {DeviceWriteAction.PROGRESS, DeviceWriteAction.MEMORY} == {"_7A", "_7M"}
+    for code in DeviceWriteAction:
         assert code.startswith("_")
         assert code not in set(NodeLifecycleAction)
+    assert DeviceWriteAction.label("_7M") == "memory"
+    assert DeviceWriteAction.label("_7Z") == "_7Z"
 
 
 def _node_added_frame() -> str:
