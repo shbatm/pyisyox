@@ -34,6 +34,11 @@ async def test_fetch_config_unwraps_data_envelope(session: FakeSession) -> None:
     cfg = await client._fetch_config()
     assert cfg.uuid == "00:21:b9:f2:72:65"
     assert cfg.version == "6.0.0"
+    # ``/api/config`` is auth-gated on both modes — the local-credentials
+    # flow 401'd when this was fetched unauthenticated.
+    _, path, kwargs = session.calls[0]
+    assert path == "/api/config"
+    assert kwargs.get("auth") is not None  # BasicAuth from LocalAuth was attached
 
 
 @pytest.mark.asyncio
