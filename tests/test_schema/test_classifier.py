@@ -99,6 +99,14 @@ def test_insteon_dimmer_is_light_with_filtered_state(profile: Profile) -> None:
     res = classify(nd, find_editor=_resolver(profile, "1", "1"))
     assert res.controllable is ControllablePlatform.LIGHT
 
+    # The light entity only claims DON/DOF. "Fast on/off" and the
+    # momentary paddle verbs have no HA light equivalent, so they fall
+    # through to buttons instead of being swallowed by the platform.
+    assert res.controllable_command_ids == frozenset({"DON", "DOF"})
+    button_ids = {c.id for c in res.buttons}
+    assert {"DFON", "DFOF", "BRT", "DIM", "FDUP", "FDDOWN", "FDSTOP"} <= button_ids
+    assert "DON" not in button_ids and "DOF" not in button_ids and "QUERY" not in button_ids
+
     reading_ids = {r.property.id for r in res.readings}
     assert "ST" not in reading_ids
     assert "OL" not in reading_ids
