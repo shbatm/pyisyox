@@ -49,109 +49,255 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+def _enum_label(enum_cls: type[StrEnum], value: str) -> str:
+    """Lower-case enum-member name for ``value``, or ``value`` verbatim
+    if it isn't a member. Shared by every ``Foo.label()`` classmethod."""
+    try:
+        return enum_cls(value).name.lower()
+    except ValueError:
+        return value
+
+
 class SystemEventControl(StrEnum):
     """IoX WebSocket "system" control codes (underscore-prefixed).
 
     Property updates use the property id (``"ST"``, ``"GV1"``, ...) with a
-    populated ``node_address``. System events use an underscore-prefixed
-    code with an empty ``node_address`` — this enum names the codes
-    we've observed and seen documented; unknown codes pass through as
-    raw strings via :meth:`label`.
+    populated ``node_address``. System events use one of these
+    underscore-prefixed codes with an empty ``node_address``.
 
-    Sources for the labelled codes: PyISY 3.x's
-    ``events/websocket.py`` (canonical mapping the legacy integration
-    has been routing on for years) and the pyisyox v6 dispatcher's
-    own internal handling.
-
-    Other codes seen on the wire but without authoritative labels are
-    intentionally not enumerated here — surfacing made-up names would
-    mislead consumers. Consumers can branch on raw strings for those
-    until UDI publishes more.
+    Codes ``_0``-``_23`` are the full ISY-994 set from the *ISY994
+    Developer Cookbook* §8.5; ``_28`` is an IoX-6 addition (Matter)
+    not in that document. Newer IoX firmware emits a few more
+    undocumented codes — those aren't enumerated; :meth:`label` passes
+    them through verbatim so logs still identify them.
     """
 
-    #: Periodic heartbeat from the controller (no payload).
+    #: Periodic heartbeat. ``<action>`` is the duration in seconds
+    #: until the next expected heartbeat (use it to detect a stalled
+    #: stream). No ``<eventInfo>``.
     HEARTBEAT = "_0"
-    #: Program-status frame (action ``"0"``), variable-change frame
-    #: (action ``"6"`` value / ``"7"`` init), or freeform trigger
-    #: status push. The action discriminates which.
+    #: Trigger events — program status, variable change/init, schedule
+    #: change, key/info-string pushes, "get status" refresh signal.
+    #: ``<action>`` discriminates; see :class:`TriggerAction`.
     TRIGGER = "_1"
-    #: Node lifecycle frame — add / remove / rename / enabled / revised.
-    #: Action carries the verb (see :class:`NodeLifecycleAction`);
-    #: ``<eventInfo>`` carries the new node element on add, just the
-    #: address on remove/rename.
+    #: Driver-specific events — payload depends on the underlying
+    #: protocol driver. Not modelled.
+    DRIVER_SPECIFIC = "_2"
+    #: Node / scene / folder lifecycle — add / remove / rename / enable
+    #: / revise / comm-error / etc. ``<action>`` carries the verb; see
+    #: :class:`NodeLifecycleAction` and :data:`NODE_LIFECYCLE_EVENT_INFO_TAGS`.
     NODE_LIFECYCLE = "_3"
-    #: System status — BUSY / IDLE / SAFE_MODE / WRITE_TO_EEPROM
-    #: state on the controller side.
+    #: System configuration updated — time / NTP / notifications /
+    #: batch-mode / battery-write-mode. ``<action>`` 0-6; see
+    #: :class:`SystemConfigAction`.
+    SYSTEM_CONFIG = "_4"
+    #: Controller-side busy/idle/safe-mode status. ``<action>`` 0-3;
+    #: see :class:`pyisyox.constants.SystemStatus`.
     SYSTEM_STATUS = "_5"
+    #: Internet-access status — disabled / enabled (``<eventInfo>`` =
+    #: external URL) / failed. See :class:`InternetAccessStatus`.
+    INTERNET_ACCESS = "_6"
     #: Progress report during long-running operations (device
-    #: programming, restore, Z-Wave inclusion, etc.).
+    #: programming, restore, device-adder). ``<action>`` 1 / 2.1 / 2.2
+    #: / 2.3; see :class:`ProgressAction`. (PyISY 3.x also surfaced the
+    #: ``_7A`` / ``_7M`` device-write sub-codes — see
+    #: :data:`DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS`.)
     PROGRESS = "_7"
-    #: Matter network status — observed on IoX 6 controllers with the
-    #: Matter module enabled.
+    #: Security-system event — connected / disconnected / armed-* /
+    #: disarmed. See :class:`SecuritySystemAction`.
+    SECURITY_SYSTEM = "_8"
+    #: System alert event — "not implemented and should be ignored"
+    #: per the cookbook.
+    SYSTEM_ALERT = "_9"
+    #: OpenADR / Flex-Your-Power events — ISY994 Z-Series demand-response.
+    OPENADR = "_10"
+    #: Climate / weather events — required the ISY994 WeatherBug module;
+    #: not present on eisy.
+    CLIMATE = "_11"
+    #: AMI/SEP energy events — ISY994 only (see the Energy Management
+    #: Developer's Manual).
+    AMI_SEP = "_12"
+    #: External energy-monitoring (Brultech) — ISY994 only; on later
+    #: firmware these are folded into node events instead.
+    ENERGY_MONITORING = "_13"
+    #: UPB linker events — UPB-enabled units only.
+    UPB_LINKER = "_14"
+    #: UPB device-adder state — UPB-enabled units only.
+    UPB_DEVICE_ADDER = "_15"
+    #: UPB device-status events — UPB-enabled units only.
+    UPB_DEVICE_STATUS = "_16"
+    #: Gas-meter events — ISY994 only.
+    GAS_METER = "_17"
+    #: Zigbee events — ISY994 only.
+    ZIGBEE = "_18"
+    #: ELK alarm-panel events — requires the ELK module (see the ELK
+    #: Integration Developer's Manual).
+    ELK = "_19"
+    #: Device-linker events — ``<action>`` 1 (status) / 2 (cleared).
+    #: See :class:`DeviceLinkerAction`.
+    DEVICE_LINKER = "_20"
+    #: Z-Wave integration events — requires the Z-Wave module (see the
+    #: Z-Wave Integration Developer's Manual).
+    ZWAVE = "_21"
+    #: Billing events — ISY994 ZS-series only.
+    BILLING = "_22"
+    #: Portal events — portal socket-connection / account-registration
+    #: status when a portal module is installed.
+    PORTAL = "_23"
+    #: Matter network status — IoX 6+ with the Matter module. Not in
+    #: the ISY994 cookbook.
     MATTER_STATUS = "_28"
 
     @classmethod
     def label(cls, control: str) -> str:
-        """Friendly name for a system control code, or the raw code.
-
-        Helps log messages render ``system event: node_lifecycle =
-        ND`` instead of ``system event: _3 = ND`` for the codes we
-        know; unknown codes pass through verbatim so the log still
-        identifies them.
-        """
-        try:
-            return cls(control).name.lower()
-        except ValueError:
-            return control
+        """Friendly name for a system control code, or the raw code if
+        unknown — so a log line reads ``node_lifecycle = ND`` instead
+        of ``_3 = ND``."""
+        return _enum_label(cls, control)
 
 
 class TriggerAction(StrEnum):
     """Action codes carried in :attr:`SystemEventControl.TRIGGER` (``_1``)
-    frames. The ``<action>`` value discriminates what the frame is.
-
-    Only the codes pyisyox routes on are enumerated — like
-    :class:`SystemEventControl`, we don't invent names for codes
-    we've seen on the wire but lack authoritative labels for;
-    consumers can branch on the raw string for those.
+    frames — *ISY994 Developer Cookbook* §8.5.3. ``<action>``
+    discriminates what the frame is; pyisyox only routes on
+    :attr:`PROGRAM_STATUS` / :attr:`VARIABLE_VALUE` / :attr:`VARIABLE_INIT`.
     """
 
-    #: Program-status update — handled by ``_apply_program_status``.
-    #: ``<eventInfo>`` carries the program id plus ``<on/>``/``<off/>``
-    #: and the run/finish timestamps.
+    #: Program status changed — handled by ``_apply_program_status``.
+    #: ``<eventInfo>`` carries the program ``<id>``, enabled/run-at-reboot
+    #: flags, last run/finish times, and a bitwise ``<s>`` status.
     PROGRAM_STATUS = "0"
-    #: Variable value change — handled by ``_apply_variable_change``.
-    #: ``<eventInfo>`` carries ``<var type="..." id="..."><val>``.
+    #: "Get status" — the controller is telling subscribers to re-poll
+    #: everything (e.g. after a config change). No payload.
+    GET_STATUS = "1"
+    #: A key changed. ``node`` carries the key.
+    KEY_CHANGED = "2"
+    #: An info string. ``node`` carries the key; ``<eventInfo>`` is the text.
+    INFO_STRING = "3"
+    #: IR learn mode toggled. No payload.
+    IR_LEARN_MODE = "4"
+    #: A schedule's status changed. ``node`` carries the key.
+    SCHEDULE = "5"
+    #: Variable value changed — handled by ``_apply_variable_change``.
+    #: ``<eventInfo>`` carries ``<var type id><val><ts>``.
     VARIABLE_VALUE = "6"
-    #: Variable init (restore-on-startup) change — same handler /
+    #: Variable init (restore-on-startup) value changed — same handler /
     #: payload shape as :attr:`VARIABLE_VALUE`, applied to ``init``.
     VARIABLE_INIT = "7"
+    #: The current subscription key, sent once right after a new
+    #: subscription is established. ``<eventInfo>`` is the key.
+    KEY = "8"
 
     @classmethod
     def label(cls, value: str) -> str:
         """Friendly lower-case name for a trigger-action code, or the
-        raw value if it isn't one we route on."""
-        try:
-            return cls(value).name.lower()
-        except ValueError:
-            return value
+        raw value if it isn't one we know."""
+        return _enum_label(cls, value)
+
+
+class ProgressAction(StrEnum):
+    """Action codes on :attr:`SystemEventControl.PROGRESS` (``_7``) frames
+    — *Cookbook* §8.5.9. ``<eventInfo>`` is free-text progress detail."""
+
+    #: Generic progress update.
+    UPDATE = "1"
+    #: Device-adder info (UPB only).
+    DEVICE_ADDER_INFO = "2.1"
+    #: Device-adder warning (UPB only).
+    DEVICE_ADDER_WARN = "2.2"
+    #: Device-adder error (UPB only).
+    DEVICE_ADDER_ERROR = "2.3"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
+
+
+class SystemConfigAction(StrEnum):
+    """Action codes on :attr:`SystemEventControl.SYSTEM_CONFIG` (``_4``)
+    frames — *Cookbook* §8.5.6."""
+
+    TIME_CHANGED = "0"
+    TIME_CONFIG_CHANGED = "1"
+    NTP_SETTINGS_UPDATED = "2"
+    NOTIFICATIONS_SETTINGS_UPDATED = "3"
+    NTP_COMM_ERROR = "4"
+    #: Batch mode toggled — ``<eventInfo><status>`` is ``"1"``/``"0"``.
+    BATCH_MODE_UPDATED = "5"
+    #: Battery-powered-write mode toggled — ``<eventInfo><status>`` is
+    #: ``"1"``/``"0"``.
+    BATTERY_WRITE_MODE_UPDATED = "6"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
+
+
+class InternetAccessStatus(StrEnum):
+    """Action codes on :attr:`SystemEventControl.INTERNET_ACCESS` (``_6``)
+    frames — *Cookbook* §8.5.8."""
+
+    DISABLED = "0"
+    #: Enabled — ``<eventInfo>`` is the external URL.
+    ENABLED = "1"
+    FAILED = "2"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
+
+
+class SecuritySystemAction(StrEnum):
+    """Action codes on :attr:`SystemEventControl.SECURITY_SYSTEM` (``_8``)
+    frames — *Cookbook* §8.5.10. ``node`` and ``<eventInfo>`` are null."""
+
+    DISCONNECTED = "0"
+    CONNECTED = "1"
+    DISARMED = "DA"
+    ARMED_AWAY = "AW"
+    ARMED_STAY = "AS"
+    ARMED_STAY_INSTANT = "ASI"
+    ARMED_NIGHT = "AN"
+    ARMED_NIGHT_INSTANT = "ANI"
+    ARMED_VACATION = "AV"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
+
+
+class DeviceLinkerAction(StrEnum):
+    """Action codes on :attr:`SystemEventControl.DEVICE_LINKER` (``_20``)
+    frames — *Cookbook* §8.5.22 (``udievnts.xsd``)."""
+
+    #: Linking status update — ``<eventInfo>`` carries device-linker info.
+    STATUS = "1"
+    #: The device-linking list was cleared. No payload.
+    CLEARED = "2"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
 
 
 class NodeLifecycleAction(StrEnum):
-    """Verbs the eisy emits via ``<control>_3</control>`` events.
-
-    The wire codes are the canonical UDI set from the IoX REST docs
-    and the ISY-994's notification table — PyISY 3.x's ``constants.py``
-    keeps the same mapping. ``<eventInfo>`` child tags per verb are in
-    :data:`NODE_LIFECYCLE_EVENT_INFO_TAGS`.
+    """Verbs the eisy emits via ``<control>_3</control>`` events —
+    *ISY994 Developer Cookbook* §8.5.5 ("Node Changed/Updated"). PyISY
+    3.x keeps the same mapping. ``<eventInfo>`` child tags per verb are
+    in :data:`NODE_LIFECYCLE_EVENT_INFO_TAGS`.
 
     ``EN`` carries an ``enabled`` boolean in ``<eventInfo>`` — there's
-    no separate ``DI`` verb on the wire; the same code handles both
-    transitions.
+    no separate "disabled" verb; the same code handles both transitions.
     """
 
     # --- node verbs ---------------------------------------------------
-    #: Node added (new device joined the controller). ``<eventInfo>``
-    #: also carries the full ``<node>`` element — see
+    #: Node added. ``<eventInfo>`` carries ``<nodeName>`` plus a
+    #: ``<nodeType>`` that is itself the full ``<node>`` element — see
     #: :attr:`NodeLifecycleEvent.node_xml`.
     NODE_ADDED = "ND"
     #: Node removed (device deleted from the controller).
@@ -160,32 +306,47 @@ class NodeLifecycleAction(StrEnum):
     NODE_RENAMED = "NN"
     #: Node moved into a Scene.
     NODE_MOVED = "MV"
+    #: Link changed (within a scene). **Not supported** by the
+    #: controller — kept for documentation; never observed.
+    LINK_CHANGED = "CL"
     #: Node removed from a Scene.
     NODE_REMOVED_FROM_GROUP = "RG"
     #: Parent (primary node) changed.
     PARENT_CHANGED = "PC"
     #: Node enabled/disabled — direction is in ``eventInfo.enabled``.
     NODE_ENABLED = "EN"
+    #: Power-info changed — ``<eventInfo>`` carries ``<deviceClass>`` /
+    #: ``<wattage>`` / ``<dcPeriod>``.
+    POWER_INFO_CHANGED = "PI"
+    #: Device ID changed. **Not implemented** by the controller — kept
+    #: for documentation.
+    DEVICE_ID_CHANGED = "DI"
+    #: Device property changed — UPB only.
+    DEVICE_PROPERTY_CHANGED = "DP"
     #: Pending device operation queued, awaiting commit. On Insteon a
     #: write (e.g. changing backlight level) surfaces ``WH`` first, then
-    #: :attr:`PROPERTY_SAVED` (``WD``) once the value lands on the device.
+    #: :attr:`PROGRAMMING_DEVICE` (``WD``) while the value is written; a
+    #: property-update event arrives separately once it lands.
     PENDING_DEVICE_OP = "WH"
-    #: A queued device write completed and the property is now saved on
-    #: the device (the ``WH`` → ``WD`` pair on an Insteon backlight/ramp/
-    #: on-level write). Also observed standalone from PG3 plugin nodes
-    #: reporting a property; ``<eventInfo>`` carries a ``<message>``.
-    #: (PyISY 3.x labelled this verb ``PROGRAMMING_DEVICE``.)
-    PROPERTY_SAVED = "WD"
-    #: Node revised (UPB / firmware-style revision).
+    #: The controller is carrying out a programming/write operation on
+    #: this node (follows :attr:`PENDING_DEVICE_OP`). Cookbook name:
+    #: "Programming Device". Not a completion signal — watch the
+    #: subsequent property-update event for the new value.
+    PROGRAMMING_DEVICE = "WD"
+    #: Node revised — drastically changed (UPB-style); the consumer
+    #: should discard cached info for the node and rebuild it.
+    #: ``<eventInfo>`` carries the full ``<node>`` structure.
     NODE_REVISED = "RV"
+    #: Discovering nodes (linking in progress). No node.
+    DISCOVERING_NODES = "SN"
+    #: Node discovery complete. No node.
+    NODE_DISCOVERY_COMPLETE = "SC"
     #: Node communication error (device unreachable).
     NODE_ERROR = "NE"
-    #: A node communication error. Observed on real hardware as the
-    #: companion to :attr:`NODE_ERROR` (``NE``); the exact distinction
-    #: between ``NE`` and ``CE`` isn't documented. (PyISY 3.x read
-    #: ``CE`` as ``CLEAR_ERROR``; the v6 rewrite briefly had
-    #: ``CONFIG_ERROR`` — both look wrong against captures.)
-    COMMS_ERROR = "CE"
+    #: A previously-reported node communication error was cleared
+    #: (cookbook: "Clear Node Error / Comm. Errors Cleared") — the
+    #: companion to :attr:`NODE_ERROR`.
+    NODE_ERROR_CLEARED = "CE"
 
     # --- folder verbs -------------------------------------------------
     #: Folder added.
@@ -205,18 +366,15 @@ class NodeLifecycleAction(StrEnum):
     GROUP_RENAMED = "GN"
 
     # --- networking verb ----------------------------------------------
-    #: A networking-module resource was renamed. Doesn't affect the
-    #: node registry.
+    #: A networking-module resource was renamed (``node`` = the new
+    #: name). Doesn't affect the node registry.
     NET_RENAMED = "WR"
 
     @classmethod
     def label(cls, value: str) -> str:
         """Friendly lower-case name for a lifecycle verb, or the raw
         code if it isn't one we know."""
-        try:
-            return cls(value).name.lower()
-        except ValueError:
-            return value
+        return _enum_label(cls, value)
 
 
 #: ``<eventInfo>`` child element names carried by each lifecycle verb
@@ -225,18 +383,24 @@ class NodeLifecycleAction(StrEnum):
 #: want to parse the payload — pyisyox itself only parses the ``<node>``
 #: element on ``NODE_ADDED`` (see ``NodeLifecycleEvent.node_xml``).
 NODE_LIFECYCLE_EVENT_INFO_TAGS: dict[NodeLifecycleAction, tuple[str, ...]] = {
-    NodeLifecycleAction.NODE_ADDED: ("nodeName", "nodeType"),  # plus the full <node> element
+    NodeLifecycleAction.NODE_ADDED: ("nodeName", "nodeType"),  # <nodeType> is the full <node>
     NodeLifecycleAction.NODE_REMOVED: (),
     NodeLifecycleAction.NODE_RENAMED: ("newName",),
     NodeLifecycleAction.NODE_MOVED: ("movedNode", "linkType"),
+    NodeLifecycleAction.LINK_CHANGED: (),  # not supported
     NodeLifecycleAction.NODE_REMOVED_FROM_GROUP: ("removedNode",),
     NodeLifecycleAction.PARENT_CHANGED: ("node", "nodeType", "parent", "parentType"),
     NodeLifecycleAction.NODE_ENABLED: ("enabled",),
+    NodeLifecycleAction.POWER_INFO_CHANGED: ("deviceClass", "wattage", "dcPeriod"),
+    NodeLifecycleAction.DEVICE_ID_CHANGED: (),  # not implemented
+    NodeLifecycleAction.DEVICE_PROPERTY_CHANGED: (),  # UPB only
     NodeLifecycleAction.PENDING_DEVICE_OP: (),
-    NodeLifecycleAction.PROPERTY_SAVED: ("message",),
-    NodeLifecycleAction.NODE_REVISED: (),
+    NodeLifecycleAction.PROGRAMMING_DEVICE: (),
+    NodeLifecycleAction.NODE_REVISED: (),  # plus the full <node> structure
+    NodeLifecycleAction.DISCOVERING_NODES: (),
+    NodeLifecycleAction.NODE_DISCOVERY_COMPLETE: (),
     NodeLifecycleAction.NODE_ERROR: (),
-    NodeLifecycleAction.COMMS_ERROR: (),
+    NodeLifecycleAction.NODE_ERROR_CLEARED: (),
     NodeLifecycleAction.FOLDER_ADDED: (),
     NodeLifecycleAction.FOLDER_REMOVED: (),
     NodeLifecycleAction.FOLDER_RENAMED: ("newName",),
@@ -246,15 +410,29 @@ NODE_LIFECYCLE_EVENT_INFO_TAGS: dict[NodeLifecycleAction, tuple[str, ...]] = {
     NodeLifecycleAction.NET_RENAMED: (),
 }
 
-#: Device-write progress sub-codes seen on ``_7`` (PROGRESS) frames —
-#: *not* ``_3`` lifecycle verbs. Reference metadata only; the
-#: dispatcher doesn't route ``_7`` frames yet, so consumers wanting
-#: these branch on the raw frame. Keyed by the literal action value.
-#: (PyISY 3.x exposed these as ``NodeChangeAction.DEVICE_WRITING`` /
-#: ``DEVICE_MEMORY``.)
+#: Device-write progress sub-codes PyISY 3.x surfaced (as
+#: ``NodeChangeAction.DEVICE_WRITING`` / ``DEVICE_MEMORY``). They have
+#: an underscore prefix and aren't ``_3`` lifecycle verbs; the
+#: dispatcher doesn't route them. Reference metadata only — keyed by
+#: the literal action value, valued with the ``<eventInfo>`` child tags.
 DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS: dict[str, tuple[str, ...]] = {
     "_7A": ("message",),  # device-writing progress message
     "_7M": ("memory", "cmd1", "cmd2", "value"),  # raw Insteon memory write
+}
+
+#: ``SystemEventControl`` member → the action-code enum that decodes
+#: its ``<action>`` value (for the controls whose actions we model).
+#: Drives :func:`describe_system_event`; consumers can use it directly
+#: too (``_SYSTEM_ACTION_ENUMS.get(control)``).
+_SYSTEM_ACTION_ENUMS: dict[SystemEventControl, type[StrEnum]] = {
+    SystemEventControl.TRIGGER: TriggerAction,
+    SystemEventControl.NODE_LIFECYCLE: NodeLifecycleAction,
+    SystemEventControl.SYSTEM_CONFIG: SystemConfigAction,
+    SystemEventControl.SYSTEM_STATUS: SystemStatus,
+    SystemEventControl.INTERNET_ACCESS: InternetAccessStatus,
+    SystemEventControl.PROGRESS: ProgressAction,
+    SystemEventControl.SECURITY_SYSTEM: SecuritySystemAction,
+    SystemEventControl.DEVICE_LINKER: DeviceLinkerAction,
 }
 
 
@@ -262,18 +440,18 @@ def describe_system_event(control: str, action: str) -> str:
     """Render a ``<control>`` / ``<action>`` pair from a *system* event
     frame as a friendly ``"<control_label> = <action_label>"`` string.
 
-    Resolves each half to its enum name where one is known:
+    Resolves both halves to their enum names where one applies:
 
     * ``"_5"`` / ``"0"`` → ``"system_status = not_busy"``
-      (:class:`pyisyox.constants.SystemStatus`)
     * ``"_1"`` / ``"0"`` → ``"trigger = program_status"``
-      (:class:`TriggerAction`)
     * ``"_3"`` / ``"WH"`` → ``"node_lifecycle = pending_device_op"``
-      (:class:`NodeLifecycleAction`)
-    * ``"_0"`` / ``"90"`` → ``"heartbeat = 90"`` (the heartbeat action
-      is a controller-side counter, not interpreted)
+    * ``"_4"`` / ``"5"`` → ``"system_config = batch_mode_updated"``
+    * ``"_8"`` / ``"AW"`` → ``"security_system = armed_away"``
+    * ``"_20"`` / ``"2"`` → ``"device_linker = cleared"``
+    * ``"_0"`` / ``"90"`` → ``"heartbeat = 90"`` (action = seconds to
+      the next heartbeat; not enumerated)
     * ``"_28"`` / ``"1.3"`` → ``"matter_status = 1.3"`` (no enum)
-    * ``"_20"`` / ``"2"`` → ``"_20 = 2"`` (control we don't recognise —
+    * ``"_26"`` / ``"2"`` → ``"_26 = 2"`` (control we don't recognise —
       both halves pass through verbatim)
 
     Intended for the debug logging consumers do over raw event frames
@@ -287,16 +465,8 @@ def describe_system_event(control: str, action: str) -> str:
         ctrl = SystemEventControl(control)
     except ValueError:
         return f"{control_label} = {action}"
-    if ctrl is SystemEventControl.SYSTEM_STATUS:
-        action_label = SystemStatus.label(action)
-    elif ctrl is SystemEventControl.TRIGGER:
-        action_label = TriggerAction.label(action)
-    elif ctrl is SystemEventControl.NODE_LIFECYCLE:
-        action_label = NodeLifecycleAction.label(action)
-    else:
-        # HEARTBEAT counter, MATTER_STATUS payload, PROGRESS, ... — no
-        # enum to translate against; the raw value is the best we have.
-        action_label = action
+    action_enum = _SYSTEM_ACTION_ENUMS.get(ctrl)
+    action_label = _enum_label(action_enum, action) if action_enum is not None else action
     return f"{control_label} = {action_label}"
 
 
@@ -337,16 +507,20 @@ class NodeLifecycleEvent:
         Reload-worthy: ``ND`` / ``NR`` / ``NN`` (node added/removed/renamed
         — the registry's set or display names are stale), ``EN``
         (enabled/disabled — the entity's property shape may change),
-        ``RV`` (revised — UPB-style firmware update changes the property
-        table), ``RG`` (removed from scene — membership changed), and the
-        folder/scene tree verbs ``FD`` / ``FR`` / ``FN`` / ``GD`` / ``GR``
-        / ``GN`` (the ``groups`` / ``folders`` registries are stale).
+        ``RV`` (revised — discard and rebuild this node), ``RG`` (removed
+        from scene — membership changed), ``SC`` (node-discovery complete
+        — new nodes may have appeared), and the folder/scene tree verbs
+        ``FD`` / ``FR`` / ``FN`` / ``GD`` / ``GR`` / ``GN`` (the
+        ``groups`` / ``folders`` registries are stale).
 
         Softer signals — informational, don't trigger reload UX:
-        ``MV`` (added to scene), ``PC`` (parent changed), ``WH`` (pending
-        op), ``WD`` (device write completed / PG3 property report), ``CE``
-        / ``NE`` (comm error — device just unreachable, no shape change),
-        ``WR`` (a networking resource was renamed — doesn't touch nodes).
+        ``MV`` (added to scene), ``CL`` (link changed — not supported),
+        ``PC`` (parent changed), ``PI`` (power info), ``DI`` (device id —
+        not implemented), ``DP`` (UPB property), ``WH`` (pending op),
+        ``WD`` (programming device — a property-update event follows),
+        ``SN`` (discovering nodes — wait for ``SC``), ``CE`` / ``NE``
+        (comm error/cleared — no shape change), ``WR`` (a networking
+        resource was renamed — doesn't touch nodes).
         """
         return self.action in {
             NodeLifecycleAction.NODE_ADDED,
@@ -355,6 +529,7 @@ class NodeLifecycleEvent:
             NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,
             NodeLifecycleAction.NODE_ENABLED,
             NodeLifecycleAction.NODE_REVISED,
+            NodeLifecycleAction.NODE_DISCOVERY_COMPLETE,
             NodeLifecycleAction.FOLDER_ADDED,
             NodeLifecycleAction.FOLDER_REMOVED,
             NodeLifecycleAction.FOLDER_RENAMED,

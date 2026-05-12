@@ -23,16 +23,25 @@ from pyisyox.runtime.events import (
         ("_5", "2", "system_status = idle"),
         ("_5", "9", "system_status = 9"),  # unknown status value passes through
         ("_1", "0", "trigger = program_status"),
+        ("_1", "1", "trigger = get_status"),
         ("_1", "6", "trigger = variable_value"),
         ("_1", "7", "trigger = variable_init"),
-        ("_1", "9", "trigger = 9"),  # unknown trigger action passes through
+        ("_1", "8", "trigger = key"),
+        ("_1", "99", "trigger = 99"),  # unknown trigger action passes through
         ("_3", "WH", "node_lifecycle = pending_device_op"),
-        ("_3", "WD", "node_lifecycle = property_saved"),
-        ("_3", "CE", "node_lifecycle = comms_error"),
+        ("_3", "WD", "node_lifecycle = programming_device"),
+        ("_3", "CE", "node_lifecycle = node_error_cleared"),
+        ("_3", "PI", "node_lifecycle = power_info_changed"),
         ("_3", "ZZ", "node_lifecycle = ZZ"),  # unknown verb passes through
-        ("_0", "90", "heartbeat = 90"),  # heartbeat counter — not interpreted
+        ("_4", "5", "system_config = batch_mode_updated"),
+        ("_6", "1", "internet_access = enabled"),
+        ("_7", "2.1", "progress = device_adder_info"),
+        ("_8", "AW", "security_system = armed_away"),
+        ("_20", "2", "device_linker = cleared"),
+        ("_0", "90", "heartbeat = 90"),  # action = seconds; not enumerated
+        ("_23", "1", "portal = 1"),  # control known, no action enum
         ("_28", "1.3", "matter_status = 1.3"),  # no enum for matter status
-        ("_20", "2", "_20 = 2"),  # unknown control — both halves verbatim
+        ("_26", "2", "_26 = 2"),  # unknown control — both halves verbatim
     ],
 )
 def test_describe_system_event(control: str, action: str, expected: str) -> None:
@@ -46,7 +55,12 @@ def test_lifecycle_event_info_tags_cover_every_verb() -> None:
     # Spot-check a few documented payloads.
     assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.NODE_RENAMED] == ("newName",)
     assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.GROUP_ADDED] == ("groupName", "groupType")
-    assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.PROPERTY_SAVED] == ("message",)
+    assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.POWER_INFO_CHANGED] == (
+        "deviceClass",
+        "wattage",
+        "dcPeriod",
+    )
+    assert NODE_LIFECYCLE_EVENT_INFO_TAGS[NodeLifecycleAction.PROGRAMMING_DEVICE] == ()
 
 
 def test_device_write_progress_codes_are_underscore_prefixed() -> None:
@@ -181,6 +195,7 @@ def test_lifecycle_requires_reload_taxonomy() -> None:
         NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,  # RG (scene-edit)
         NodeLifecycleAction.NODE_ENABLED,  # EN — covers both directions
         NodeLifecycleAction.NODE_REVISED,  # RV
+        NodeLifecycleAction.NODE_DISCOVERY_COMPLETE,  # SC — new nodes may have appeared
         NodeLifecycleAction.FOLDER_ADDED,  # FD
         NodeLifecycleAction.FOLDER_REMOVED,  # FR
         NodeLifecycleAction.FOLDER_RENAMED,  # FN
@@ -190,13 +205,21 @@ def test_lifecycle_requires_reload_taxonomy() -> None:
     }
     soft_actions = {
         NodeLifecycleAction.NODE_MOVED,  # MV (added to scene)
+        NodeLifecycleAction.LINK_CHANGED,  # CL — not supported
         NodeLifecycleAction.PARENT_CHANGED,  # PC
+        NodeLifecycleAction.POWER_INFO_CHANGED,  # PI
+        NodeLifecycleAction.DEVICE_ID_CHANGED,  # DI — not implemented
+        NodeLifecycleAction.DEVICE_PROPERTY_CHANGED,  # DP — UPB only
         NodeLifecycleAction.PENDING_DEVICE_OP,  # WH
-        NodeLifecycleAction.PROPERTY_SAVED,  # WD (write completed / PG3 report)
-        NodeLifecycleAction.COMMS_ERROR,  # CE — comm error
+        NodeLifecycleAction.PROGRAMMING_DEVICE,  # WD — a property event follows
+        NodeLifecycleAction.DISCOVERING_NODES,  # SN — wait for SC
+        NodeLifecycleAction.NODE_ERROR_CLEARED,  # CE — comm error cleared
         NodeLifecycleAction.NODE_ERROR,  # NE — comm error, no shape change
         NodeLifecycleAction.NET_RENAMED,  # WR — networking resource, not nodes
     }
+    # The two sets together must cover every verb — keeps this test
+    # honest when new verbs are added.
+    assert reload_actions | soft_actions == set(NodeLifecycleAction)
     for act in reload_actions:
         ev = NodeLifecycleEvent(action=act, node_address="X", raw_action=act, seqnum=0)
         assert ev.requires_reload is True, f"{act} should be a reload-worthy signal"
