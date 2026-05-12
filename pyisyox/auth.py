@@ -313,28 +313,59 @@ class PortalAuth:
         return True
 
     async def close(self, session: aiohttp.ClientSession, base_url: str) -> None:
-        """Best-effort logout against ``POST /api/logout``, then clear
+        """Best-effort logout against ``POST /api/jwt/logout``, then clear
         the in-memory tokens.
 
         If we don't tell the eisy we're done, the refresh token stays
         live for its full 30-day TTL — useful only to attackers who
         somehow obtain it. The logout call is best-effort: any error
-        (network down, controller already gone) is logged at debug
-        level and swallowed. The local token state is cleared
+        (network down, controller already gone, stale token) is logged
+        at debug level and swallowed. The local token state is cleared
         regardless so the consumer can construct a fresh
         :class:`PortalAuth` and re-authenticate.
         """
         if self._tokens is not None:
-            url = f"{base_url.rstrip('/')}{self.LOGOUT_PATH}"
-            headers = {"Authorization": f"Bearer {self._tokens.access_token}"}
-            try:
-                async with session.post(url, headers=headers) as resp:
-                    _LOGGER.debug("logout response: HTTP %s", resp.status)
-            except Exception as exc:  # pylint: disable=broad-except
-                # Network errors during logout are not fatal — the token
-                # will expire naturally even if we couldn't tell the eisy.
-                _LOGGER.debug("logout call failed (%s); token will expire naturally", exc)
+            await self._logout(session, base_url)
         self._tokens = None
+
+    async def _logout(self, session: aiohttp.ClientSession, base_url: str) -> None:
+        """Post ``POST /api/jwt/logout`` with a *live* bearer token.
+
+        The access token is the credential the eisy authenticates the
+        logout call with. After a long WebSocket-only session it's
+        usually expired — proactive refresh only fires on REST calls
+        (:meth:`request_kwargs`), and an event-stream-driven consumer
+        makes almost none after init. Posting an expired bearer to
+        ``/api/jwt/logout`` is what produces the intermittent ``HTTP
+        404`` / ``HTTP 500`` responses seen at shutdown (the firmware's
+        answer for "no such session" varies). So refresh first if the
+        token is at/near expiry; the refresh rotates the refresh token
+        too, so logging out with the new access token still invalidates
+        the current pair. If the refresh itself fails the refresh token
+        is already dead or the controller is unreachable — there's
+        nothing left to invalidate, so skip the logout call.
+        """
+        if self._tokens is not None and self._tokens.access_expires_within(self.PROACTIVE_REFRESH_LEEWAY):
+            async with self._lock():
+                if self._tokens is not None and self._tokens.access_expires_within(
+                    self.PROACTIVE_REFRESH_LEEWAY
+                ):
+                    try:
+                        await self._refresh_locked(session, base_url)
+                    except AuthError as exc:
+                        _LOGGER.debug("pre-logout token refresh failed (%s); skipping logout", exc)
+                        return
+        if self._tokens is None:  # pragma: no cover — defensive; guarded by close()
+            return
+        url = f"{base_url.rstrip('/')}{self.LOGOUT_PATH}"
+        headers = {"Authorization": f"Bearer {self._tokens.access_token}"}
+        try:
+            async with session.post(url, headers=headers) as resp:
+                _LOGGER.debug("logout response: HTTP %s", resp.status)
+        except Exception as exc:  # pylint: disable=broad-except
+            # Network errors during logout are not fatal — the token
+            # will expire naturally even if we couldn't tell the eisy.
+            _LOGGER.debug("logout call failed (%s); token will expire naturally", exc)
 
     async def _refresh_or_relogin(
         self,
