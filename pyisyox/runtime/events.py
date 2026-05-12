@@ -511,13 +511,16 @@ def _xml_to_obj(el: ET.Element) -> object:
     """Recursively turn an ``<eventInfo>`` child element into a
     JSON-friendly value for human-readable logging.
 
+    Attributes and child elements share the dict's keyspace (the IoX
+    event schema doesn't collide names, and dropping an ``@`` prefix
+    reads cleaner); body text alongside children lands under ``#text``.
+
     * leaf with text → the (scalar-coerced) text
-    * element with attributes → dict with ``@attr`` keys, ``#text`` for
-      any body text, and one key per child
+    * element with attributes and/or children → a dict
     * empty self-closing element (``<on/>``, ``<nr/>``) → ``True`` — a
       presence flag
     """
-    obj: dict[str, object] = {f"@{k}": v for k, v in el.attrib.items()}
+    obj: dict[str, object] = {k: _scalar(v) for k, v in el.attrib.items()}
     for child in el:
         obj[child.tag] = _xml_to_obj(child)
     text = (el.text or "").strip()
