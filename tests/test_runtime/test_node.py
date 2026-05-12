@@ -279,3 +279,50 @@ async def test_client_send_node_command_multiple_params() -> None:
     await client.send_node_command("A", "X", 1, 2, 3)
     _, path, _ = session.calls[0]
     assert path == "/rest/nodes/A/cmd/X/1/2/3"
+
+
+# --- enable / disable ----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_node_set_enabled_disable(real_profile: Profile) -> None:
+    """``set_enabled(False)`` → GET /rest/nodes/{addr}/disable; the local
+    record's ``enabled`` flag flips on success."""
+    record = _make_record()
+    session = FakeSession(BASE)
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/disable", 200, "<ok/>")
+    node = Node.from_record(record, real_profile, _make_client(session))
+    assert node.enabled is True
+
+    await node.set_enabled(False)
+
+    method, path, _ = session.calls[0]
+    assert method == "GET"
+    assert path == "/rest/nodes/3D%207D%2087%201/disable"
+    assert node.enabled is False
+
+
+@pytest.mark.asyncio
+async def test_node_set_enabled_enable(real_profile: Profile) -> None:
+    """``set_enabled(True)`` → GET /rest/nodes/{addr}/enable."""
+    record = _make_record()
+    record.enabled = False
+    session = FakeSession(BASE)
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/enable", 200, "<ok/>")
+    node = Node.from_record(record, real_profile, _make_client(session))
+
+    await node.set_enabled(True)
+
+    _, path, _ = session.calls[0]
+    assert path == "/rest/nodes/3D%207D%2087%201/enable"
+    assert node.enabled is True
+
+
+@pytest.mark.asyncio
+async def test_client_set_node_enabled_quotes_address() -> None:
+    session = FakeSession(BASE)
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/disable", 200, "<ok/>")
+    client = _make_client(session)
+    await client.set_node_enabled("3D 7D 87 1", False)
+    _, path, _ = session.calls[0]
+    assert path == "/rest/nodes/3D%207D%2087%201/disable"
