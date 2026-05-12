@@ -485,8 +485,16 @@ class IoXClient:
         )
 
     async def _fetch_config(self) -> ControllerConfig:
-        """``GET /api/config`` — minimal, used to confirm IoX 6+ + uuid."""
-        raw = await self._get_json(CONFIG_PATH, authenticated=False)
+        """``GET /api/config`` — minimal, used to confirm IoX 6+ + uuid.
+
+        Authenticated like every other endpoint: ``/api/config`` is
+        gated on both auth modes (``LocalAuth`` HTTP-basic on
+        ``:8443``, ``PortalAuth`` JWT on ``:443``), so an earlier
+        ``authenticated=False`` here 401'd the local-credentials flow.
+        ``_authenticate_once`` is a no-op for ``LocalAuth`` (basic auth
+        attaches per request) and runs the login POST for ``PortalAuth``.
+        """
+        raw = await self._get_json(CONFIG_PATH)
         data = raw.get("data", raw)
         return ControllerConfig(
             uuid=str(data.get("uuid", "")),
