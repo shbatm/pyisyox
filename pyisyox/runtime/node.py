@@ -460,21 +460,31 @@ class Node:
         await self.send_command(CMD_SECURE, 0)
 
     async def set_on_level(self, val: int) -> None:
-        """Set the device's remembered on-level.
+        """Set the device's remembered on-level via the legacy ``OL`` command.
 
-        Valid range is **per device** — the editor codec enforces the
-        actual bounds via the ``OL`` property's editor on this node's
-        nodedef:
+        ``val`` is the **device-native** encoding:
 
-        * Insteon dimmers: raw 0-255 (UOM 100, raw-byte encoded)
-        * Z-Wave dimmers: 0-100 (UOM 100, percentage)
-        * KeypadLinc relay/keypad-button: 0-100 (different editor)
+        * **Insteon dimmers** — a 0-255 raw byte (the controller also
+          reports ``OL`` as a UOM-100 byte; ``255`` = 100%).
+        * **Z-Wave / Zigbee dimmers, KeypadLinc** — 0-100.
 
-        Pass the integer the device's editor expects. The codec raises
-        :class:`pyisyox.runtime.NodeCommandError` on out-of-range; no
-        pre-validation here, the codec is the source of truth.
+        The profile's ``I_OL`` editor only describes the 0-100%
+        *display* slider (``max=100``), so it would wrongly reject the
+        0-255 byte the Insteon ``/cmd/OL`` endpoint expects — the editor
+        codec is therefore **not** applied here; the value is sent to
+        ``/rest/nodes/{addr}/cmd/OL/{val}`` verbatim. Callers working in
+        percentages scale to the device's encoding first (the consumer
+        knows whether the ``OL`` property reports as a byte).
+
+        Raises:
+            NodeCommandError: when ``val`` is outside ``0-255`` (a
+                coarse sanity bound; the controller enforces the real
+                per-device range).
         """
-        await self.send_command(PROP_ON_LEVEL, val)
+        raw = int(val)
+        if not 0 <= raw <= 255:
+            raise NodeCommandError(f"node {self.address!r}: on-level {val!r} is out of range 0-255")
+        await self._client.send_node_command(self.address, PROP_ON_LEVEL, raw)
 
     async def set_ramp_rate(self, val: int) -> None:
         """Set the device's ramp rate.

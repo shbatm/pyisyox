@@ -326,3 +326,33 @@ async def test_client_set_node_enabled_quotes_address() -> None:
     await client.set_node_enabled("3D 7D 87 1", False)
     _, path, _ = session.calls[0]
     assert path == "/rest/nodes/3D%207D%2087%201/disable"
+
+
+# --- set_on_level (raw byte, codec-bypassed) -----------------------------
+
+
+@pytest.mark.asyncio
+async def test_set_on_level_sends_raw_byte(real_profile: Profile) -> None:
+    """``set_on_level`` sends the value verbatim to ``/cmd/OL/{val}`` —
+    the ``I_OL`` editor's ``max=100`` (the display slider) does *not*
+    clamp it, so the 0-255 byte an Insteon dimmer wants gets through."""
+    record = _make_record(nodedef_id="DimmerLampSwitch", family_id="1", instance_id="1")
+    session = FakeSession(BASE)
+    session.set_route("GET", "/rest/nodes/3D%207D%2087%201/cmd/OL/255", 200, "<ok/>")
+    node = Node.from_record(record, real_profile, _make_client(session))
+
+    await node.set_on_level(255)
+
+    method, path, _ = session.calls[0]
+    assert method == "GET"
+    assert path == "/rest/nodes/3D%207D%2087%201/cmd/OL/255"
+
+
+@pytest.mark.asyncio
+async def test_set_on_level_rejects_out_of_range(real_profile: Profile) -> None:
+    record = _make_record(nodedef_id="DimmerLampSwitch", family_id="1", instance_id="1")
+    session = FakeSession(BASE)
+    node = Node.from_record(record, real_profile, _make_client(session))
+    with pytest.raises(NodeCommandError, match="out of range 0-255"):
+        await node.set_on_level(300)
+    assert session.calls == [], "must short-circuit before HTTP"
