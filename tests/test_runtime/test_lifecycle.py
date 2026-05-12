@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pyisyox.client import NodeRecord
 from pyisyox.runtime.events import (
     DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS,
@@ -9,7 +11,32 @@ from pyisyox.runtime.events import (
     EventDispatcher,
     NodeLifecycleAction,
     NodeLifecycleEvent,
+    describe_system_event,
 )
+
+
+@pytest.mark.parametrize(
+    ("control", "action", "expected"),
+    [
+        ("_5", "0", "system_status = not_busy"),
+        ("_5", "1", "system_status = busy"),
+        ("_5", "2", "system_status = idle"),
+        ("_5", "9", "system_status = 9"),  # unknown status value passes through
+        ("_1", "0", "trigger = program_status"),
+        ("_1", "6", "trigger = variable_value"),
+        ("_1", "7", "trigger = variable_init"),
+        ("_1", "9", "trigger = 9"),  # unknown trigger action passes through
+        ("_3", "WH", "node_lifecycle = pending_device_op"),
+        ("_3", "WD", "node_lifecycle = property_saved"),
+        ("_3", "CE", "node_lifecycle = comms_error"),
+        ("_3", "ZZ", "node_lifecycle = ZZ"),  # unknown verb passes through
+        ("_0", "90", "heartbeat = 90"),  # heartbeat counter — not interpreted
+        ("_28", "1.3", "matter_status = 1.3"),  # no enum for matter status
+        ("_20", "2", "_20 = 2"),  # unknown control — both halves verbatim
+    ],
+)
+def test_describe_system_event(control: str, action: str, expected: str) -> None:
+    assert describe_system_event(control, action) == expected
 
 
 def test_lifecycle_event_info_tags_cover_every_verb() -> None:
@@ -166,7 +193,7 @@ def test_lifecycle_requires_reload_taxonomy() -> None:
         NodeLifecycleAction.PARENT_CHANGED,  # PC
         NodeLifecycleAction.PENDING_DEVICE_OP,  # WH
         NodeLifecycleAction.PROPERTY_SAVED,  # WD (write completed / PG3 report)
-        NodeLifecycleAction.CONFIG_ERROR,  # CE
+        NodeLifecycleAction.COMMS_ERROR,  # CE — comm error
         NodeLifecycleAction.NODE_ERROR,  # NE — comm error, no shape change
         NodeLifecycleAction.NET_RENAMED,  # WR — networking resource, not nodes
     }

@@ -860,12 +860,26 @@ NODE_CATEGORIES: dict[str, str] = {
 
 
 class SystemStatus(StrEnum):
-    """System Status Enum."""
+    """System Status Enum — the ``<action>`` value on ``_5`` event frames."""
 
     NOT_BUSY = "0"
     BUSY = "1"
     IDLE = "2"
     SAFE_MODE = "3"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name for a system-status value, or the
+        raw value verbatim if it isn't one we know.
+
+        Mirrors :meth:`pyisyox.runtime.SystemEventControl.label` so the
+        two compose cleanly in log lines
+        (``system_status = not_busy``).
+        """
+        try:
+            return cls(value).name.lower()
+        except ValueError:
+            return value
 
 
 # Node Link Types

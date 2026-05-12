@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from pyisyox.client import NodePropertyValue
+from pyisyox.constants import SystemStatus
 
 if TYPE_CHECKING:
     from pyisyox.client import NodeRecord, ProgramRecord, VariableRecord
@@ -125,6 +126,15 @@ class TriggerAction(StrEnum):
     #: payload shape as :attr:`VARIABLE_VALUE`, applied to ``init``.
     VARIABLE_INIT = "7"
 
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name for a trigger-action code, or the
+        raw value if it isn't one we route on."""
+        try:
+            return cls(value).name.lower()
+        except ValueError:
+            return value
+
 
 class NodeLifecycleAction(StrEnum):
     """Verbs the eisy emits via ``<control>_3</control>`` events.
@@ -170,10 +180,12 @@ class NodeLifecycleAction(StrEnum):
     NODE_REVISED = "RV"
     #: Node communication error (device unreachable).
     NODE_ERROR = "NE"
-    #: Configuration error — observed on PG3 plugin nodes. (PyISY 3.x
-    #: read ``CE`` as ``CLEAR_ERROR`` instead; the meaning is
-    #: ambiguous and may be context-dependent.)
-    CONFIG_ERROR = "CE"
+    #: A node communication error. Observed on real hardware as the
+    #: companion to :attr:`NODE_ERROR` (``NE``); the exact distinction
+    #: between ``NE`` and ``CE`` isn't documented. (PyISY 3.x read
+    #: ``CE`` as ``CLEAR_ERROR``; the v6 rewrite briefly had
+    #: ``CONFIG_ERROR`` — both look wrong against captures.)
+    COMMS_ERROR = "CE"
 
     # --- folder verbs -------------------------------------------------
     #: Folder added.
@@ -197,6 +209,15 @@ class NodeLifecycleAction(StrEnum):
     #: node registry.
     NET_RENAMED = "WR"
 
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name for a lifecycle verb, or the raw
+        code if it isn't one we know."""
+        try:
+            return cls(value).name.lower()
+        except ValueError:
+            return value
+
 
 #: ``<eventInfo>`` child element names carried by each lifecycle verb
 #: (per the UDI notification table). An empty tuple means the frame
@@ -215,7 +236,7 @@ NODE_LIFECYCLE_EVENT_INFO_TAGS: dict[NodeLifecycleAction, tuple[str, ...]] = {
     NodeLifecycleAction.PROPERTY_SAVED: ("message",),
     NodeLifecycleAction.NODE_REVISED: (),
     NodeLifecycleAction.NODE_ERROR: (),
-    NodeLifecycleAction.CONFIG_ERROR: (),
+    NodeLifecycleAction.COMMS_ERROR: (),
     NodeLifecycleAction.FOLDER_ADDED: (),
     NodeLifecycleAction.FOLDER_REMOVED: (),
     NodeLifecycleAction.FOLDER_RENAMED: ("newName",),
@@ -235,6 +256,48 @@ DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS: dict[str, tuple[str, ...]] = {
     "_7A": ("message",),  # device-writing progress message
     "_7M": ("memory", "cmd1", "cmd2", "value"),  # raw Insteon memory write
 }
+
+
+def describe_system_event(control: str, action: str) -> str:
+    """Render a ``<control>`` / ``<action>`` pair from a *system* event
+    frame as a friendly ``"<control_label> = <action_label>"`` string.
+
+    Resolves each half to its enum name where one is known:
+
+    * ``"_5"`` / ``"0"`` → ``"system_status = not_busy"``
+      (:class:`pyisyox.constants.SystemStatus`)
+    * ``"_1"`` / ``"0"`` → ``"trigger = program_status"``
+      (:class:`TriggerAction`)
+    * ``"_3"`` / ``"WH"`` → ``"node_lifecycle = pending_device_op"``
+      (:class:`NodeLifecycleAction`)
+    * ``"_0"`` / ``"90"`` → ``"heartbeat = 90"`` (the heartbeat action
+      is a controller-side counter, not interpreted)
+    * ``"_28"`` / ``"1.3"`` → ``"matter_status = 1.3"`` (no enum)
+    * ``"_20"`` / ``"2"`` → ``"_20 = 2"`` (control we don't recognise —
+      both halves pass through verbatim)
+
+    Intended for the debug logging consumers do over raw event frames
+    (so a line reads ``system_status = busy`` instead of
+    ``system_status = 1``); not part of any dispatch path. Property-
+    update frames (non-underscore control) aren't system events — this
+    just echoes them back unchanged if you pass one.
+    """
+    control_label = SystemEventControl.label(control)
+    try:
+        ctrl = SystemEventControl(control)
+    except ValueError:
+        return f"{control_label} = {action}"
+    if ctrl is SystemEventControl.SYSTEM_STATUS:
+        action_label = SystemStatus.label(action)
+    elif ctrl is SystemEventControl.TRIGGER:
+        action_label = TriggerAction.label(action)
+    elif ctrl is SystemEventControl.NODE_LIFECYCLE:
+        action_label = NodeLifecycleAction.label(action)
+    else:
+        # HEARTBEAT counter, MATTER_STATUS payload, PROGRESS, ... — no
+        # enum to translate against; the raw value is the best we have.
+        action_label = action
+    return f"{control_label} = {action_label}"
 
 
 @dataclass(slots=True, frozen=True)
@@ -282,9 +345,8 @@ class NodeLifecycleEvent:
         Softer signals — informational, don't trigger reload UX:
         ``MV`` (added to scene), ``PC`` (parent changed), ``WH`` (pending
         op), ``WD`` (device write completed / PG3 property report), ``CE``
-        (config error), ``NE`` (comm error — device just unreachable, no
-        shape change), ``WR`` (a networking resource was renamed — doesn't
-        touch nodes).
+        / ``NE`` (comm error — device just unreachable, no shape change),
+        ``WR`` (a networking resource was renamed — doesn't touch nodes).
         """
         return self.action in {
             NodeLifecycleAction.NODE_ADDED,

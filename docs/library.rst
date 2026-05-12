@@ -223,6 +223,21 @@ ride on ``_7`` (PROGRESS) frames. Both are reference metadata —
 pyisyox itself only parses the ``<node>`` element on
 :attr:`~pyisyox.NodeLifecycleAction.NODE_ADDED`.
 
+.. autofunction:: pyisyox.describe_system_event
+    :no-index:
+
+:func:`~pyisyox.describe_system_event` renders a system-event frame's
+``<control>`` / ``<action>`` pair into a friendly
+``"control_label = action_label"`` string (e.g.
+``system_status = busy``, ``trigger = program_status``,
+``node_lifecycle = pending_device_op``), translating each half against
+:class:`~pyisyox.SystemEventControl`,
+:class:`pyisyox.constants.SystemStatus`,
+:class:`~pyisyox.TriggerAction`, and
+:class:`~pyisyox.NodeLifecycleAction` where one applies. The
+``.label(value)`` classmethod on each of those enums does the
+single-value lookup if you only need one half.
+
 .. autoclass:: pyisyox.ProgramStatusEvent
     :no-index:
     :members:
