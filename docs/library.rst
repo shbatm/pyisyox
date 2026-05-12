@@ -194,12 +194,40 @@ Event pipeline
     :members:
     :show-inheritance:
 
+**System-event control + action codes** — the wire vocabulary from
+the *ISY994 Developer Cookbook* §8.5 (plus IoX-6 additions):
+
 .. autoclass:: pyisyox.SystemEventControl
     :no-index:
     :members:
     :show-inheritance:
 
 .. autoclass:: pyisyox.TriggerAction
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.ProgressAction
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.SystemConfigAction
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.InternetAccessStatus
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.SecuritySystemAction
+    :no-index:
+    :members:
+    :show-inheritance:
+
+.. autoclass:: pyisyox.DeviceLinkerAction
     :no-index:
     :members:
     :show-inheritance:
@@ -219,8 +247,8 @@ Event pipeline
 element names it carries (empty tuple = the frame carries only the node
 address); ``pyisyox.DEVICE_WRITE_PROGRESS_EVENT_INFO_TAGS`` does the
 same for the ``_7A`` / ``_7M`` device-write progress sub-codes that
-ride on ``_7`` (PROGRESS) frames. Both are reference metadata —
-pyisyox itself only parses the ``<node>`` element on
+PyISY 3.x surfaced. Both are reference metadata — pyisyox itself only
+parses the ``<node>`` element on
 :attr:`~pyisyox.NodeLifecycleAction.NODE_ADDED`.
 
 .. autofunction:: pyisyox.describe_system_event
@@ -230,13 +258,10 @@ pyisyox itself only parses the ``<node>`` element on
 ``<control>`` / ``<action>`` pair into a friendly
 ``"control_label = action_label"`` string (e.g.
 ``system_status = busy``, ``trigger = program_status``,
-``node_lifecycle = pending_device_op``), translating each half against
-:class:`~pyisyox.SystemEventControl`,
-:class:`pyisyox.constants.SystemStatus`,
-:class:`~pyisyox.TriggerAction`, and
-:class:`~pyisyox.NodeLifecycleAction` where one applies. The
-``.label(value)`` classmethod on each of those enums does the
-single-value lookup if you only need one half.
+``node_lifecycle = programming_device``, ``security_system = armed_away``,
+``device_linker = cleared``), translating each half against the enums
+above where one applies. The ``.label(value)`` classmethod on each
+enum does the single-value lookup if you only need one half.
 
 .. autoclass:: pyisyox.ProgramStatusEvent
     :no-index:
