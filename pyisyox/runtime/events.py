@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -738,8 +739,22 @@ def parse_event_frame(raw: str) -> Event | None:
     try:
         root = ET.fromstring(payload)  # noqa: S314 — eisy LAN traffic
     except ET.ParseError as exc:
-        _LOGGER.debug("WS frame XML parse failed (%s); frame=%r", exc, payload[:200])
-        return None
+        # eisy occasionally emits frames with unescaped ``&`` in text
+        # content — typically inside an ``_7`` REST-log ``<eventInfo>``
+        # echo of a ``submitCmd`` query string like
+        # ``NUM.107=24&VAL.111=1`` — which is not well-formed XML. Try
+        # again after escaping stray ampersands; suppress the original
+        # parse-failure log only when the recovery succeeds.
+        repaired = _escape_stray_ampersands(payload)
+        if repaired != payload:
+            try:
+                root = ET.fromstring(repaired)  # noqa: S314 — eisy LAN traffic
+            except ET.ParseError:
+                _LOGGER.debug("WS frame XML parse failed (%s); frame=%r", exc, payload[:200])
+                return None
+        else:
+            _LOGGER.debug("WS frame XML parse failed (%s); frame=%r", exc, payload[:200])
+            return None
     if root.tag != "Event":
         return None
 
@@ -820,6 +835,19 @@ def _decode_action_attrs(action_el: ET.Element | None) -> tuple[str, int | None]
         return uom, int(prec_raw)
     except ValueError:
         return uom, None
+
+
+#: Matches ``&`` that isn't already part of a valid XML/HTML entity
+#: reference (``&amp;`` / ``&lt;`` / ``&gt;`` / ``&quot;`` / ``&apos;``
+#: / numeric ``&#NN;`` / hex ``&#xNN;``). Used to recover frames where
+#: eisy embeds query-string-shaped text (``NUM.107=24&VAL.111=1``) in
+#: ``<eventInfo>`` without escaping the ampersand.
+_STRAY_AMPERSAND_RE = re.compile(r"&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)")
+
+
+def _escape_stray_ampersands(payload: str) -> str:
+    """Escape ``&`` chars that aren't part of an XML entity reference."""
+    return _STRAY_AMPERSAND_RE.sub("&amp;", payload)
 
 
 def _maybe_unwrap_json_envelope(raw: str) -> str | None:

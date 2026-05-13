@@ -54,6 +54,31 @@ ZWAVE_NODEDEFS_PATH = "/rest/zwave/node/{address}/def/get"
 #: best-effort for unresolved family-``12`` nodes.
 ZMATTER_ZWAVE_NODEDEFS_PATH = "/rest/zmatter/zwave/node/{address}/def/get"
 
+#: ``GET /rest/zwave/node/{address}/config/query/{number}`` — fetch one
+#: Z-Wave configuration parameter. The HTTP body is a
+#: ``<config paramNum="N" size="SZ" value="V"/>`` response on success
+#: (PyISY 3.x verified shape); the device's underlying poll reply also
+#: arrives on the WebSocket stream. ``address`` is URL-quoted.
+ZWAVE_PARAMETER_GET_PATH = "/rest/zwave/node/{address}/config/query/{number}"
+
+#: ``GET /rest/zwave/node/{address}/config/set/{number}/{value}/{size}`` —
+#: set one Z-Wave parameter. ``size`` is the parameter's byte size (1/2/4)
+#: as defined by the device; the controller forwards it on the wire so
+#: multi-byte parameters land correctly.
+ZWAVE_PARAMETER_SET_PATH = "/rest/zwave/node/{address}/config/set/{number}/{value}/{size}"
+
+#: ``GET /rest/zmatter/zwave/node/{address}/config/query/{number}`` — as
+#: :data:`ZWAVE_PARAMETER_GET_PATH` but for the Z-Matter (family ``12``)
+#: radio. Not yet confirmed against hardware; mirrors the nodedef-path
+#: zmatter quirk and is exercised through :meth:`Node.get_zwave_parameter`
+#: when ``family_id == "12"``.
+ZMATTER_ZWAVE_PARAMETER_GET_PATH = "/rest/zmatter/zwave/node/{address}/config/query/{number}"
+
+#: ``GET /rest/zmatter/zwave/node/{address}/config/set/{number}/{value}/{size}`` —
+#: zmatter-radio counterpart of :data:`ZWAVE_PARAMETER_SET_PATH`. Same
+#: hardware-not-verified caveat as above.
+ZMATTER_ZWAVE_PARAMETER_SET_PATH = "/rest/zmatter/zwave/node/{address}/config/set/{number}/{value}/{size}"
+
 #: ``GET /rest/status`` — XML property table. Merged into ``/api/nodes``
 #: records to fill missing property values (especially for plugin nodes).
 REST_STATUS_PATH = "/rest/status"

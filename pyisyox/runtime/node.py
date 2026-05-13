@@ -27,7 +27,9 @@ both :class:`PortalAuth` JWT and :class:`LocalAuth` HTTP basic accept
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
+from xml.etree import ElementTree as ET
 
 from pyisyox.client import NodeType
 from pyisyox.constants import (
@@ -47,8 +49,11 @@ from pyisyox.constants import (
     NodeFlag,
     Protocol,
 )
+from pyisyox.exceptions import ISYResponseParseError
 from pyisyox.runtime._commands import NodeCommandError, encode_command_params
 from pyisyox.runtime._normalize import normalize_property_value
+
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
@@ -585,6 +590,95 @@ class Node:
         """
         await self._client.post_node_update(self.address, {"name": name, "nodeType": NodeType.NODE})
 
+    # --- Z-Wave parameter surface ------------------------------------
+    #
+    # Z-Wave configuration parameters live on a dedicated wire path
+    # (``/rest/(zmatter/)?zwave/node/{addr}/parameters/...``) rather than
+    # the legacy ``/cmd/CONFIG/...`` surface. The ``CONFIG`` accept
+    # command in the dynamic Z-Wave nodedefs models only the (NUM, VAL)
+    # pair — it has no slot for the parameter's byte size, which the
+    # device needs for multi-byte writes — so these helpers are the
+    # supported way to read / write parameters from consumers (HA
+    # service calls, scripts, …).
+
+    async def get_zwave_parameter(self, number: int) -> dict[str, int]:
+        """Request parameter ``number`` from this Z-Wave node.
+
+        On success the controller responds with
+        ``<config paramNum="N" size="SZ" value="V"/>`` synchronously
+        (matches PyISY 3.x's verified shape); this method parses that
+        and returns ``{"parameter": N, "size": SZ, "value": V}`` so
+        consumers get structured data instead of raw XML. The device's
+        post-poll parameter report also arrives on the WS event stream.
+
+        Picks the right wire prefix from this node's family id:
+        ``"4"`` → legacy ``/rest/zwave/...``, ``"12"`` → Z-Matter
+        ``/rest/zmatter/zwave/...``.
+
+        Raises:
+            NodeCommandError: When this node isn't a Z-Wave node
+                (family ``4`` or ``12``), or when the controller
+                returns a ``<RestResponse succeeded="false">`` envelope
+                (unknown parameter number, device unreachable, …).
+            ISYResponseParseError: When the response body is neither
+                a ``<config>`` element nor a ``<RestResponse>``
+                envelope — i.e. malformed.
+        """
+        if self.family_id not in _ZWAVE_FAMILY_IDS:
+            raise NodeCommandError(
+                f"node {self.address!r} is not a Z-Wave node "
+                f"(family={self.family_id!r}); parameters surface is "
+                "Z-Wave-only"
+            )
+        zmatter = self.family_id == NodeFamily.ZMATTER_ZWAVE
+        body = await self._client.get_zwave_parameter(self.address, number, zmatter=zmatter)
+        parsed = _parse_zwave_parameter_response(self.address, number, body)
+        _LOGGER.debug("Z-Wave get parameter on %s succeeded: %s", self.address, parsed)
+        return parsed
+
+    async def set_zwave_parameter(self, number: int, value: int, size: int) -> None:
+        """Write parameter ``number`` on this Z-Wave node.
+
+        Args:
+            number: Z-Wave parameter number (device-defined).
+            value: Signed integer value; the controller / device
+                interpret the sign per the device's parameter spec.
+            size: Parameter byte size — ``1``, ``2``, or ``4``.
+
+        On controller acceptance the device's post-write parameter
+        report arrives asynchronously on the WS stream. The HTTP body
+        is a ``<RestResponse>`` envelope which this method inspects —
+        ``succeeded="false"`` raises :class:`NodeCommandError` so a
+        failed write is never silent.
+
+        Raises:
+            NodeCommandError: When this node isn't Z-Wave, ``size``
+                isn't ``1`` / ``2`` / ``4``, or the controller rejects
+                the write.
+        """
+        if self.family_id not in _ZWAVE_FAMILY_IDS:
+            raise NodeCommandError(
+                f"node {self.address!r} is not a Z-Wave node "
+                f"(family={self.family_id!r}); parameters surface is "
+                "Z-Wave-only"
+            )
+        if size not in (1, 2, 4):
+            raise NodeCommandError(f"Z-Wave parameter size must be 1, 2, or 4 bytes; got {size!r}")
+        zmatter = self.family_id == NodeFamily.ZMATTER_ZWAVE
+        body = await self._client.set_zwave_parameter(self.address, number, value, size, zmatter=zmatter)
+        _check_rest_response_succeeded(
+            self.address,
+            body,
+            context=(f"Z-Wave set parameter {number}={value} (size={size}) on {self.address!r}"),
+        )
+        _LOGGER.debug(
+            "Z-Wave set parameter on %s succeeded: parameter=%d value=%d size=%d",
+            self.address,
+            number,
+            value,
+            size,
+        )
+
     async def set_enabled(self, enabled: bool) -> None:
         """Enable or disable this node on the controller.
 
@@ -598,3 +692,82 @@ class Node:
         """
         await self._client.set_node_enabled(self.address, enabled)
         self._record.enabled = enabled
+
+
+# --- Z-Wave parameter response helpers -----------------------------------
+#
+# Module-level so they can be exercised by parser-shape tests without
+# constructing a Node + client. Both shapes were verified against PyISY
+# 3.x's :class:`pyisy.nodes.Node.get_zwave_parameter` /
+# :meth:`set_zwave_parameter` — the eisy/IoX side hasn't changed.
+
+
+def _parse_zwave_parameter_response(address: str, number: int, body: str) -> dict[str, int]:
+    """Decode the controller's ``<config>``/``<RestResponse>`` body.
+
+    Success shape: ``<config paramNum="N" size="SZ" value="V"/>`` →
+    ``{"parameter": N, "size": SZ, "value": V}`` (ints).
+    Failure shape: ``<RestResponse succeeded="false">…`` → raises
+    :class:`NodeCommandError` quoting the controller's status code.
+    Anything else (truncated frame, unexpected root) → raises
+    :class:`ISYResponseParseError`.
+    """
+    try:
+        root = ET.fromstring(body)  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError as exc:
+        raise ISYResponseParseError(
+            f"Z-Wave parameter response for {address!r} param {number} is not well-formed XML: {exc}"
+        ) from exc
+    if root.tag == "config":
+        try:
+            return {
+                "parameter": int(root.attrib.get("paramNum", number)),
+                "size": int(root.attrib["size"]),
+                "value": int(root.attrib["value"]),
+            }
+        except (KeyError, ValueError) as exc:
+            raise ISYResponseParseError(
+                f"Z-Wave <config> response for {address!r} param {number} "
+                f"is missing size/value or has non-integer attrs: "
+                f"{root.attrib!r}"
+            ) from exc
+    if root.tag == "RestResponse":
+        status = root.findtext("status", default="").strip()
+        succeeded = root.attrib.get("succeeded", "true").lower() == "true"
+        if not succeeded:
+            raise NodeCommandError(
+                f"Z-Wave get parameter {number} on {address!r} rejected by "
+                f"controller (status={status or 'unknown'})"
+            )
+        # A "succeeded" RestResponse with no <config> sibling is unexpected
+        # on the get path — surface as parse error so the caller can log
+        # the body and we can adapt if a new firmware ever returns this.
+        raise ISYResponseParseError(
+            f"Z-Wave get parameter {number} on {address!r} returned a "
+            f"RestResponse envelope without a <config> payload: {body!r}"
+        )
+    raise ISYResponseParseError(
+        f"Z-Wave parameter response for {address!r} param {number} has "
+        f"unexpected root element {root.tag!r}: {body!r}"
+    )
+
+
+def _check_rest_response_succeeded(address: str, body: str, *, context: str) -> None:
+    """Raise :class:`NodeCommandError` when ``<RestResponse>`` says no.
+
+    A success ``<RestResponse succeeded="true"/>`` (or any body without
+    a recognised RestResponse envelope) passes silently — controllers
+    occasionally elide the envelope on success and we don't want to
+    second-guess that. The conservative read is: only treat
+    ``succeeded="false"`` as a hard failure.
+    """
+    try:
+        root = ET.fromstring(body)  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError:
+        return
+    if root.tag != "RestResponse":
+        return
+    if root.attrib.get("succeeded", "true").lower() == "true":
+        return
+    status = root.findtext("status", default="").strip()
+    raise NodeCommandError(f"{context} rejected by controller (status={status or 'unknown'})")
