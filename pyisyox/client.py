@@ -329,8 +329,8 @@ class VariableRecord:
     type_id: str
     id: str
     name: str
-    value: int = 0
-    init: int = 0
+    value: int | float = 0
+    init: int | float = 0
     precision: int = 0
     ts: str = ""
 
@@ -1386,8 +1386,8 @@ def parse_api_variables_type(raw: list[dict[str, Any]], type_id: str) -> dict[st
             type_id=str(type_id),
             id=vid_str,
             name=str(entry.get("name", "")),
-            value=_coerce_int(entry.get("val"), default=0),
-            init=_coerce_int(entry.get("init"), default=0),
+            value=_coerce_var_number(entry.get("val"), default=0),
+            init=_coerce_var_number(entry.get("init"), default=0),
             precision=_coerce_prec(entry.get("prec")),
             ts=str(entry.get("ts", "")),
         )
@@ -1402,6 +1402,31 @@ def _coerce_int(raw: Any, *, default: int = 0) -> int:
         return int(raw)
     except (TypeError, ValueError):
         return default
+
+
+def _coerce_var_number(raw: Any, *, default: int = 0) -> int | float:
+    """Coerce a variable wire value to ``int | float``.
+
+    Variables can store floats on the modern controller (``POST
+    /api/variables/{type}/{id}`` accepts both ints and floats), so the
+    parser preserves whichever the wire emits — ``int`` for raw
+    integer storage, ``float`` for a fresh write that posted a
+    fractional value. Bool slips past ``isinstance(bool, int)`` but
+    isn't a meaningful variable value here, so it's coerced too.
+    """
+    if raw is None or raw == "":
+        return default
+    if isinstance(raw, bool):
+        return int(raw)
+    if isinstance(raw, (int, float)):
+        return raw
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return default
 
 
 def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:

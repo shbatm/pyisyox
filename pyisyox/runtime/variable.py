@@ -27,6 +27,22 @@ if TYPE_CHECKING:
     from pyisyox.client import IoXClient, VariableRecord
 
 
+def _coerce_numeric(value: float | str) -> int | float:
+    """Coerce a caller-supplied value to ``int | float`` for the wire.
+
+    Pass-through for ``int`` / ``float``. Strings are parsed as
+    ``float`` if they carry a decimal point, otherwise ``int`` — this
+    matches the legacy PyISY 3.x contract that accepted string values
+    from generic callers.
+    """
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value
+    text = str(value).strip()
+    if "." in text or "e" in text.lower():
+        return float(text)
+    return int(text)
+
+
 class Variable:
     """User-facing handle for one controller variable."""
 
@@ -65,17 +81,24 @@ class Variable:
         return self._record.name
 
     @property
-    def value(self) -> int:
+    def value(self) -> int | float:
         """Current value (wire field ``val``).
 
         Reads reflect the latest write — mutations via :meth:`set_value`
         update the underlying record in place after a successful POST.
+
+        Type is ``int | float``: most variables read back as ``int`` from
+        the wire (``/api/variables/{type}`` parses ``"val"`` as int), but
+        a controller may surface ``float`` on a fresh write that posted a
+        non-integer (the modern ``POST /api/variables/{type}/{id}``
+        endpoint accepts floats and the wrapper stores whatever was sent
+        on success).
         """
         return self._record.value
 
     @property
-    def init(self) -> int:
-        """Restore-on-startup value."""
+    def init(self) -> int | float:
+        """Restore-on-startup value. Same int-or-float surface as :attr:`value`."""
         return self._record.init
 
     @property
@@ -95,27 +118,40 @@ class Variable:
 
     # --- mutation -----------------------------------------------------
 
-    async def set_value(self, value: int) -> None:
+    async def set_value(self, value: float) -> None:
         """Set the current value of this variable.
 
         Wire shape: ``POST /api/variables/{type}/{id}`` with body
-        ``{"value": <int>}``. Updates the underlying record on success
-        so subsequent reads of :attr:`value` reflect the new state
-        without waiting for a WS frame.
+        ``{"value": <number>}``. The modern endpoint accepts both
+        ``int`` and ``float`` — for a ``precision > 0`` variable, send
+        the *displayed* float (e.g. ``51.5``) and the controller
+        applies the ``* 10**precision`` scale on store. Sending an
+        ``int`` on the same variable means the controller stores it
+        verbatim (no scale applied), which produces a mismatch
+        between consumer-displayed and controller-internal values — so
+        callers driving displayed-unit UIs should send floats.
+
+        Strings are tolerated for legacy callers (parsed as float if
+        they contain a decimal point, else int).
+
+        Updates the underlying record on success so subsequent reads
+        of :attr:`value` reflect the new state without waiting for a
+        WS frame.
         """
-        new_value = int(value)
+        new_value = _coerce_numeric(value)
         await self._client.post_variable_update(
             self._record.type_id, self._record.id, {VariableField.VALUE: new_value}
         )
         self._record.value = new_value
 
-    async def set_init(self, init: int) -> None:
+    async def set_init(self, init: float) -> None:
         """Set the init / restore-on-startup value.
 
         Wire shape: ``POST /api/variables/{type}/{id}`` with
-        ``{"init": <int>}``.
+        ``{"init": <number>}``. Same int-or-float semantics as
+        :meth:`set_value`.
         """
-        new_init = int(init)
+        new_init = _coerce_numeric(init)
         await self._client.post_variable_update(
             self._record.type_id, self._record.id, {VariableField.INIT: new_init}
         )

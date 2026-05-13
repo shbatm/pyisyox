@@ -453,7 +453,34 @@ def test_dispatcher_applies_variable_value_change_to_record() -> None:
 
 
 def test_dispatcher_applies_variable_init_change_to_record() -> None:
-    """Action ``"7"`` updates ``record.init`` in place; value is untouched."""
+    """Action ``"7"`` updates ``record.init`` in place; value is untouched.
+
+    Real eisy firmware emits the new init value in the ``<init>`` element
+    of the ``<var>`` payload (alongside ``<prec>``), **not** ``<val>`` —
+    earlier dispatcher logic looked for ``<val>`` only and silently
+    dropped every init frame the controller emitted. This fixture
+    matches what was captured on a live eisy at FW 6.0."""
+    record = _make_variable_record(type_id="2", id_="8", value=5, init=0)
+    variables = {"1": {}, "2": {"8": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>7</action>'
+        "<node></node>"
+        '<eventInfo><var type="2" id="8"><init>81</init><prec>1</prec></var></eventInfo>'
+        "</Event>"
+    )
+    dispatcher.feed(frame)
+
+    assert record.init == 81
+    assert record.value == 5  # untouched on action 7
+
+
+def test_dispatcher_applies_variable_init_change_with_val_fallback() -> None:
+    """A frame emitting ``<val>`` on an action-7 init change still works
+    — older / alternative firmwares may reuse the value element name
+    even for init changes. The dispatcher prefers ``<init>`` and falls
+    back to ``<val>`` so both shapes round-trip."""
     record = _make_variable_record(type_id="2", id_="8", value=5, init=0)
     variables = {"1": {}, "2": {"8": record}}
     dispatcher = EventDispatcher({}, variables=variables)
@@ -467,7 +494,25 @@ def test_dispatcher_applies_variable_init_change_to_record() -> None:
     dispatcher.feed(frame)
 
     assert record.init == 100
-    assert record.value == 5  # untouched on action 7
+    assert record.value == 5
+
+
+def test_dispatcher_applies_variable_float_change_to_record() -> None:
+    """A float-valued variable change (modern API can store floats)
+    parses as ``float`` rather than dropping the frame."""
+    record = _make_variable_record(type_id="2", id_="8", value=0, init=0)
+    variables = {"1": {}, "2": {"8": record}}
+    dispatcher = EventDispatcher({}, variables=variables)
+
+    frame = (
+        '<Event seqnum="1"><control>_1</control><action>6</action>'
+        "<node></node>"
+        '<eventInfo><var type="2" id="8"><val>51.5</val></var></eventInfo>'
+        "</Event>"
+    )
+    dispatcher.feed(frame)
+
+    assert record.value == 51.5
 
 
 def test_dispatcher_drops_variable_event_for_unknown_type() -> None:

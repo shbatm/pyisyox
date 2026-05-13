@@ -1247,26 +1247,41 @@ class EventDispatcher:
             )
             return
 
-        val_text = (var_elem.findtext("val") or "").strip()
-        if not val_text:
+        # Action 6 carries the new value in <val>; action 7 (init change)
+        # carries it in <init>. Old code read <val> regardless and
+        # silently dropped every init frame — fix is to pick the
+        # right element per action, with <val> as a tolerant fallback
+        # for action 7 in case some firmwares reuse the value field.
+        if event.action == TriggerAction.VARIABLE_INIT:
+            primary_text = (var_elem.findtext("init") or "").strip()
+            fallback_text = (var_elem.findtext("val") or "").strip()
+            field = "init"
+        else:
+            primary_text = (var_elem.findtext("val") or "").strip()
+            fallback_text = ""
+            field = "value"
+
+        text = primary_text or fallback_text
+        if not text:
             return
         try:
-            new_value = int(val_text)
+            new_value: int | float = int(text)
         except ValueError:
-            _LOGGER.debug(
-                "WS variable-change event for %s.%s carried non-numeric value %r",
-                type_id,
-                var_id,
-                val_text,
-            )
-            return
+            try:
+                new_value = float(text)
+            except ValueError:
+                _LOGGER.debug(
+                    "WS variable-change event for %s.%s carried non-numeric value %r",
+                    type_id,
+                    var_id,
+                    text,
+                )
+                return
 
-        if event.action == TriggerAction.VARIABLE_VALUE:
+        if field == "value":
             record.value = new_value
-            field = "value"
-        else:  # TriggerAction.VARIABLE_INIT
+        else:
             record.init = new_value
-            field = "init"
 
         ts_text = (var_elem.findtext("ts") or "").strip()
         if ts_text:
