@@ -64,9 +64,19 @@ from pyisyox.paths import (
     TRIGGERS_PATH,
     VARIABLE_ITEM_PATH,
     VARIABLES_TYPE_PATH,
+    ZMATTER_ZWAVE_NODEDEFS_PATH,
+    ZWAVE_NODEDEFS_PATH,
 )
 from pyisyox.redactor import redact_sensitive
-from pyisyox.schema import Profile
+from pyisyox.schema import (
+    Command,
+    CommandParameter,
+    NodeCommands,
+    NodeDef,
+    NodeLinks,
+    NodeProperty,
+    Profile,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -464,6 +474,7 @@ class IoXClient:
         nodes = parse_api_nodes(nodes_raw)
         merge_status_into_nodes(nodes, parse_rest_status(status_xml))
         groups, folders = parse_rest_nodes_groups_folders(rest_nodes_xml)
+        await self._load_dynamic_zwave_nodedefs(profile, nodes)
 
         return LoadResult(
             config=config,
@@ -483,6 +494,60 @@ class IoXClient:
             },
             network_resources=parse_rest_networking_resources(networking_xml),
         )
+
+    #: Family id → ordered ``def/get`` path candidates for radios whose
+    #: nodedefs are generated dynamically and therefore absent from
+    #: ``/rest/profiles``. ``"4"`` = legacy Z-Wave radio, ``"12"`` =
+    #: Z-Matter (800-series). Both candidates are tried because it's not
+    #: yet confirmed which family id a Z-Matter setup reports in
+    #: ``/api/nodes`` — the controller's own answer is in ``/rest/sys``
+    #: ``<SystemOptions><ZMatterZWave>`` (``true`` ⇒ the ``/rest/zmatter/
+    #: zwave/...`` surface), but probing both is cheap and avoids the
+    #: extra round-trip.
+    _DYNAMIC_NODEDEF_PATHS = {
+        "4": (ZWAVE_NODEDEFS_PATH, ZMATTER_ZWAVE_NODEDEFS_PATH),
+        "12": (ZMATTER_ZWAVE_NODEDEFS_PATH, ZWAVE_NODEDEFS_PATH),
+    }
+
+    async def _load_dynamic_zwave_nodedefs(self, profile: Profile, nodes: dict[str, NodeRecord]) -> None:
+        """Fetch + merge the dynamic Z-Wave / Z-Matter nodedefs, if needed.
+
+        ``/rest/profiles`` carries the ``ZW_*`` editors but not the
+        ``UZW*`` nodedefs, so a Z-Wave node's ``(nodeDefId, family,
+        instance)`` lookup comes back empty. For each ``(family,
+        instance)`` scope that has at least one such unresolved node, GET
+        ``/rest/zwave/node/0/def/get`` (or the Z-Matter variant) once,
+        parse the legacy ``<nodeDefs>`` XML, and register the results
+        into ``profile`` in place. Best-effort: a 404 (no radio / older
+        firmware) or parse error is swallowed — the nodes simply stay
+        nodedef-less and ``Node.send_command`` falls back to its
+        unvalidated passthrough.
+        """
+        wanted: set[tuple[str, str]] = set()
+        for node in nodes.values():
+            if node.family_id not in self._DYNAMIC_NODEDEF_PATHS:
+                continue
+            if profile.find_nodedef(node.nodedef_id, node.family_id, node.instance_id) is None:
+                wanted.add((node.family_id, node.instance_id))
+        for family_id, instance_id in wanted:
+            for path_tmpl in self._DYNAMIC_NODEDEF_PATHS[family_id]:
+                path = path_tmpl.format(address="0")
+                try:
+                    xml = await self._get_text_or_empty(path)
+                    nodedefs = parse_zwave_nodedefs(xml, family_id=family_id, instance_id=instance_id)
+                except ClientError as exc:  # pragma: no cover - defensive
+                    _LOGGER.debug("Dynamic nodedef load from %s failed: %s", path, exc)
+                    continue
+                if nodedefs:
+                    profile.register_nodedefs(family_id, instance_id, nodedefs)
+                    _LOGGER.debug(
+                        "Loaded %d dynamic nodedefs for family %s/%s from %s",
+                        len(nodedefs),
+                        family_id,
+                        instance_id,
+                        path,
+                    )
+                    break
 
     async def _fetch_config(self) -> ControllerConfig:
         """``GET /api/config`` — minimal, used to confirm IoX 6+ + uuid.
@@ -943,6 +1008,97 @@ def parse_rest_nodes_groups_folders(
             parent_address=parent_text or None,
         )
     return groups, folders
+
+
+def _zwave_cmd_from_xml(cmd_el: ET.Element) -> Command:
+    """Build a :class:`Command` from a ``<cmd>`` element in the legacy
+    ``<nodeDefs>`` XML (``<cmd id="DON"><p id="" editor="..." optional="T"/>``).
+
+    ``native="F"`` (the only ``native`` value seen on the Z-Wave nodedefs)
+    marks a non-native, higher-layer command; its absence means native.
+    """
+    params: list[CommandParameter] = []
+    for p_el in cmd_el.findall("p"):
+        editor_id = p_el.get("editor")
+        if not editor_id:
+            continue
+        params.append(
+            CommandParameter(
+                editor_id=editor_id,
+                param_id=p_el.get("id", ""),
+                init=p_el.get("init"),
+                optional=p_el.get("optional", "").upper() in ("T", "TRUE", "1"),
+            )
+        )
+    return Command(
+        id=cmd_el.get("id", ""),
+        name=cmd_el.get("name", ""),
+        parameters=params,
+        native=cmd_el.get("native", "").upper() not in ("F", "FALSE", "0"),
+        format=cmd_el.get("fmt"),
+    )
+
+
+def parse_zwave_nodedefs(xml: str, *, family_id: str, instance_id: str) -> dict[str, NodeDef]:
+    """Decode ``/rest/zwave/node/{addr}/def/get`` XML into ``{id: NodeDef}``.
+
+    The dynamically-generated Z-Wave nodedefs aren't carried by
+    ``/rest/profiles``; this endpoint serves them in the legacy
+    ``<nodeDefs><nodedef id="UZW..." nls="..."><sts><st id="ST"
+    editor="..."/></sts><cmds><sends/><accepts><cmd .../></accepts></cmds>
+    <links><ctl/><rsp><link linkdef="..."/></rsp></links></nodedef></nodeDefs>``
+    shape. The ``family_id`` / ``instance_id`` are stamped onto each
+    :class:`NodeDef` so it joins against the node's
+    ``(nodeDefId, family, instance)`` key. Many referenced editors are
+    *encoded ids* (``_51_0_R_0_101_N_IX_DIM_REP``) decoded on demand by
+    :meth:`pyisyox.schema.editor.Editor.from_encoded_id`; the named ones
+    (``ZW_DIM_PERCENT``, …) are already in ``/rest/profiles`` under
+    family ``4``.
+
+    Empty / missing input (no Z-Wave radio) returns ``{}``. Malformed
+    XML raises :class:`ClientError`.
+    """
+    if not xml or not xml.strip():
+        return {}
+    try:
+        root = ET.fromstring(xml)  # noqa: S314 — eisy LAN traffic
+    except ET.ParseError as exc:
+        raise ClientError(f"failed to parse Z-Wave nodedefs XML: {exc}") from exc
+
+    out: dict[str, NodeDef] = {}
+    for nd_el in root.findall("nodedef"):
+        nd_id = nd_el.get("id")
+        if not nd_id:
+            continue
+        properties: dict[str, NodeProperty] = {}
+        for st_el in nd_el.findall("sts/st"):
+            pid = st_el.get("id")
+            if not pid:
+                continue
+            properties[pid] = NodeProperty(
+                id=pid,
+                editor_id=st_el.get("editor", ""),
+                name=st_el.get("name", ""),
+                hide=st_el.get("hide", "").upper() in ("T", "TRUE", "1"),
+            )
+        cmds = NodeCommands(
+            sends=[_zwave_cmd_from_xml(c) for c in nd_el.findall("cmds/sends/cmd")],
+            accepts=[_zwave_cmd_from_xml(c) for c in nd_el.findall("cmds/accepts/cmd")],
+        )
+        links = NodeLinks(
+            ctl=[ln.get("linkdef", "") for ln in nd_el.findall("links/ctl/link")],
+            rsp=[ln.get("linkdef", "") for ln in nd_el.findall("links/rsp/link")],
+        )
+        out[nd_id] = NodeDef(
+            id=nd_id,
+            family_id=family_id,
+            instance_id=instance_id,
+            properties=properties,
+            cmds=cmds,
+            nls_key=nd_el.get("nls"),
+            links=links,
+        )
+    return out
 
 
 def parse_rest_networking_resources(xml: str) -> dict[str, NetworkResourceRecord]:

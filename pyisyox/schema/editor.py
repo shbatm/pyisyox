@@ -65,6 +65,30 @@ def _parse_subset(spec: str) -> set[int]:
     return out
 
 
+def _decode_signed_bound(token: str) -> int:
+    """Decode an encoded-editor-id numeric bound; a leading ``m`` = negative."""
+    return -int(token[1:]) if token.startswith("m") else int(token)
+
+
+def _subset_from_hex_masks(low_hex: str, high_hex: str | None) -> set[int]:
+    """Decode the ``_S_`` bitmask form: bit *i* set ⇒ value *i* is valid.
+
+    ``low_hex`` covers bits 0-31; the optional ``high_hex`` bits 32-63.
+    e.g. ``"FF00FF00"`` → ``{8..15, 24..31}``.
+    """
+    out: set[int] = set()
+    low = int(low_hex, 16)
+    for i in range(32):
+        if low & (1 << i):
+            out.add(i)
+    if high_hex is not None:
+        high = int(high_hex, 16)
+        for i in range(32):
+            if high & (1 << i):
+                out.add(32 + i)
+    return out
+
+
 @dataclass(slots=True)
 class EditorRange:
     """One range entry within an editor.
@@ -162,6 +186,60 @@ class Editor:
         ranges = [EditorRange.from_json(r) for r in raw.get("ranges", [])]
         return cls(id=raw["id"], ranges=ranges)
 
+    @classmethod
+    def from_encoded_id(cls, editor_id: str) -> Editor | None:
+        """Decode a self-describing *encoded editor id* into an :class:`Editor`.
+
+        IoX lets a simple editor be referenced by an id that fully
+        encodes its (single) range instead of pointing at a named
+        ``<editor>`` element — handy for the dynamically-generated
+        Z-Wave nodedefs where most editors are spelled inline. The
+        grammar (see
+        https://developer.isy.io/docs/API/IoX/editors#encoded-editor-id):
+
+        * ``_<uom>_<prec>`` — implied bounds ``[-2147483647, 2147483647]``
+        * optionally one of
+          ``_R_<min>_<max>`` (numeric range; a leading ``m`` makes a
+          bound negative — ``_17_2_R_m5_10`` => -5..10) or
+          ``_S_<lowMask>[_<highMask>]`` (subset as a 32/64-bit hex
+          bitmask — ``_17_1_S_FF00FF00`` ⇒ ``{8..15, 24..31}``)
+        * optionally a trailing ``_N_<nls>`` NLS-prefix segment
+
+        Returns ``None`` if ``editor_id`` doesn't parse as an encoding
+        (so callers can fall back to a table lookup). The ``_N_<nls>``
+        part only names an NLS string table — which pyisyox doesn't
+        resolve — so ``names`` is left empty; range / subset validation
+        still works.
+        """
+        if not editor_id.startswith("_"):
+            return None
+        parts = editor_id.split("_")[1:]  # drop the leading empty token
+        if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            return None
+        uom, prec_s, rest = parts[0], parts[1], parts[2:]
+        # Peel an optional trailing ``_N_<nls>`` (nls may contain "_").
+        if "N" in rest:
+            rest = rest[: rest.index("N")]
+        rng_min: float | None = None
+        rng_max: float | None = None
+        subset: set[int] = set()
+        try:
+            if not rest:
+                pass
+            elif rest[0] == "R" and len(rest) == 3:
+                rng_min = _decode_signed_bound(rest[1])
+                rng_max = _decode_signed_bound(rest[2])
+            elif rest[0] == "S" and len(rest) in (2, 3):
+                subset = _subset_from_hex_masks(rest[1], rest[2] if len(rest) == 3 else None)
+            else:
+                return None
+        except ValueError:
+            return None
+        return cls(
+            id=editor_id,
+            ranges=[EditorRange(uom=uom, min=rng_min, max=rng_max, precision=int(prec_s), subset=subset)],
+        )
+
     def range_for(self, uom: str | None = None) -> EditorRange:
         """Pick the range matching ``uom``, or the first range if no hint."""
         if not self.ranges:
@@ -179,6 +257,11 @@ class Editor:
         precision-aware numeric string. Does not append the unit — callers
         format the unit separately based on the range's ``uom``.
 
+        When ``uom`` isn't given and the editor has multiple ranges, the
+        enum-name lookup scans every range (so e.g. an editor whose first
+        range is a 0-100 % scale and whose second is a tiny ``{1: "Previous
+        Value"}`` index still decodes ``1`` to its name).
+
         UOM-101 / "degrees" with ``prec=0`` halves the raw value (Insteon
         half-degree convention).
         """
@@ -187,6 +270,10 @@ class Editor:
             ival = int(raw_value)
             if ival in rng.names:
                 return rng.names[ival]
+            if uom is None:
+                for other in self.ranges:
+                    if ival in other.names:
+                        return other.names[ival]
         if rng.precision:
             return f"{raw_value / (10**rng.precision):.{rng.precision}f}"
         if rng.uom in _HALF_DEGREE_UOMS:
@@ -196,7 +283,7 @@ class Editor:
     def encode(self, value: float | str, uom: str | None = None) -> int:
         """Encode user input to a raw integer the controller will accept.
 
-        Two paths:
+        Two paths within a range:
 
         * **Enum name (str matching ``names``)** — returns the matching raw
           int verbatim. ``prec`` and ``min``/``max`` don't apply.
@@ -204,15 +291,45 @@ class Editor:
           the *displayed* value. Validated against ``[min, max]`` (which
           the IoX schema stores in displayed form), then scaled to raw via
           ``raw = round(displayed * 10**prec)``. Symmetric with
-          :meth:`decode`'s ``raw / 10**prec``.
+          :meth:`decode`'s ``raw / 10**prec``. Subset validation (when
+          present) runs on the resulting raw int.
 
-        Subset validation (when present) runs on the resulting raw int —
-        ``subset`` is always raw-int form regardless of ``prec``.
+        When ``uom`` is given, only that range is tried. Otherwise every
+        range is tried in order and the first that accepts ``value`` wins
+        — multi-range editors like ``ZW_DIM_PERCENT`` (range 0 is a tiny
+        ``{1: "Previous Value"}`` index, range 1 is the 0-100 % scale)
+        need this so a plain ``75`` lands in the percent range instead of
+        being rejected by the index range.
 
-        Raises :class:`EditorCodecError` if the value falls outside ``[min,
-        max]`` or, for subset editors, isn't a valid raw int.
+        Raises :class:`EditorCodecError` if no range accepts ``value``.
         """
-        rng = self.range_for(uom)
+        return self.encode_param(value, uom)[0]
+
+    def encode_param(self, value: float | str, uom: str | None = None) -> tuple[int, str]:
+        """Like :meth:`encode`, but also returns the UOM of the range used.
+
+        Command-send code appends each parameter as ``/{raw}/{uom}`` so
+        the controller can do device-side scaling; the UOM has to be the
+        one belonging to the range that actually accepted the value, not
+        always ``ranges[0]`` — for a multi-range editor like
+        ``ZW_DIM_PERCENT`` a plain ``75`` is encoded by the 0-100 %
+        range (uom ``51``), so ``/cmd/DON/75/51`` is what must go on the
+        wire, not ``/cmd/DON/75/25``.
+        """
+        if uom is not None:
+            rng = self.range_for(uom)
+            return self._encode_in_range(rng, value), rng.uom
+        ranges = self.ranges or [self.range_for()]  # range_for() raises if truly empty
+        last_error: EditorCodecError | None = None
+        for rng in ranges:
+            try:
+                return self._encode_in_range(rng, value), rng.uom
+            except EditorCodecError as exc:
+                last_error = exc
+        raise last_error or EditorCodecError(f"Editor {self.id!r}: cannot encode {value!r}")
+
+    def _encode_in_range(self, rng: EditorRange, value: float | str) -> int:
+        """Encode ``value`` against a single range — see :meth:`encode`."""
         if isinstance(value, str):
             stripped = value.strip()
             if not stripped:

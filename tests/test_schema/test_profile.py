@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pyisyox.schema import Profile
+from pyisyox.schema.nodedef import NodeDef
 
 
 def test_loads_all_families(profile: Profile) -> None:
@@ -73,6 +74,32 @@ def test_find_editor_falls_back_to_common_family(profile: Profile) -> None:
 
 def test_find_editor_returns_none_when_not_in_either_scope(profile: Profile) -> None:
     assert profile.find_editor("not_a_real_editor", "10", "10") is None
+
+
+def test_find_editor_decodes_encoded_ids(profile: Profile) -> None:
+    """An encoded editor id is decoded on the spot, regardless of scope —
+    that's how the dynamic Z-Wave nodedefs spell most of their editors.
+    A leading ``_`` that *doesn't* parse as an encoding (UDI's
+    ``_sys_notify_full``) still falls through to the table lookup."""
+    ed = profile.find_editor("_51_0_R_0_101_N_IX_DIM_REP", "4", "1")
+    assert ed is not None
+    assert ed.id == "_51_0_R_0_101_N_IX_DIM_REP"
+    assert (ed.ranges[0].uom, ed.ranges[0].min, ed.ranges[0].max) == ("51", 0, 101)
+    # _sys_notify_full begins with "_" but isn't an encoding — table lookup wins.
+    assert profile.find_editor("_sys_notify_full", "10", "10") is not None
+    # A "_"-prefixed string that's neither a valid encoding nor a known id.
+    assert profile.find_editor("_17_x", "10", "10") is None
+
+
+def test_register_nodedefs_adds_to_scope_and_lookup(profile: Profile) -> None:
+    """register_nodedefs() folds a batch of nodedefs into a family/instance
+    (creating it if needed) and updates the join-key lookup — this is how
+    the dynamic Z-Wave nodedefs land in the live profile post-load."""
+    nd = NodeDef(id="UZW9999", family_id="4", instance_id="1")
+    assert profile.find_nodedef("UZW9999", "4", "1") is None
+    profile.register_nodedefs("4", "1", {"UZW9999": nd})
+    assert profile.find_nodedef("UZW9999", "4", "1") is nd
+    assert profile.families["4"].instances["1"].nodedefs["UZW9999"] is nd
 
 
 def test_find_editor_local_match_takes_precedence_over_common(profile: Profile) -> None:

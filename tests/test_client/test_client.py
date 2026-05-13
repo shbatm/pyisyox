@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from pyisyox.auth import AuthError, LocalAuth, PortalAuth
-from pyisyox.client import ClientError, HTTPError, IoXClient
+from pyisyox.client import ClientError, ControllerConfig, HTTPError, IoXClient
 from tests.test_client.conftest import FakeSession
 
 BASE = "https://eisy.local"
@@ -236,3 +236,76 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     # /rest/networking/resources. Still constant w.r.t. node-server count.
     fanout = [c for c in session.calls if c[0] == "GET" and c[1] not in ("/api/config",)]
     assert len(fanout) == 9
+
+
+def _empty_fanout_routes(session: FakeSession) -> None:
+    """Script the eight non-/api/nodes fan-out endpoints with empty
+    payloads — enough for ``load()`` to complete; tests override the
+    pieces they care about afterwards."""
+    profile_json = json.loads((FIXTURE_DIR / "profiles_with_flume.json").read_text())
+    session.set_route("GET", "/rest/profiles?include=nodedefs,editors,linkdefs", 200, profile_json)
+    session.set_route("GET", "/rest/status", 200, "<nodes/>")
+    session.set_route("GET", "/rest/nodes", 200, "<nodes/>")
+    session.set_route("GET", "/api/programs", 200, {"successful": True, "data": []})
+    session.set_route("GET", "/api/triggers", 200, {"successful": True, "data": []})
+    session.set_route("GET", "/api/variables/1", 200, {"successful": True, "data": []})
+    session.set_route("GET", "/api/variables/2", 200, {"successful": True, "data": []})
+    session.set_route("GET", "/rest/networking/resources", 404)
+
+
+@pytest.mark.asyncio
+async def test_load_fetches_and_merges_dynamic_zwave_nodedefs(session: FakeSession) -> None:
+    """A Z-Wave node's ``UZW*`` nodedef isn't in ``/rest/profiles``, so
+    ``load()`` GETs ``/rest/zwave/node/0/def/get`` and merges the parsed
+    nodedefs into the live profile — the node's lookup then resolves."""
+    _empty_fanout_routes(session)
+    session.set_route(
+        "GET",
+        "/api/nodes",
+        200,
+        {
+            "data": {
+                "nodes": {
+                    "node": [
+                        {
+                            "address": "ZW003_1",
+                            "name": "ZW Relay",
+                            "nodeDefId": "UZW0015",
+                            "family": "4",
+                            "type": "4.16.1.0",
+                            "enabled": "true",
+                            "pnode": "ZW003_1",
+                        }
+                    ]
+                }
+            }
+        },
+    )
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/0/def/get",
+        200,
+        (FIXTURE_DIR / "rest_zwave_nodedefs.xml").read_text(),
+    )
+
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True  # skip the connect-time handshake
+    result = await client.load(config=ControllerConfig(uuid="u", version="6.0.0"))
+
+    nd = result.profile.find_nodedef("UZW0015", "4", "1")
+    assert nd is not None
+    assert any(c.id == "DON" for c in nd.cmds.accepts)
+    assert ("GET", "/rest/zwave/node/0/def/get", {}) in [(m, p, {}) for m, p, _ in session.calls]
+
+
+@pytest.mark.asyncio
+async def test_load_skips_dynamic_zwave_fetch_when_no_zwave_nodes(session: FakeSession) -> None:
+    """No family-4/12 nodes ⇒ the dynamic-nodedef endpoint is never hit."""
+    _empty_fanout_routes(session)
+    session.set_route("GET", "/api/nodes", 200, {"data": {"nodes": {"node": []}}})
+
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+    await client.load(config=ControllerConfig(uuid="u", version="6.0.0"))
+
+    assert not any("/zwave/" in p for _, p, _ in session.calls)

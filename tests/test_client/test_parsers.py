@@ -18,6 +18,7 @@ from pyisyox.client import (
     parse_api_variables_type,
     parse_rest_networking_resources,
     parse_rest_status,
+    parse_zwave_nodedefs,
 )
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "eisy6"
@@ -651,3 +652,47 @@ def test_variable_record_default_construction() -> None:
     assert record.precision == 0
     assert record.ts == ""
     assert record.address == "1.42"
+
+
+# --- /rest/zwave/node/{addr}/def/get XML ---------------------------------
+
+
+def test_parse_zwave_nodedefs_from_fixture() -> None:
+    """The dynamically-generated Z-Wave nodedefs arrive as legacy
+    ``<nodeDefs><nodedef><sts><st>../<cmds>../<links>..>`` XML; parse one
+    full nodedef end-to-end and stamp the supplied family/instance on it."""
+    xml = (FIXTURE_DIR / "rest_zwave_nodedefs.xml").read_text()
+    nds = parse_zwave_nodedefs(xml, family_id="4", instance_id="1")
+    assert set(nds) == {f"UZW{n:04X}" for n in range(0x0E, 0x17)}
+
+    dimmer = nds["UZW000E"]
+    assert dimmer.lookup_key == ("UZW000E", "4", "1")
+    assert dimmer.nls_key == "109"
+    # <sts><st id="ST" editor="_51_0_R_0_101_N_IX_DIM_REP"/><st id="ERR" ... hide="T"/>
+    assert dimmer.properties["ST"].editor_id == "_51_0_R_0_101_N_IX_DIM_REP"
+    assert dimmer.properties["ERR"].hide is True
+    # DON carries two optional params; BRT/DIM are non-native, zero-arg.
+    don = next(c for c in dimmer.cmds.accepts if c.id == "DON")
+    assert [(p.param_id, p.editor_id, p.optional) for p in don.parameters] == [
+        ("", "ZW_DIM_PERCENT", True),
+        ("RR", "ZW_RR", True),
+    ]
+    brt = next(c for c in dimmer.cmds.accepts if c.id == "BRT")
+    assert brt.parameters == [] and brt.native is False
+    assert next(c for c in dimmer.cmds.accepts if c.id == "DOF").native is True
+    # links: this nodedef has only response links
+    assert dimmer.links.ctl == []
+    assert "MLSW" in dimmer.links.rsp
+    # a nodedef with an empty <sts/> still parses
+    assert nds["UZW0010"].properties == {}
+
+
+def test_parse_zwave_nodedefs_empty_input() -> None:
+    assert parse_zwave_nodedefs("", family_id="4", instance_id="1") == {}
+    assert parse_zwave_nodedefs("  ", family_id="4", instance_id="1") == {}
+    assert parse_zwave_nodedefs("<nodeDefs/>", family_id="4", instance_id="1") == {}
+
+
+def test_parse_zwave_nodedefs_malformed_xml_raises() -> None:
+    with pytest.raises(ClientError, match="Z-Wave nodedefs"):
+        parse_zwave_nodedefs("<nodeDefs><nodedef", family_id="4", instance_id="1")
