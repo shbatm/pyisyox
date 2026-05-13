@@ -20,6 +20,7 @@ from pyisyox.runtime.events import (
     NodeLifecycleEvent,
     ProgramStatusEvent,
     SystemEventControl,
+    VariableTableChangeEvent,
     _extract_lifecycle_node_xml,
     parse_event_frame,
 )
@@ -513,6 +514,36 @@ def test_dispatcher_applies_variable_float_change_to_record() -> None:
     dispatcher.feed(frame)
 
     assert record.value == 51.5
+
+
+def test_dispatcher_fires_variable_table_change_listener() -> None:
+    """Action ``"9"`` is the controller's signal that a variable was
+    added/removed or had its precision changed on a given type. The
+    dispatcher fires registered listeners; it does **not** auto-refresh
+    the registry (that's the consumer's call). Listeners receive the
+    type id pulled from ``<var type="N">`` (attribute) or
+    ``<var><type>N</type></var>`` (child-element) — both shapes have
+    been observed across firmwares."""
+    received: list[VariableTableChangeEvent] = []
+    dispatcher = EventDispatcher({}, variables={"1": {}, "2": {}})
+    dispatcher.add_variable_table_change_listener(received.append)
+
+    # Attribute form.
+    dispatcher.feed(
+        '<Event seqnum="42"><control>_1</control><action>9</action>'
+        "<node></node>"
+        '<eventInfo><var type="2" id="0"/></eventInfo>'
+        "</Event>"
+    )
+    # Child-element form.
+    dispatcher.feed(
+        '<Event seqnum="43"><control>_1</control><action>9</action>'
+        "<node></node>"
+        "<eventInfo><var><type>1</type><id>0</id></var></eventInfo>"
+        "</Event>"
+    )
+
+    assert [(e.type_id, e.seqnum) for e in received] == [("2", 42), ("1", 43)]
 
 
 def test_dispatcher_drops_variable_event_for_unknown_type() -> None:

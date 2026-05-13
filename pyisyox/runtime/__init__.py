@@ -27,6 +27,8 @@ from pyisyox.runtime.events import (
     SystemConfigAction,
     SystemEventControl,
     TriggerAction,
+    VariableTableChangeEvent,
+    VariableTableChangeListener,
     describe_system_event,
     parse_event_frame,
 )
@@ -67,6 +69,8 @@ __all__ = [
     "SystemEventControl",
     "TriggerAction",
     "Variable",
+    "VariableTableChangeEvent",
+    "VariableTableChangeListener",
     "WebSocketEventStream",
     "describe_system_event",
     "parse_event_frame",
