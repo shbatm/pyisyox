@@ -679,6 +679,79 @@ class Node:
             size,
         )
 
+    # --- Z-Wave lock-code surface ------------------------------------
+    #
+    # Same Z-Wave-only family guard as the parameter surface above. The
+    # wire paths come from PyISY 3.x — assumed valid on IoX 6+ without
+    # captured proof; needs a tester with an enrolled Z-Wave lock for
+    # confirmation. Lock codes are stored on the device; pyisyox doesn't
+    # read them back (the controller doesn't expose a "get code" surface
+    # either — slots are write-only by design for security).
+
+    async def set_zwave_lock_code(self, user_num: int, code: int) -> None:
+        """Program a Z-Wave lock's user-code slot.
+
+        Args:
+            user_num: Slot number (device-defined, 1-based).
+            code: Numeric PIN. Locks vary in min/max digits; the
+                controller forwards the value verbatim.
+
+        Path: ``GET /rest/(zmatter/)?zwave/node/<addr>/security/user/<n>/set/code/<c>``.
+        Raises :class:`NodeCommandError` on a ``<RestResponse
+        succeeded="false">`` envelope so failed programmings aren't
+        silent.
+
+        Raises:
+            NodeCommandError: When this node isn't a Z-Wave node, or
+                the controller rejects the write.
+        """
+        if self.family_id not in _ZWAVE_FAMILY_IDS:
+            raise NodeCommandError(
+                f"node {self.address!r} is not a Z-Wave node "
+                f"(family={self.family_id!r}); lock-code surface is "
+                "Z-Wave-only"
+            )
+        zmatter = self.family_id == NodeFamily.ZMATTER_ZWAVE
+        body = await self._client.set_zwave_lock_code(self.address, user_num, code, zmatter=zmatter)
+        _check_rest_response_succeeded(
+            self.address,
+            body,
+            context=(f"Z-Wave set lock code user_num={user_num} on {self.address!r}"),
+        )
+        _LOGGER.debug(
+            "Z-Wave set lock code on %s succeeded: user_num=%d",
+            self.address,
+            user_num,
+        )
+
+    async def delete_zwave_lock_code(self, user_num: int) -> None:
+        """Clear a Z-Wave lock's user-code slot.
+
+        Path: ``GET /rest/(zmatter/)?zwave/node/<addr>/security/user/<n>/delete``.
+
+        Raises:
+            NodeCommandError: When this node isn't a Z-Wave node, or
+                the controller rejects the delete.
+        """
+        if self.family_id not in _ZWAVE_FAMILY_IDS:
+            raise NodeCommandError(
+                f"node {self.address!r} is not a Z-Wave node "
+                f"(family={self.family_id!r}); lock-code surface is "
+                "Z-Wave-only"
+            )
+        zmatter = self.family_id == NodeFamily.ZMATTER_ZWAVE
+        body = await self._client.delete_zwave_lock_code(self.address, user_num, zmatter=zmatter)
+        _check_rest_response_succeeded(
+            self.address,
+            body,
+            context=(f"Z-Wave delete lock code user_num={user_num} on {self.address!r}"),
+        )
+        _LOGGER.debug(
+            "Z-Wave delete lock code on %s succeeded: user_num=%d",
+            self.address,
+            user_num,
+        )
+
     async def set_enabled(self, enabled: bool) -> None:
         """Enable or disable this node on the controller.
 

@@ -66,9 +66,13 @@ from pyisyox.paths import (
     TRIGGERS_PATH,
     VARIABLE_ITEM_PATH,
     VARIABLES_TYPE_PATH,
+    ZMATTER_ZWAVE_LOCK_CODE_DELETE_PATH,
+    ZMATTER_ZWAVE_LOCK_CODE_SET_PATH,
     ZMATTER_ZWAVE_NODEDEFS_PATH,
     ZMATTER_ZWAVE_PARAMETER_GET_PATH,
     ZMATTER_ZWAVE_PARAMETER_SET_PATH,
+    ZWAVE_LOCK_CODE_DELETE_PATH,
+    ZWAVE_LOCK_CODE_SET_PATH,
     ZWAVE_NODEDEFS_PATH,
     ZWAVE_PARAMETER_GET_PATH,
     ZWAVE_PARAMETER_SET_PATH,
@@ -783,6 +787,74 @@ class IoXClient:
             number,
             value,
             size,
+            address,
+            zmatter,
+            path,
+        )
+        body = await self._get_text(path)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, body)
+        return body
+
+    async def set_zwave_lock_code(
+        self,
+        address: str,
+        user_num: int,
+        code: int,
+        *,
+        zmatter: bool = False,
+    ) -> str:
+        """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/security/user/{n}/set/code/{c}``.
+
+        Program one user-code slot on a Z-Wave lock. The HTTP body is a
+        ``<RestResponse>`` envelope — callers should pass it through
+        :meth:`Node.set_zwave_lock_code`'s parser, which raises on
+        ``succeeded="false"``.
+
+        Args:
+            address: Wire address of the Z-Wave lock node (URL-quoted here).
+            user_num: User-code slot number (device-defined, 1-based).
+            code: Numeric PIN to program into the slot. Stored on the
+                device; pyisyox doesn't read it back.
+            zmatter: ``True`` for Z-Matter (family ``12``) locks.
+        """
+        encoded_addr = quote(address, safe="")
+        path_tmpl = ZMATTER_ZWAVE_LOCK_CODE_SET_PATH if zmatter else ZWAVE_LOCK_CODE_SET_PATH
+        path = path_tmpl.format(address=encoded_addr, user_num=user_num, code=code)
+        _LOGGER.debug(
+            "Z-Wave set lock code user_num=%d on %s (zmatter=%s) -> GET %s",
+            user_num,
+            address,
+            zmatter,
+            path,
+        )
+        body = await self._get_text(path)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, body)
+        return body
+
+    async def delete_zwave_lock_code(
+        self,
+        address: str,
+        user_num: int,
+        *,
+        zmatter: bool = False,
+    ) -> str:
+        """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/security/user/{n}/delete``.
+
+        Clear one user-code slot on a Z-Wave lock.
+
+        Args:
+            address: Wire address of the Z-Wave lock node (URL-quoted here).
+            user_num: User-code slot number to clear.
+            zmatter: ``True`` for Z-Matter (family ``12``) locks.
+        """
+        encoded_addr = quote(address, safe="")
+        path_tmpl = ZMATTER_ZWAVE_LOCK_CODE_DELETE_PATH if zmatter else ZWAVE_LOCK_CODE_DELETE_PATH
+        path = path_tmpl.format(address=encoded_addr, user_num=user_num)
+        _LOGGER.debug(
+            "Z-Wave delete lock code user_num=%d on %s (zmatter=%s) -> GET %s",
+            user_num,
             address,
             zmatter,
             path,
