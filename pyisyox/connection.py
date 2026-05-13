@@ -15,10 +15,10 @@ from pyisyox.exceptions import ISYConnectionError, ISYInvalidAuthError
 from pyisyox.helpers.session import get_new_client_session, get_sslcontext
 from pyisyox.logging import _LOGGER, enable_logging
 
-MAX_HTTPS_CONNECTIONS_ISY = 2
-MAX_HTTP_CONNECTIONS_ISY = 5
-MAX_HTTPS_CONNECTIONS_IOX = 20
-MAX_HTTP_CONNECTIONS_IOX = 50
+MAX_HTTPS_CONNECTIONS_ISY = 1
+MAX_HTTP_CONNECTIONS_ISY = 1
+MAX_HTTPS_CONNECTIONS_IOX = 1
+MAX_HTTP_CONNECTIONS_IOX = 1
 
 MAX_RETRIES = 5
 RETRY_BACKOFF = [0.01, 0.10, 0.25, 1, 2]  # Seconds
