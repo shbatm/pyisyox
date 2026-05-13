@@ -8,8 +8,13 @@ Sits between the auth layer (:mod:`pyisyox.auth`) and the schema layer
 * ``GET /rest/profiles?include=nodedefs,editors,linkdefs`` — single
   ~117 KB JSON blob; the source for every nodedef + editor.
 * Parallel fan-out:
-    * ``GET /api/nodes`` — JSON structure (family/instance, addresses,
-      parent/pnode). Plugin nodes have **no** ``property[]`` field.
+    * ``GET /api/nodes`` — JSON structure with three parallel arrays
+      under ``data.nodes``: ``node`` (family/instance, addresses,
+      parent/pnode; plugin nodes have **no** ``property[]`` field),
+      ``group`` (scenes with members + ``flag`` bit for the
+      controller-self root group whose ``<name>`` is the friendly
+      controller label), and ``folder`` (organisational tree).
+      Each entry tagged with ``nodeType``.
     * ``GET /rest/status`` — XML, the canonical full-property table for
       both native and plugin nodes. PyISY 3.x already merges this into
       ``/rest/nodes`` to fill in Insteon thermostat properties; the
@@ -17,7 +22,10 @@ Sits between the auth layer (:mod:`pyisyox.auth`) and the schema layer
     * ``GET /api/programs``, ``/api/triggers`` — JSON.
     * ``GET /api/variables/1`` and ``/api/variables/2`` — JSON.
 
-Total: ≤ 7 HTTP + 1 WebSocket regardless of node-server count.
+Total: ≤ 6 HTTP + 1 WebSocket regardless of node-server count
+(``/rest/nodes`` was dropped from the fan-out in #127 — its
+group/folder data is fully covered by ``/api/nodes`` JSON, saving one
+round-trip per connect).
 
 The client is auth-mode-agnostic — it accepts any :class:`pyisyox.auth.Auth`
 implementation (``PortalAuth`` or ``LocalAuth``). On a 401 it asks the
@@ -61,7 +69,6 @@ from pyisyox.paths import (
     PROFILES_PATH,
     PROGRAM_COMMAND_PATH,
     PROGRAMS_PATH,
-    REST_NODES_PATH,
     REST_STATUS_PATH,
     TRIGGERS_PATH,
     VARIABLE_ITEM_PATH,
@@ -468,7 +475,6 @@ class IoXClient:
         (
             profile_raw,
             nodes_raw,
-            rest_nodes_xml,
             status_xml,
             programs_raw,
             triggers_raw,
@@ -478,7 +484,6 @@ class IoXClient:
         ) = await asyncio.gather(
             self._get_json(PROFILES_PATH),
             self._get_json(NODES_PATH),
-            self._get_text(REST_NODES_PATH),
             self._get_text(REST_STATUS_PATH),
             self._get_json(PROGRAMS_PATH),
             self._get_json(TRIGGERS_PATH),
@@ -494,7 +499,13 @@ class IoXClient:
         profile = Profile.load_from_json(profile_raw)
         nodes = parse_api_nodes(nodes_raw)
         merge_status_into_nodes(nodes, parse_rest_status(status_xml))
-        groups, folders, root_name = parse_rest_nodes_groups_folders(rest_nodes_xml)
+        # /api/nodes JSON carries the full node + group + folder tree
+        # (each entry tagged with ``nodeType``) — see issue #127. The
+        # legacy ``/rest/nodes`` XML round-trip is dropped from the
+        # fan-out; ``parse_rest_nodes_groups_folders`` stays exported
+        # for LocalAuth (which doesn't expose ``/api/*``) and external
+        # consumers that prefer the XML surface.
+        groups, folders, root_name = parse_api_nodes_groups_folders(nodes_raw)
         await self._load_dynamic_zwave_nodedefs(profile, nodes)
 
         return LoadResult(
@@ -1042,6 +1053,88 @@ def _flag_int(raw: Any) -> int:
         return int(raw)
     except (TypeError, ValueError):
         return 0
+
+
+def parse_api_nodes_groups_folders(
+    raw: dict[str, Any],
+) -> tuple[dict[str, GroupRecord], dict[str, FolderRecord], str]:
+    """Decode ``/api/nodes`` JSON into group + folder registries + root name.
+
+    The JSON payload nests three parallel arrays under ``data.nodes`` —
+    ``node``, ``group``, ``folder`` — each entry tagged with a
+    ``nodeType`` discriminator. This walks the ``group`` and ``folder``
+    arrays only; nodes are handled by :func:`parse_api_nodes`.
+
+    Drop-in replacement for :func:`parse_rest_nodes_groups_folders`
+    (the legacy ``/rest/nodes`` XML parser) — same return shape, same
+    ``NodeFlag.ROOT`` filtering, same controller-vs-responder
+    ``type="16"`` discrimination on group members. Captured live on
+    eisy IoX 6+ confirmed the JSON uses the identical encoding the
+    XML did.
+
+    The root group (``flag`` bit ``NodeFlag.ROOT`` set — the
+    controller-self pseudo-group whose address is the controller MAC)
+    is filtered out of the returned ``groups`` map; its ``name`` is
+    surfaced as the third return value so consumers can use the
+    user-assigned controller label (e.g. ``"Main eisy"``) for device
+    naming — same source the legacy
+    ``/rest/config/<configuration><root><name>`` path carried in
+    PyISY 3.x. Returns an empty string when the root group is absent
+    or unnamed.
+    """
+    nodes_data = (raw.get("data") or {}).get("nodes") or {}
+
+    groups: dict[str, GroupRecord] = {}
+    root_name = ""
+    for item in nodes_data.get("group") or []:
+        if _flag_int(item.get("flag")) & NodeFlag.ROOT:
+            root_name = str(item.get("name") or "") or root_name
+            continue
+        addr = str(item.get("address") or "")
+        if not addr:
+            continue
+        member_records = (item.get("members") or {}).get("link") or []
+        members: list[str] = []
+        controllers: list[str] = []
+        for link in member_records:
+            link_addr = str(link.get("_") or "").strip()
+            if not link_addr:
+                continue
+            members.append(link_addr)
+            # ``type="16"`` (0x10) marks a scene controller in both the
+            # legacy XML and the JSON. Anything else is a responder.
+            if str(link.get("type") or "") == "16":
+                controllers.append(link_addr)
+        parent = item.get("parent")
+        parent_address = parent.get("_") if isinstance(parent, dict) else parent
+        pnode = item.get("pnode")
+        groups[addr] = GroupRecord(
+            address=addr,
+            name=str(item.get("name") or ""),
+            nodedef_id=str(item.get("nodeDefId") or ""),
+            family_id=str(item.get("family") or "1"),
+            instance_id="1",
+            parent_address=str(parent_address) if parent_address else None,
+            pnode=str(pnode) if pnode else None,
+            member_addresses=tuple(members),
+            controller_addresses=tuple(controllers),
+        )
+
+    folders: dict[str, FolderRecord] = {}
+    for item in nodes_data.get("folder") or []:
+        addr = str(item.get("address") or "")
+        if not addr:
+            continue
+        parent = item.get("parent")
+        parent_address = parent.get("_") if isinstance(parent, dict) else parent
+        folders[addr] = FolderRecord(
+            address=addr,
+            name=str(item.get("name") or ""),
+            family_id=str(item.get("family") or "13"),
+            parent_address=str(parent_address) if parent_address else None,
+        )
+
+    return groups, folders, root_name
 
 
 def parse_api_nodes(raw: dict[str, Any]) -> dict[str, NodeRecord]:

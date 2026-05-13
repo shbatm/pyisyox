@@ -35,8 +35,14 @@ TRIGGERS_PATH = "/api/triggers"
 #: ~117 KB profile blob with every nodedef + editor + linkdef.
 PROFILES_PATH = "/rest/profiles?include=nodedefs,editors,linkdefs"
 
-#: ``GET /rest/nodes`` — legacy XML; source for ``<group>``/``<folder>``
-#: structure (the JSON ``/api/nodes`` doesn't carry these).
+#: ``GET /rest/nodes`` — legacy XML surface for the node + group +
+#: folder tree. **No longer used by the default load fan-out** —
+#: ``/api/nodes`` JSON carries ``data.nodes.{node, group, folder}``
+#: with every field the connector needs (verified against captures on
+#: eisy IoX 6+; member ``type="16"`` controller marker matches). The
+#: constant + the legacy parser (:func:`parse_rest_nodes_groups_folders`)
+#: stay exported for LocalAuth flows on ``:8443`` (which doesn't
+#: expose ``/api/*``) and for external consumers that prefer the XML.
 REST_NODES_PATH = "/rest/nodes"
 
 #: ``GET /rest/zwave/node/{address}/def/get`` — the *dynamically

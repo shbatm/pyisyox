@@ -191,7 +191,6 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     session.set_route("GET", "/rest/profiles?include=nodedefs,editors,linkdefs", 200, profile_json)
     session.set_route("GET", "/api/nodes", 200, nodes_payload)
     session.set_route("GET", "/rest/status", 200, status_xml)
-    session.set_route("GET", "/rest/nodes", 200, '<?xml version="1.0"?><nodes><root/></nodes>')
     session.set_route("GET", "/api/programs", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/triggers", 200, {"successful": True, "data": []})
     session.set_route(
@@ -229,23 +228,22 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     assert list(result.network_resources) == ["1"]
     assert result.network_resources["1"].name == "Reboot Router"
 
-    # Total HTTP cost: 1 (config setup) + 1 (login setup) + 9 (parallel
-    # fan-out) = 11 calls. The fan-out covers: profiles, /api/nodes,
-    # /rest/nodes (groups + folders), /rest/status, /api/programs,
-    # /api/triggers, /api/variables/1, /api/variables/2,
+    # Total HTTP cost: 1 (config setup) + 1 (login setup) + 8 (parallel
+    # fan-out) = 10 calls. The fan-out covers: profiles, /api/nodes
+    # (which now carries groups + folders too, see #127), /rest/status,
+    # /api/programs, /api/triggers, /api/variables/1, /api/variables/2,
     # /rest/networking/resources. Still constant w.r.t. node-server count.
     fanout = [c for c in session.calls if c[0] == "GET" and c[1] not in ("/api/config",)]
-    assert len(fanout) == 9
+    assert len(fanout) == 8
 
 
 def _empty_fanout_routes(session: FakeSession) -> None:
-    """Script the eight non-/api/nodes fan-out endpoints with empty
+    """Script the seven non-/api/nodes fan-out endpoints with empty
     payloads — enough for ``load()`` to complete; tests override the
     pieces they care about afterwards."""
     profile_json = json.loads((FIXTURE_DIR / "profiles_with_flume.json").read_text())
     session.set_route("GET", "/rest/profiles?include=nodedefs,editors,linkdefs", 200, profile_json)
     session.set_route("GET", "/rest/status", 200, "<nodes/>")
-    session.set_route("GET", "/rest/nodes", 200, "<nodes/>")
     session.set_route("GET", "/api/programs", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/triggers", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/variables/1", 200, {"successful": True, "data": []})
