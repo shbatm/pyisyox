@@ -93,6 +93,8 @@ from pyisyox.runtime import (
     SystemEventControl,
     TriggerAction,
     Variable,
+    VariableTableChangeEvent,
+    VariableTableChangeListener,
     WebSocketEventStream,
     describe_system_event,
 )
@@ -166,6 +168,8 @@ __all__ = [
     "Variable",
     "VariableField",
     "VariableRecord",
+    "VariableTableChangeEvent",
+    "VariableTableChangeListener",
     "WebSocketEventStream",
     "build_sslcontext",
     "classify",

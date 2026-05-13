@@ -329,8 +329,8 @@ class VariableRecord:
     type_id: str
     id: str
     name: str
-    value: int = 0
-    init: int = 0
+    value: int | float = 0
+    init: int | float = 0
     precision: int = 0
     ts: str = ""
 
@@ -899,7 +899,18 @@ class IoXClient:
         Raises:
             HTTPError on non-2xx; ClientError on malformed response.
         """
-        return await self._post_json(VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id), body)
+        path = VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id)
+        _LOGGER.debug(
+            "Variable write type=%s id=%s body=%s -> POST %s",
+            var_type,
+            var_id,
+            body,
+            path,
+        )
+        response = await self._post_json(path, body)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "POST %s response: %s", path, response)
+        return response
 
     async def run_program_command(self, program_id: str, command: str) -> str:
         """Send a program / folder command via the legacy REST endpoint.
@@ -923,7 +934,12 @@ class IoXClient:
         The controller acknowledges receipt only — it doesn't return
         the result of the underlying HTTP / TCP / UDP fire.
         """
-        return await self._get_text(NETWORK_RESOURCE_ITEM_PATH.format(resource_id=resource_id))
+        path = NETWORK_RESOURCE_ITEM_PATH.format(resource_id=resource_id)
+        _LOGGER.debug("Network resource fire id=%s -> GET %s", resource_id, path)
+        body = await self._get_text(path)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, body)
+        return body
 
     async def post_node_update(self, address: str, body: dict[str, Any]) -> dict[str, Any]:
         """Issue ``POST /api/nodes/{address}`` with the supplied body.
@@ -1370,8 +1386,8 @@ def parse_api_variables_type(raw: list[dict[str, Any]], type_id: str) -> dict[st
             type_id=str(type_id),
             id=vid_str,
             name=str(entry.get("name", "")),
-            value=_coerce_int(entry.get("val"), default=0),
-            init=_coerce_int(entry.get("init"), default=0),
+            value=_coerce_var_number(entry.get("val"), default=0),
+            init=_coerce_var_number(entry.get("init"), default=0),
             precision=_coerce_prec(entry.get("prec")),
             ts=str(entry.get("ts", "")),
         )
@@ -1386,6 +1402,31 @@ def _coerce_int(raw: Any, *, default: int = 0) -> int:
         return int(raw)
     except (TypeError, ValueError):
         return default
+
+
+def _coerce_var_number(raw: Any, *, default: int = 0) -> int | float:
+    """Coerce a variable wire value to ``int | float``.
+
+    Variables can store floats on the modern controller (``POST
+    /api/variables/{type}/{id}`` accepts both ints and floats), so the
+    parser preserves whichever the wire emits — ``int`` for raw
+    integer storage, ``float`` for a fresh write that posted a
+    fractional value. Bool slips past ``isinstance(bool, int)`` but
+    isn't a meaningful variable value here, so it's coerced too.
+    """
+    if raw is None or raw == "":
+        return default
+    if isinstance(raw, bool):
+        return int(raw)
+    if isinstance(raw, (int, float)):
+        return raw
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return default
 
 
 def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:

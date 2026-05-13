@@ -11,6 +11,8 @@ hit the in-memory record directly so the test surface is just:
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from pyisyox.auth import LocalAuth
@@ -77,19 +79,44 @@ async def test_set_value_posts_value_body_and_updates_record() -> None:
 
 
 @pytest.mark.asyncio
-async def test_set_value_coerces_to_int_before_posting() -> None:
-    """A non-int caller (str / float) is coerced — matches the
-    legacy ``Controller.set_variable_value`` contract."""
+async def test_set_value_passes_float_through_to_wire() -> None:
+    """Floats reach the wire verbatim. The modern ``POST /api/variables``
+    endpoint accepts both ``int`` and ``float``; on a ``precision > 0``
+    variable, the controller applies the ``* 10**precision`` scale to
+    a float server-side. Coercing to ``int`` here would truncate the
+    fractional portion and double-shift the value (controller would
+    pre-scale the truncated int again), producing wrong stored state."""
+    record = _make_record(precision=1)
+    session = FakeSession(BASE)
+    session.set_route("POST", "/api/variables/2/8", 200, '{"successful": true}')
+    variable = Variable.from_record(record, _make_client(session))
+
+    await variable.set_value(51.5)
+
+    _, _, kwargs = session.calls[-1]
+    assert kwargs["json"] == {"value": 51.5}
+    assert variable.value == 51.5  # record updated in place
+
+
+@pytest.mark.asyncio
+async def test_set_value_accepts_legacy_string_input() -> None:
+    """A string caller is parsed — matches the legacy
+    ``Controller.set_variable_value`` contract. Strings with a decimal
+    point parse as ``float`` so the float-passthrough path applies."""
     record = _make_record()
     session = FakeSession(BASE)
     session.set_route("POST", "/api/variables/2/8", 200, '{"successful": true}')
     variable = Variable.from_record(record, _make_client(session))
 
     await variable.set_value("42")  # type: ignore[arg-type]
-
     _, _, kwargs = session.calls[-1]
     assert kwargs["json"] == {"value": 42}
     assert variable.value == 42
+
+    await variable.set_value("3.14")  # type: ignore[arg-type]
+    _, _, kwargs = session.calls[-1]
+    assert kwargs["json"] == {"value": 3.14}
+    assert variable.value == 3.14
 
 
 @pytest.mark.asyncio
@@ -121,6 +148,25 @@ async def test_rename_posts_name_body_and_updates_record() -> None:
     assert kwargs["json"] == {"name": "New Name"}
     assert variable.name == "New Name"
     assert record.name == "New Name"
+
+
+@pytest.mark.asyncio
+async def test_set_value_logs_debug_with_url_and_body(caplog: pytest.LogCaptureFixture) -> None:
+    """Every wire write should leave a DEBUG breadcrumb at the client
+    layer so a user filing a bug can show the request that went out
+    (the WS echo only confirms the *change*, not the original call)."""
+    record = _make_record()
+    session = FakeSession(BASE)
+    session.set_route("POST", "/api/variables/2/8", 200, '{"successful": true}')
+    variable = Variable.from_record(record, _make_client(session))
+
+    with caplog.at_level(logging.DEBUG, logger="pyisyox.client"):
+        await variable.set_value(42)
+
+    assert any(
+        "Variable write" in msg and "/api/variables/2/8" in msg
+        for msg in caplog.messages
+    )
 
 
 @pytest.mark.asyncio
