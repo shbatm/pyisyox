@@ -1,33 +1,13 @@
 """WebSocket event parsing and dispatch.
 
-The eisy event stream sends ``<Event>`` XML frames over WebSocket. Two
-transports exist:
+Two transports — legacy ``/rest/subscribe`` (raw XML) and modern
+``/api/events/subscribe`` (JSON-wrapped, adds PG3 ``spolisy`` channel)
+— wrap the same ``<Event>`` payload, so :func:`parse_event_frame`
+accepts either. System events use underscore-prefixed control ids
+(``_5``, ``_28``, …) — see :class:`SystemEventControl`.
 
-* ``/rest/subscribe`` — legacy, raw XML frames. **Default** for both
-  PortalAuth and LocalAuth modes.
-* ``/api/events/subscribe`` — modern, JSON-wrapped:
-  ``{"type": "event", "data": "<xml>"}``. Adds a ``"spolisy"`` side
-  channel for PG3 service status. Opt-in for portal mode only.
-
-Both wrap the same ``<Event seqnum=... sid=... timestamp=...>`` XML
-payload, so :func:`parse_event_frame` accepts either shape and
-returns a single :class:`Event` (or ``None`` for unparsable / non-
-event frames like keep-alive nulls).
-
-Event control ids:
-
-* Property updates use the property id (e.g. ``"ST"``, ``"GV1"``) and
-  populate ``node_address``.
-* System events use a leading underscore (``"_5"`` system status,
-  ``"_28"`` Matter status, etc.) with empty ``node_address``. The
-  documented codes are enumerated in :class:`SystemEventControl`;
-  consumers can either branch on the enum or render labels via
-  :meth:`SystemEventControl.label` (which passes unknown codes
-  through verbatim).
-
-This module is decoupled from the actual WebSocket reader so the
-dispatcher can be tested with synthetic frames; the WS loop lives in
-:mod:`pyisyox.runtime.ws`.
+Decoupled from the WS reader (:mod:`pyisyox.runtime.ws`) so the
+dispatcher can be tested with synthetic frames.
 """
 
 from __future__ import annotations
@@ -1029,28 +1009,10 @@ class EventDispatcher:
     ) -> None:
         """Bind to a node + program + variable registry.
 
-        Args:
-            nodes: The same ``dict[str, NodeRecord]`` that
-                :class:`IoXClient.LoadResult` produces. The dispatcher
-                mutates ``record.properties`` in place when an event
-                targets a known node; events for unknown addresses
-                are dropped silently (typically nodes that joined
-                after the initial load — listen for node-add via
-                :meth:`add_lifecycle_listener` and trigger a reload).
-            programs: Optional program registry. When provided, the
-                dispatcher mutates ``record.status`` / ``record.running``
-                in place on program-status frames. ``None`` (the
-                default for tests that only care about node events)
-                makes program-status dispatch a no-op.
-            variables: Optional variable registry, shape
-                ``{type_id: {var_id: VariableRecord}}``. When provided,
-                the dispatcher mutates ``record.value`` (action ``"6"``
-                frames) or ``record.init`` (action ``"7"`` frames) in
-                place; symmetric with the node-property and
-                program-status handling. ``None`` (the default) makes
-                variable-change dispatch a no-op — consumers that need
-                variable updates without registering a registry can
-                still parse :attr:`Event.event_info` themselves.
+        The dispatcher mutates records in place. Events for unknown
+        addresses are dropped silently (subscribe to lifecycle for
+        joins). Passing ``None`` for ``programs``/``variables`` makes
+        those dispatch paths a no-op.
         """
         self._nodes = nodes
         self._programs = programs if programs is not None else {}

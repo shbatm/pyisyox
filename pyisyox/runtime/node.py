@@ -1,28 +1,10 @@
-"""Runtime ``Node`` — wraps a :class:`NodeRecord` + :class:`NodeDef` + client.
+"""Runtime ``Node`` — :class:`NodeRecord` + :class:`NodeDef` + client.
 
-The :class:`Node` is the primary user-facing handle for a single device.
-It exposes the structural fields and current property values
-(populated by :class:`pyisyox.client.IoXClient`'s initial load and
-later updated by the WebSocket dispatcher) plus a
-:meth:`Node.send_command` that:
-
-1. Looks the command up in the node's :class:`NodeDef` (under
-   ``cmds.accepts``).
-2. Validates each parameter against the editor that command parameter
-   references — using the bidirectional codec from
-   :mod:`pyisyox.schema.editor`. Enum names get translated to their
-   raw integers; subset constraints are enforced; out-of-range numeric
-   values raise before any HTTP traffic.
-3. Issues the legacy XML command endpoint
-   ``GET /rest/nodes/{addr}/cmd/{cmd_id}[/{p1}[/{p2}...]]`` via the
-   client. The response is a small ``<RestResponse/>`` envelope which
-   we don't need to decode beyond confirming the HTTP status.
-
-Only the legacy ``/rest/nodes/{addr}/cmd/...`` surface exists for
-sending node commands — there is no ``/api/*`` equivalent observed in
-captures, so we go through the legacy XML path. Auth still works:
-both :class:`PortalAuth` JWT and :class:`LocalAuth` HTTP basic accept
-``/rest/*`` requests.
+The primary user-facing device handle. Exposes structural fields,
+current properties (updated in place by the WS dispatcher), and
+:meth:`Node.send_command` for editor-validated command dispatch.
+Commands go through the legacy ``/rest/nodes/{addr}/cmd/...`` XML
+surface — no ``/api/*`` equivalent has been observed.
 """
 
 from __future__ import annotations
@@ -95,20 +77,7 @@ class Node:
         profile: Profile,
         client: IoXClient,
     ) -> None:
-        """Store the components needed for state reads and command sends.
-
-        Args:
-            record: The structural + merged-property data for this node.
-            nodedef: The resolved nodedef, or ``None`` if the
-                ``(nodedef_id, family, instance)`` triple didn't match
-                anything in the profile (e.g. a brand-new plugin
-                whose profile hasn't been loaded yet).
-            profile: The parsed :class:`Profile`. Used to resolve
-                editors scoped to this node's family/instance for
-                command-parameter validation.
-            client: The :class:`IoXClient` that owns the HTTP session.
-                Calls go through ``client.send_node_command``.
-        """
+        """Store the components needed for state reads and command sends."""
         self._record = record
         self._nodedef = nodedef
         self._profile = profile
@@ -159,37 +128,21 @@ class Node:
 
     @property
     def parent_address(self) -> str | None:
-        """Address of the tree-hierarchy parent (folder containing this node).
+        """Tree-hierarchy parent (containing folder). ``None`` at root.
 
-        Sourced from the IoX ``<parent>`` element. ``None`` for nodes at the
-        root of the node tree. Matches the ``parent_address`` semantic on
-        :class:`pyisyox.Folder`, :class:`pyisyox.Group`, and
-        :class:`pyisyox.Program` — i.e., "what folder is this in?"
-
-        Note: this is NOT the device primary for multi-button physical
-        devices (KeypadLinc, RemoteLinc, FanLinc). For that, use
-        :attr:`primary_address` — which derives from the IoX ``<pnode>``
-        element. The two concepts are independent: a sub-button can be
-        under a folder while also being a sub-node of a device primary.
+        Distinct from :attr:`primary_address`: ``<parent>`` is the folder,
+        ``<pnode>`` is the device primary for multi-button hardware.
         """
         return self._record.parent_address
 
     @property
     def primary_address(self) -> str | None:
-        """Address of the device primary for sub-button nodes.
+        """Device primary for sub-button nodes (from ``<pnode>``).
 
-        Sourced from the IoX ``<pnode>`` element. For multi-button physical
-        devices (KeypadLinc, RemoteLinc, FanLinc) the sub-button nodes carry
-        the primary load node's address in ``<pnode>``; primaries carry
-        their own address. We return ``None`` for primaries so the consumer
-        can treat ``primary_address is not None`` as a "this is a sub-node"
-        indicator and ``primary_address or address`` as "the canonical
-        device-grouping address."
-
-        PyISY 3.x exposed the same concept as ``Node.primary_node`` (which
-        returned a string). The ``_address`` suffix here matches the
-        convention used elsewhere in the package (``parent_address``,
-        ``member_addresses``, ``controller_addresses``).
+        Sub-buttons of multi-button devices (KeypadLinc, RemoteLinc,
+        FanLinc) carry the primary's address. ``None`` for primaries —
+        so ``primary_address is not None`` reads as "sub-node" and
+        ``primary_address or address`` as the device-grouping address.
         """
         pnode = self._record.pnode
         if pnode is None or pnode == self._record.address:
@@ -218,20 +171,11 @@ class Node:
     def properties(self) -> dict[str, NodePropertyValue]:
         """Live property values, keyed by property id (e.g. ``"ST"``).
 
-        For native nodes these are merged from ``/api/nodes`` + the
-        ``/rest/status`` overlay during initial load. Plugin nodes get
-        all values from ``/rest/status``. WebSocket events update the
-        underlying record in place at runtime via
-        :class:`pyisyox.runtime.EventDispatcher`.
-
-        Each value is normalised to its nodedef editor's canonical UOM
-        before being returned — e.g. an Insteon dimmer that reports
-        ``OL``/``ST`` as a UOM-100 0-255 byte is surfaced here as the
-        UOM-51 0-100% value its ``I_OL`` editor (and the ``/cmd`` write
-        surface) uses. Values whose reported UOM already matches the
-        editor pass through unchanged. The returned dict is freshly
-        built on each access; mutate the controller's state via commands,
-        not by writing here.
+        Each value is UOM-normalised to its nodedef editor's canonical
+        unit — e.g. an Insteon dimmer reporting ``OL`` as a UOM-100
+        0-255 byte is surfaced as the UOM-51 0-100% the ``I_OL`` editor
+        (and the ``/cmd`` write surface) uses. Values already matching
+        the editor pass through unchanged.
         """
         record_props = self._record.properties
         return {
@@ -278,17 +222,7 @@ class Node:
     def has_flag(self, flag: NodeFlag) -> bool:
         """Return ``True`` if every bit in ``flag`` is set on this node.
 
-        ``flag`` may be a single :class:`NodeFlag` member or an OR'd
-        combination (e.g. ``NodeFlag.NEW | NodeFlag.IN_ERR``); the check
-        is bitwise-AND against all requested bits, so a combined value
-        only matches when every bit is present.
-
-        Example::
-
-            from pyisyox.constants import NodeFlag
-
-            if node.has_flag(NodeFlag.DEVICE_ROOT):
-                ...
+        ``flag`` may be OR'd; combined values must have every bit set.
         """
         return (self._record.flag & int(flag)) == int(flag)
 
@@ -296,28 +230,12 @@ class Node:
 
     @property
     def protocol(self) -> Protocol:
-        """Best-effort device-protocol classification, derived from ``family_id``.
+        """Transport-protocol classification from ``family_id``.
 
-        Returns a :class:`pyisyox.constants.Protocol` member (a
-        ``StrEnum``, so it compares equal to its string value):
-
-        * :attr:`Protocol.INSTEON` — family ``"1"``.
-        * :attr:`Protocol.UPB` — family ``"2"``.
-        * :attr:`Protocol.ZWAVE` — family ``"4"`` (legacy attached
-          Z-Wave radio) or ``"12"`` (Z-Matter radio as a Z-Wave
-          controller).
-        * :attr:`Protocol.MATTER` — family ``"15"`` (Z-Matter radio
-          as a Matter/Thread controller).
-        * :attr:`Protocol.NODE_SERVER` — family ``"10"`` or any id
-          outside the IoX core family set; PG3 plugin nodes report a
-          slot id here, so we treat the whole space as node-server.
-        * :attr:`Protocol.UNKNOWN` — recognised core family with no
-          dedicated protocol mapping (RCS, Brultech, NCD, UDI, the
-          group/auto families, folders) or no family id at all.
-
-        This classifies the *transport*, not the device class — a
-        plugin thermostat reads as ``NODE_SERVER`` here; use
-        :attr:`is_thermostat` etc. for capability.
+        Returns ``NODE_SERVER`` for any non-core family id (PG3 plugin
+        nodes report a slot id here), ``UNKNOWN`` for recognised but
+        unmapped core families. Classifies transport, not device class
+        — use :attr:`is_thermostat` etc. for capability.
         """
         fid = self.family_id
         if fid == NodeFamily.INSTEON:
@@ -336,63 +254,37 @@ class Node:
 
     @property
     def is_thermostat(self) -> bool:
-        """True if the node accepts climate-mode or setpoint commands.
-
-        Derived from ``nodedef.cmds.accepts`` (protocol-agnostic), so a
-        PG3 plugin thermostat reads as a thermostat the same way a
-        native Insteon 2441ZTH does.
-        """
+        """True if the node accepts climate-mode or setpoint commands."""
         return self._has_command(CMD_CLIMATE_MODE) or self._has_command(PROP_SETPOINT_HEAT)
 
     @property
     def is_lock(self) -> bool:
-        """True if the node is a door / deadbolt lock.
+        """True for door/deadbolt locks.
 
-        Two tells, either is sufficient:
-
-        * The nodedef accepts the secure-lock (``SECMD``) verb — Z-Wave
-          and Insteon I2CS locks both expose this.
-        * The nodedef id contains the substring ``"Lock"`` — covers
-          IoX 6+ ``DoorLock`` / ``DoorLock_ADV`` / equivalents that
-          drive the lock via ``DON`` / ``DOF`` rather than ``SECMD``.
+        Two tells: nodedef accepts ``SECMD`` (Z-Wave / Insteon I2CS), or
+        nodedef id contains ``"Lock"`` (IoX 6+ ``DoorLock`` variants that
+        drive via ``DON``/``DOF``).
         """
         return self._has_command(CMD_SECURE) or "Lock" in self.nodedef_id
 
     @property
     def is_fan(self) -> bool:
-        """True if the node is a multi-speed fan controller.
+        """True for multi-speed fan controllers (nodedef id contains ``"Fan"``).
 
-        Derived from the nodedef id substring ``"Fan"`` — matches
-        the Insteon ``FanLincMotor`` sub-node (the FanLinc light
-        side reports as ``DimmerLampOnly``, so light/fan separate
-        cleanly per sub-address) and PG3 plugin fan nodedefs that
-        follow the same naming convention.
-
-        Fan nodes are a subset of dimmable nodes (``FanLincMotor``
-        accepts ``DON`` with a level parameter restricted to the
-        ``{0, 25, 75, 100}`` Off/Low/Medium/High subset), so
-        callers classifying onto a HA-style ``Platform.FAN`` should
-        check ``is_fan`` **before** ``is_dimmable``.
+        Fan nodes are a subset of dimmable (``FanLincMotor`` accepts
+        ``DON`` with a ``{0, 25, 75, 100}`` subset), so platform
+        classification should check ``is_fan`` **before** ``is_dimmable``.
         """
         return "Fan" in self.nodedef_id
 
     @property
     def is_dimmable(self) -> bool:
-        """True if the node reports a multilevel ``ST`` (status) state.
+        """True if the node reports a multilevel ``ST`` state.
 
-        Derived from the ``ST`` property's editor on the resolved
-        nodedef:
-
-        * ``I_OL_RELAY`` / similar editors with a binary subset
-          (``{0, 100}``) → on/off only → **not** dimmable.
-        * ``I_OL`` / similar editors with a multilevel range (e.g.
-          ``[0, 100]`` or ``[0, 255]``) and no binary subset →
-          dimmable.
-
-        Relay nodedefs accept ``DON`` with an optional level parameter
-        too (the controller ignores the level), so checking ``DON``'s
-        parameters isn't reliable. The ST editor is the source of
-        truth — it's what the device reports its own state through.
+        Derived from the ``ST`` property editor: a binary subset
+        (``{0, 100}``) → not dimmable; a multilevel range → dimmable.
+        Relay nodedefs accept ``DON`` with an ignored level param, so
+        ``DON``'s editor is unreliable — ``ST`` is the source of truth.
         """
         if self._nodedef is None:
             return False
@@ -409,12 +301,10 @@ class Node:
 
     @property
     def is_battery_node(self) -> bool:
-        """True for nodes that report battery level but no on/off status.
+        """True if the node reports ``BATLVL`` but no ``ST``.
 
-        Battery-powered Insteon sensors (motion, leak, open/close) follow
-        this pattern — they advertise ``BATLVL`` and protocol-specific
-        sub-properties but no ``ST`` because they don't have an on/off
-        primary state.
+        Battery-powered Insteon sensors (motion, leak, open/close) match
+        this — they have no on/off primary state.
         """
         props = self._record.properties
         return PROP_BATTERY_LEVEL in props and PROP_STATUS not in props
@@ -428,43 +318,17 @@ class Node:
     # --- commanding ---------------------------------------------------
 
     async def send_command(self, command_id: str, *params: float | str) -> None:
-        """Send a command to this node, with editor-codec parameter validation.
+        """Send a command, with editor-codec parameter validation.
 
-        Each positional arg is matched against the corresponding
-        parameter slot on the command's nodedef definition. Enum names
-        ("Heat", "Authorized") are accepted in addition to integers and
-        translated through the editor's ``names`` map. Out-of-subset or
-        out-of-range values raise :class:`NodeCommandError` before any
-        HTTP traffic.
+        Each parameter is sent as ``/{value}/{uom}`` using the UOM its
+        editor declares (the eisy web-UI convention — ``/cmd/DON/75/51``).
+        Parameters whose editor carries no real unit (UOM ``"0"`` or
+        unset) are sent bare.
 
-        Each parameter is sent in the form ``/{value}/{uom}`` — the UOM
-        is the one the parameter's editor declares — so the controller
-        does any device-side scaling itself (this is the convention the
-        eisy web UI uses, e.g. ``/cmd/DON/75/51`` to set 75% on a
-        dimmer; ``/cmd/OL/75/51``; ``/cmd/BL/10/25``). Parameters whose
-        editor carries no real unit (UOM ``"0"`` / unset) are sent as a
-        bare ``/{value}`` with no UOM segment.
-
-        Args:
-            command_id: The IoX command id (e.g. ``"DON"``, ``"DOF"``,
-                ``"CLISPC"``, ``"DISCOVER"``).
-            *params: Positional command arguments. Number must match
-                the command's parameter count (or be zero for
-                parameterless commands like ``DOF``).
-
-        When the node has **no resolved nodedef** (e.g. dynamically
-        provisioned Z-Wave / Z-Matter nodes, whose ``UZW*`` nodedefs
-        aren't published in ``/rest/profiles``), there is nothing to
-        validate against — the command and any params are passed
-        through verbatim (numeric params coerced to ``int``, no UOM
-        segment). This keeps such nodes controllable; the cost is no
-        client-side validation.
-
-        Raises:
-            NodeCommandError: When the command id isn't on this node's
-                accept list, the parameter count is wrong, or any
-                parameter fails editor validation. (Not raised for
-                nodedef-less nodes — see above.)
+        When the node has no resolved nodedef (dynamically provisioned
+        Z-Wave/Z-Matter nodes whose ``UZW*`` defs aren't in
+        ``/rest/profiles``), params pass through verbatim (numeric →
+        int, no UOM) so the node stays controllable without validation.
         """
         if self._nodedef is None:
             passthrough: list[int | str] = [int(p) if isinstance(p, (int, float)) else p for p in params]
@@ -524,21 +388,7 @@ class Node:
         await self.send_command(CMD_SECURE, 0)
 
     async def set_on_level(self, val: int) -> None:
-        """Set the device's remembered on-level via the ``OL`` command.
-
-        ``val`` is the **percentage** ``0-100`` — the unit the ``I_OL``
-        editor (and therefore the ``/cmd/OL`` write surface) uses. The
-        command is sent as ``/cmd/OL/{val}/51`` and the controller does
-        any device-side scaling (Insteon dimmers internally store a
-        0-255 byte; ``75`` → byte ``191`` → reported back as
-        ``OL uom="100" 191``, which :attr:`properties` normalises back
-        to ``75`` for you).
-
-        Raises:
-            NodeCommandError: when this node's nodedef doesn't accept
-                ``OL``, or ``val`` falls outside the ``I_OL`` editor's
-                range (``0-100``).
-        """
+        """Set the remembered on-level via ``OL`` (0-100 percent)."""
         await self.send_command(PROP_ON_LEVEL, val)
 
     async def set_ramp_rate(self, val: int) -> None:
@@ -550,20 +400,10 @@ class Node:
         await self.send_command(PROP_RAMP_RATE, val)
 
     async def set_backlight(self, val: int | str) -> None:
-        """Set keypad / switch backlight intensity.
+        """Set keypad/switch backlight intensity.
 
-        Two encoding modes selected by the BL editor's UOM:
-
-        * **UOM 100 (percentage)** — DimmerSwitch / RelaySwitch / etc.
-          Pass 0-100.
-        * **UOM 25 (index)** — KeypadDimmer / KeypadRelay / KeypadButton.
-          Pass an integer index into the IoX backlight table, or — if
-          the profile's BL editor carries the enum names — the
-          human-readable label string (the codec resolves it).
-
-        The display-label list is *not* mirrored in pyisyox; consumers
-        wanting the labels can iterate
-        ``editor.range_for("25").names`` against the node's BL editor.
+        Two encodings driven by the BL editor's UOM: UOM 100 → 0-100%,
+        UOM 25 → integer index (or enum-name string the codec resolves).
         """
         await self.send_command(CMD_BACKLIGHT, val)
 
@@ -579,27 +419,12 @@ class Node:
         await self.send_command(CMD_MANUAL_DIM_STOP)
 
     async def rename(self, name: str) -> None:
-        """Rename this node.
-
-        Wire shape: ``POST /api/nodes/{address}`` with
-        ``{"name": "<str>", "nodeType": "node"}``. The IoX server
-        emits a ``<control>_3</control>`` lifecycle event with
-        ``action="NN"`` after a successful rename, so consumers
-        listening through
-        :meth:`Controller.add_node_lifecycle_listener` will see the
-        change without polling.
-        """
+        """Rename this node. The controller emits a ``_3`` lifecycle frame
+        with ``action="NN"`` on success."""
         await self._client.post_node_update(self.address, {"name": name, "nodeType": NodeType.NODE})
 
     def to_dict(self) -> dict[str, Any]:
-        """Flatten this node to a JSON-compatible dict.
-
-        Includes the underlying record's structural fields (address,
-        nodedef triple, properties map, flag bitfield) plus the
-        derived :attr:`protocol`. Property values are already
-        :class:`NodePropertyValue` dataclasses so ``asdict`` walks them
-        recursively.
-        """
+        """Flatten this node to a JSON-compatible dict (record + protocol)."""
         payload = asdict(self._record)
         payload["protocol"] = self.protocol
         return payload
@@ -607,36 +432,17 @@ class Node:
     # --- Z-Wave parameter surface ------------------------------------
     #
     # Z-Wave configuration parameters live on a dedicated wire path
-    # (``/rest/(zmatter/)?zwave/node/{addr}/parameters/...``) rather than
-    # the legacy ``/cmd/CONFIG/...`` surface. The ``CONFIG`` accept
-    # command in the dynamic Z-Wave nodedefs models only the (NUM, VAL)
-    # pair — it has no slot for the parameter's byte size, which the
-    # device needs for multi-byte writes — so these helpers are the
-    # supported way to read / write parameters from consumers (HA
-    # service calls, scripts, …).
+    # (``/rest/(zmatter/)?zwave/node/{addr}/parameters/...``). The legacy
+    # ``CONFIG`` accept command models only (NUM, VAL) — no slot for byte
+    # size — so these helpers are the supported read/write surface.
 
     async def get_zwave_parameter(self, number: int) -> dict[str, int]:
-        """Request parameter ``number`` from this Z-Wave node.
+        """Request parameter ``number``; return ``{parameter, size, value}``.
 
-        On success the controller responds with
-        ``<config paramNum="N" size="SZ" value="V"/>`` synchronously
-        (matches PyISY 3.x's verified shape); this method parses that
-        and returns ``{"parameter": N, "size": SZ, "value": V}`` so
-        consumers get structured data instead of raw XML. The device's
-        post-poll parameter report also arrives on the WS event stream.
-
-        Picks the right wire prefix from this node's family id:
-        ``"4"`` → legacy ``/rest/zwave/...``, ``"12"`` → Z-Matter
-        ``/rest/zmatter/zwave/...``.
-
-        Raises:
-            NodeCommandError: When this node isn't a Z-Wave node
-                (family ``4`` or ``12``), or when the controller
-                returns a ``<RestResponse succeeded="false">`` envelope
-                (unknown parameter number, device unreachable, …).
-            ISYResponseParseError: When the response body is neither
-                a ``<config>`` element nor a ``<RestResponse>``
-                envelope — i.e. malformed.
+        Family id picks the wire prefix (``"4"`` → ``/rest/zwave/...``,
+        ``"12"`` → ``/rest/zmatter/zwave/...``). Raises
+        :class:`NodeCommandError` on non-Z-Wave nodes or controller
+        failure; ``ISYResponseParseError`` on malformed bodies.
         """
         if self.family_id not in _ZWAVE_FAMILY_IDS:
             raise NodeCommandError(
@@ -651,24 +457,11 @@ class Node:
         return parsed
 
     async def set_zwave_parameter(self, number: int, value: int, size: int) -> None:
-        """Write parameter ``number`` on this Z-Wave node.
+        """Write parameter ``number`` (size 1/2/4 bytes) on this Z-Wave node.
 
-        Args:
-            number: Z-Wave parameter number (device-defined).
-            value: Signed integer value; the controller / device
-                interpret the sign per the device's parameter spec.
-            size: Parameter byte size — ``1``, ``2``, or ``4``.
-
-        On controller acceptance the device's post-write parameter
-        report arrives asynchronously on the WS stream. The HTTP body
-        is a ``<RestResponse>`` envelope which this method inspects —
-        ``succeeded="false"`` raises :class:`NodeCommandError` so a
-        failed write is never silent.
-
-        Raises:
-            NodeCommandError: When this node isn't Z-Wave, ``size``
-                isn't ``1`` / ``2`` / ``4``, or the controller rejects
-                the write.
+        The post-write report arrives asynchronously on the WS stream.
+        Raises :class:`NodeCommandError` on rejection so failures aren't
+        silent.
         """
         if self.family_id not in _ZWAVE_FAMILY_IDS:
             raise NodeCommandError(
@@ -695,30 +488,13 @@ class Node:
 
     # --- Z-Wave lock-code surface ------------------------------------
     #
-    # Same Z-Wave-only family guard as the parameter surface above. The
-    # wire paths come from PyISY 3.x — assumed valid on IoX 6+ without
+    # Wire paths come from PyISY 3.x — assumed valid on IoX 6+ without
     # captured proof; needs a tester with an enrolled Z-Wave lock for
-    # confirmation. Lock codes are stored on the device; pyisyox doesn't
-    # read them back (the controller doesn't expose a "get code" surface
-    # either — slots are write-only by design for security).
+    # confirmation. Lock codes are write-only (no "get code" surface).
 
     async def set_zwave_lock_code(self, user_num: int, code: int) -> None:
-        """Program a Z-Wave lock's user-code slot.
-
-        Args:
-            user_num: Slot number (device-defined, 1-based).
-            code: Numeric PIN. Locks vary in min/max digits; the
-                controller forwards the value verbatim.
-
-        Path: ``GET /rest/(zmatter/)?zwave/node/<addr>/security/user/<n>/set/code/<c>``.
-        Raises :class:`NodeCommandError` on a ``<RestResponse
-        succeeded="false">`` envelope so failed programmings aren't
-        silent.
-
-        Raises:
-            NodeCommandError: When this node isn't a Z-Wave node, or
-                the controller rejects the write.
-        """
+        """Program a Z-Wave lock's user-code slot. Raises
+        :class:`NodeCommandError` on a failed envelope."""
         if self.family_id not in _ZWAVE_FAMILY_IDS:
             raise NodeCommandError(
                 f"node {self.address!r} is not a Z-Wave node "
@@ -739,14 +515,7 @@ class Node:
         )
 
     async def delete_zwave_lock_code(self, user_num: int) -> None:
-        """Clear a Z-Wave lock's user-code slot.
-
-        Path: ``GET /rest/(zmatter/)?zwave/node/<addr>/security/user/<n>/delete``.
-
-        Raises:
-            NodeCommandError: When this node isn't a Z-Wave node, or
-                the controller rejects the delete.
-        """
+        """Clear a Z-Wave lock's user-code slot."""
         if self.family_id not in _ZWAVE_FAMILY_IDS:
             raise NodeCommandError(
                 f"node {self.address!r} is not a Z-Wave node "
@@ -769,13 +538,8 @@ class Node:
     async def set_enabled(self, enabled: bool) -> None:
         """Enable or disable this node on the controller.
 
-        Wire shape: ``GET /rest/nodes/{address}/{enable|disable}``. A
-        disabled node stays in the table but the controller stops
-        polling / commanding it. On success the local record's
-        :attr:`enabled` flag is updated optimistically (the controller
-        also emits a ``<control>_3</control>`` ``action="EN"`` lifecycle
-        event); on failure the underlying ``HTTPError`` propagates and
-        the flag is left untouched.
+        On success the local ``enabled`` flag is updated optimistically;
+        the controller also emits a ``_3`` ``action="EN"`` lifecycle.
         """
         await self._client.set_node_enabled(self.address, enabled)
         self._record.enabled = enabled
@@ -826,9 +590,8 @@ def _parse_zwave_parameter_response(address: str, number: int, body: str) -> dic
                 f"Z-Wave get parameter {number} on {address!r} rejected by "
                 f"controller (status={status or 'unknown'})"
             )
-        # A "succeeded" RestResponse with no <config> sibling is unexpected
-        # on the get path — surface as parse error so the caller can log
-        # the body and we can adapt if a new firmware ever returns this.
+        # A succeeded RestResponse without <config> is unexpected — parse
+        # error so the body surfaces for triage.
         raise ISYResponseParseError(
             f"Z-Wave get parameter {number} on {address!r} returned a "
             f"RestResponse envelope without a <config> payload: {body!r}"

@@ -1,21 +1,15 @@
-"""Profile loader for IoX ``/rest/profiles`` JSON responses.
+"""Profile loader for ``/rest/profiles`` JSON.
 
-Parses one profile blob (families → instances → editors/linkdefs/nodedefs)
-into resolved Python objects, then builds the
-``(nodedef_id, family_id, instance_id) → NodeDef`` lookup that lets a node
-from ``/api/nodes`` find its definition.
+Parses families → instances → editors/linkdefs/nodedefs and builds the
+``(nodedef_id, family_id, instance_id) → NodeDef`` lookup. Knows the
+wire shape but does no HTTP — callers pass dicts to
+:meth:`Profile.load_from_json`.
 
-This module knows the JSON wire shape but does no HTTP. Callers pass
-already-fetched dicts to :meth:`Profile.load_from_json`.
-
-Source schema: ``/rest/profiles?include=nodedefs,editors,linkdefs`` JSON.
-For its families the controller inline-resolves every visible string into
-the ``name`` fields, so the NLS string table isn't needed there. The
-*dynamically* generated Z-Wave nodedefs (fetched from ``def/get`` XML, not
-``/rest/profiles``) are the exception: their commands/properties arrive
-label-less, so :mod:`pyisyox.client` fetches the relevant per-family NLS
-tables and stashes the merged result on :attr:`Profile.nls` — used to
-resolve those labels and to fill encoded editors' enum option names.
+The controller inline-resolves visible strings into the ``name`` fields,
+so the NLS string table isn't needed for ``/rest/profiles`` families.
+Dynamically generated Z-Wave nodedefs (from ``def/get`` XML) are the
+exception: they arrive label-less, so :mod:`pyisyox.client` overlays
+the per-family NLS tables onto :attr:`Profile.nls` after loading them.
 """
 
 from __future__ import annotations
@@ -117,37 +111,12 @@ class Profile:
     def merge(self, other: Profile) -> ProfileMergeResult:
         """Merge ``other`` into ``self`` in place; return a diff summary.
 
-        Designed for PG3 dynamic profile reload: when a plugin updates
-        its nodedefs at runtime (per
-        https://developer.isy.io/docs/API/pg/DynamicProfiles), the
-        consumer refetches ``/rest/profiles`` and constructs a fresh
-        :class:`Profile` from the new payload, then calls this method
-        to fold the updates into the live one. Existing
-        :class:`pyisyox.runtime.Node` instances hold a reference to
-        the resolved :class:`NodeDef`; if we replaced the Profile
-        wholesale they'd cling to stale lookups, so the merge mutates
-        the existing dicts and replaces individual NodeDef / Editor /
-        LinkDef objects rather than rebuilding the structure.
-
-        Semantics:
-
-        * Editors / LinkDefs / NodeDefs in ``other`` overwrite same-id
-          entries in ``self`` at the same family/instance scope.
-        * Editors / LinkDefs / NodeDefs only in ``self`` are kept —
-          ``other`` is treated as additive, never as a delete list.
-          (To remove items, the caller passes a profile with the
-          removed entries explicitly absent and tracks the
-          :attr:`ProfileMergeResult` to act on the diff themselves.)
-        * Families / Instances new to ``other`` are added to ``self``.
-        * The ``nodedef_lookup`` table is updated so the
-          ``(nodedef_id, family_id, instance_id)`` join key resolves
-          to the new instance.
-
-        Returns:
-            A :class:`ProfileMergeResult` listing the nodedef ids that
-            were added vs replaced, plus the equivalent for editors
-            and linkdefs. Consumers can use this to invalidate caches
-            or re-classify nodes whose nodedef changed.
+        Designed for PG3 dynamic profile reload. Existing runtime
+        :class:`Node` instances hold references to the resolved
+        :class:`NodeDef`, so a wholesale replace would leave them
+        clinging to stale lookups — instead the merge mutates the
+        existing dicts and replaces individual NodeDef/Editor/LinkDef
+        objects. Additive only: items absent from ``other`` are kept.
         """
         result = ProfileMergeResult()
         for fam_id, other_family in other.families.items():
@@ -178,15 +147,9 @@ class Profile:
     def register_nodedefs(self, family_id: str, instance_id: str, nodedefs: dict[str, NodeDef]) -> None:
         """Add a batch of nodedefs to ``family_id``/``instance_id`` in place.
 
-        Used for the dynamically-generated Z-Wave nodedefs, which aren't
-        carried by ``/rest/profiles`` and are fetched separately from
-        ``/rest/zwave/node/{addr}/def/get``. The target family / instance
-        is created if it doesn't exist yet (the Z-Wave families *do*
-        already exist in ``/rest/profiles`` — with their ``ZW_*`` editors
-        but no nodedefs — so usually only the nodedef dicts are filled
-        in). Existing same-id nodedefs at that scope are overwritten and
-        the ``nodedef_lookup`` table updated so the
-        ``(nodedef_id, family_id, instance_id)`` join key resolves.
+        Used for dynamic Z-Wave nodedefs (fetched from ``def/get`` XML —
+        the Z-Wave families already exist in ``/rest/profiles`` with
+        their ``ZW_*`` editors but no nodedefs). Overwrites by id.
         """
         family = self.families.setdefault(family_id, Family(id=family_id, name=""))
         instance = family.instances.setdefault(instance_id, Instance(id=instance_id, name=""))
