@@ -255,3 +255,74 @@ def test_range_step_defaults_to_none() -> None:
     """Ranges without a ``step`` key report ``step is None``."""
     ed = Editor.from_json({"id": "I_BL", "ranges": [{"uom": "51", "min": 0, "max": 100}]})
     assert ed.ranges[0].step is None
+
+
+# --- encoded editor ids ---------------------------------------------------
+
+
+def test_from_encoded_id_uom_prec_only() -> None:
+    """``_<uom>_<prec>`` — implied unbounded int range, given precision."""
+    ed = Editor.from_encoded_id("_1_3")
+    assert ed is not None
+    assert ed.id == "_1_3"
+    (rng,) = ed.ranges
+    assert (rng.uom, rng.precision, rng.min, rng.max, rng.subset) == ("1", 3, None, None, set())
+
+
+def test_from_encoded_id_numeric_range_and_negatives() -> None:
+    """``_R_<min>_<max>`` with the ``m`` = negative convention."""
+    assert Editor.from_encoded_id("_56_0_R_0_255").ranges[0].max == 255  # type: ignore[union-attr]
+    ed = Editor.from_encoded_id("_17_2_R_m5_10")
+    assert ed is not None
+    rng = ed.ranges[0]
+    assert (rng.uom, rng.precision, rng.min, rng.max) == ("17", 2, -5, 10)
+
+
+def test_from_encoded_id_subset_bitmasks() -> None:
+    """``_S_<lowMask>[_<highMask>]`` decodes the hex bitmask to a value set."""
+    assert Editor.from_encoded_id("_17_1_S_FF00FF00").ranges[0].subset == set(range(8, 16)) | set(  # type: ignore[union-attr]
+        range(24, 32)
+    )
+    assert Editor.from_encoded_id("_17_1_S_FF00FF00_03E").ranges[0].subset == (  # type: ignore[union-attr]
+        set(range(8, 16)) | set(range(24, 32)) | set(range(33, 38))
+    )
+
+
+def test_from_encoded_id_trailing_nls_is_ignored_but_tolerated() -> None:
+    """A ``_N_<nls>`` tail (which can itself contain ``_``) names an NLS
+    table pyisyox doesn't resolve — parsing still succeeds, names empty."""
+    ed = Editor.from_encoded_id("_51_0_R_0_101_N_IX_DIM_REP")
+    assert ed is not None
+    rng = ed.ranges[0]
+    assert (rng.uom, rng.precision, rng.min, rng.max) == ("51", 0, 0, 101)
+    assert rng.names == {}
+
+
+@pytest.mark.parametrize("bad", ["ZW_DIM_PERCENT", "_sys_notify_full", "_17_x", "_17", "_", "", "_17_1_Q_5"])
+def test_from_encoded_id_rejects_non_encodings(bad: str) -> None:
+    assert Editor.from_encoded_id(bad) is None
+
+
+def test_encode_param_picks_accepting_range_and_returns_its_uom() -> None:
+    """A multi-range editor (range 0: tiny ``{1: "Previous Value"}`` index
+    in uom 25; range 1: 0-100 % in uom 51) — a plain percent value must be
+    encoded by the % range and report uom ``"51"``, while the index value
+    ``1`` still resolves (and reports uom ``"25"``)."""
+    ed = Editor.from_json(
+        {
+            "id": "ZW_DIM_PERCENT_LIKE",
+            "ranges": [
+                {"uom": "25", "subset": "1", "names": {"1": "Previous Value"}},
+                {"uom": "51", "min": 0, "max": 100},
+            ],
+        }
+    )
+    assert ed.encode_param(75) == (75, "51")
+    assert ed.encode_param("Previous Value") == (1, "25")
+    assert ed.encode_param(1) == (1, "25")  # first range wins for the ambiguous int
+    assert ed.encode(75) == 75  # plain encode() still works
+    # decode scans every range for an enum name when no uom hint is given
+    assert ed.decode(1) == "Previous Value"
+    assert ed.decode(75) == "75"
+    with pytest.raises(EditorCodecError):
+        ed.encode_param(150)  # out of every range

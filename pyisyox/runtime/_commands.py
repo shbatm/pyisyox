@@ -121,14 +121,14 @@ def _encode(
                 f"not found in family {family_id!r} instance {instance_id!r}"
             )
         try:
-            raw_value = editor.encode(params[idx])
+            # encode_param returns the UOM of the range that actually
+            # accepted the value (not always ranges[0]) — that's the
+            # input convention the /cmd surface expects appended
+            # (e.g. I_OL → "51"; ZW_DIM_PERCENT's % range → "51").
+            raw_value, uom = editor.encode_param(params[idx])
         except EditorCodecError as exc:
             raise NodeCommandError(
                 f"command {command.id!r} parameter {idx} (editor {param_def.editor_id!r}): {exc}"
             ) from exc
-        # First range's UOM is the input/display convention the /cmd
-        # surface expects appended (e.g. I_OL → "51"). range_for() with
-        # no hint already picks the first range, matching encode() above.
-        uom = editor.range_for().uom if editor.ranges else ""
         encoded.append((raw_value, uom))
     return tuple(encoded)

@@ -168,6 +168,25 @@ class Profile:
             self.timestamp = other.timestamp
         return result
 
+    def register_nodedefs(self, family_id: str, instance_id: str, nodedefs: dict[str, NodeDef]) -> None:
+        """Add a batch of nodedefs to ``family_id``/``instance_id`` in place.
+
+        Used for the dynamically-generated Z-Wave nodedefs, which aren't
+        carried by ``/rest/profiles`` and are fetched separately from
+        ``/rest/zwave/node/{addr}/def/get``. The target family / instance
+        is created if it doesn't exist yet (the Z-Wave families *do*
+        already exist in ``/rest/profiles`` — with their ``ZW_*`` editors
+        but no nodedefs — so usually only the nodedef dicts are filled
+        in). Existing same-id nodedefs at that scope are overwritten and
+        the ``nodedef_lookup`` table updated so the
+        ``(nodedef_id, family_id, instance_id)`` join key resolves.
+        """
+        family = self.families.setdefault(family_id, Family(id=family_id, name=""))
+        instance = family.instances.setdefault(instance_id, Instance(id=instance_id, name=""))
+        for nodedef in nodedefs.values():
+            instance.nodedefs[nodedef.id] = nodedef
+            self.nodedef_lookup[nodedef.lookup_key] = nodedef
+
     def find_nodedef(self, nodedef_id: str, family_id: str, instance_id: str) -> NodeDef | None:
         """Resolve a nodedef by its ``(id, family, instance)`` join key.
 
@@ -184,15 +203,28 @@ class Profile:
         may appear in multiple instances with different ranges, so the
         family/instance must be supplied.
 
-        Fallback chain on miss:
+        An *encoded editor id* — one that fully describes its range, e.g.
+        ``"_51_0_R_0_101_N_IX_DIM_REP"`` — is decoded directly via
+        :meth:`Editor.from_encoded_id`; this is how the dynamically-
+        generated Z-Wave nodedefs spell most of their editors. (The check
+        is "does it parse as an encoding", not just "starts with ``_``" —
+        UDI also ships *named* editors that begin with ``_`` such as
+        ``_sys_notify_full``, which fall through to the table lookup.)
+
+        Table-lookup fallback chain on miss:
 
         1. ``family_id`` / ``instance_id`` (the requested scope)
         2. The ``"common"`` family / instance ``"1"`` — UDI publishes a
            shared set of editors there (``_sys_notify_full``, etc.) that
            any plugin nodedef can reference
 
-        Returns ``None`` if neither scope contains the editor.
+        Returns ``None`` if it's neither a valid encoding nor present in
+        either scope.
         """
+        if editor_id.startswith("_"):
+            encoded = Editor.from_encoded_id(editor_id)
+            if encoded is not None:
+                return encoded
         editor = self._editor_in(family_id, instance_id, editor_id)
         if editor is not None:
             return editor
