@@ -138,7 +138,7 @@ class Profile:
                         result.nodedefs_added.append(nd.lookup_key)
                     continue
 
-                _merge_instance(self_inst, other_inst, self.nodedef_lookup, result)
+                _merge_instance(fam_id, self_inst, other_inst, self.nodedef_lookup, result)
 
         if other.timestamp:
             self.timestamp = other.timestamp
@@ -289,6 +289,7 @@ class ProfileMergeResult:
 
 
 def _merge_instance(
+    fam_id: str,
     self_inst: Instance,
     other_inst: Instance,
     nodedef_lookup: dict[tuple[str, str, str], NodeDef],
@@ -302,7 +303,7 @@ def _merge_instance(
     ``changed is False``.
     """
     for ed_id, ed in other_inst.editors.items():
-        key = (ed_id, self_inst.id, self_inst.id)
+        key = (ed_id, fam_id, self_inst.id)
         existing = self_inst.editors.get(ed_id)
         if existing is None:
             result.editors_added.append(key)
@@ -312,7 +313,7 @@ def _merge_instance(
             self_inst.editors[ed_id] = ed
 
     for ld_id, ld in other_inst.linkdefs.items():
-        key = (ld_id, self_inst.id, self_inst.id)
+        key = (ld_id, fam_id, self_inst.id)
         existing_ld = self_inst.linkdefs.get(ld_id)
         if existing_ld is None:
             result.linkdefs_added.append(key)
