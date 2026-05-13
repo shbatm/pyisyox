@@ -39,6 +39,21 @@ PROFILES_PATH = "/rest/profiles?include=nodedefs,editors,linkdefs"
 #: structure (the JSON ``/api/nodes`` doesn't carry these).
 REST_NODES_PATH = "/rest/nodes"
 
+#: ``GET /rest/zwave/node/{address}/def/get`` — the *dynamically
+#: generated* Z-Wave (family ``4``) nodedefs, in the legacy
+#: ``<nodeDefs>`` XML shape. Use ``"0"`` for ``address`` to get every
+#: Z-Wave nodedef in one call. These ``UZW*`` nodedefs are **not**
+#: carried by ``/rest/profiles`` (only their ``ZW_*`` editors are), so
+#: pyisyox fetches this on connect when there are unresolved Z-Wave
+#: nodes. 404 tolerated (no Z-Wave radio / older firmware).
+ZWAVE_NODEDEFS_PATH = "/rest/zwave/node/{address}/def/get"
+
+#: ``GET /rest/zmatter/zwave/node/{address}/def/get`` — as
+#: :data:`ZWAVE_NODEDEFS_PATH` but for the Z-Matter (800-series /
+#: family ``12``) radio. Not yet confirmed against hardware; tried
+#: best-effort for unresolved family-``12`` nodes.
+ZMATTER_ZWAVE_NODEDEFS_PATH = "/rest/zmatter/zwave/node/{address}/def/get"
+
 #: ``GET /rest/status`` — XML property table. Merged into ``/api/nodes``
 #: records to fill missing property values (especially for plugin nodes).
 REST_STATUS_PATH = "/rest/status"
