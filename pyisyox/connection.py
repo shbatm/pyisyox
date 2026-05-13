@@ -156,9 +156,18 @@ class Connection:
                         _LOGGER.debug("Response received %s", endpoint)
                         res.release()
                         return ""
-                    _LOGGER.error("Reported an Invalid Command received %s", endpoint)
+                    # The eisy returns 404 "Invalid Command" for valid
+                    # commands when its internal queues are saturated,
+                    # even immediately after a NOT_BUSY (_5) frame —
+                    # the BUSY signal lags real readiness. Treat as
+                    # transient and fall through to the retry block;
+                    # truly invalid commands will still bottom out
+                    # after MAX_RETRIES with the "Bad ISY Request"
+                    # ERROR below.
+                    _LOGGER.warning(
+                        "Reported an Invalid Command received %s; will retry", endpoint
+                    )
                     res.release()
-                    return None
                 if res.status == HTTP_UNAUTHORIZED:
                     _LOGGER.error("Invalid credentials provided for ISY connection.")
                     res.release()
