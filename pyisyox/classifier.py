@@ -57,9 +57,7 @@ from pyisyox.constants import (
     CMD_FADE_STOP,
     CMD_FADE_UP,
     CMD_OFF,
-    CMD_OFF_FAST,
     CMD_ON,
-    CMD_ON_FAST,
     CMD_QUERY,
     CMD_SECURE,
     PROP_HEAT_COOL_STATE,
@@ -150,7 +148,15 @@ class ClassificationResult:
 _QUERY_CMDS = frozenset({CMD_QUERY})
 
 _LIGHT_DIMMER_HINTS = frozenset({CMD_BRIGHTEN, CMD_DIM, CMD_FADE_UP, CMD_FADE_DOWN, CMD_FADE_STOP})
-_LIGHT_SWITCH_CMDS = frozenset({CMD_ON, CMD_OFF, CMD_ON_FAST, CMD_OFF_FAST}) | _LIGHT_DIMMER_HINTS
+#: Commands the light/switch controllable platform actually maps onto
+#: its on/off surface. ``DFON``/``DFOF`` ("fast on/off") and the
+#: momentary paddle-simulation verbs (``BRT``/``DIM``/``FDUP``/
+#: ``FDDOWN``/``FDSTOP``) deliberately stay *out* of this set — they
+#: have no HA light/switch equivalent, so the classifier lets them
+#: fall through to ``buttons`` (one HA ``button`` entity each) rather
+#: than absorbing and hiding them. They still feed dimmer *detection*
+#: via :data:`_LIGHT_DIMMER_HINTS`.
+_LIGHT_SWITCH_CMDS = frozenset({CMD_ON, CMD_OFF})
 #: On a thermostat ``BRT``/``DIM`` mean setpoint up/down, not light
 #: dimming. ``CLISPC``/``CLISPH`` are reported as properties *and*
 #: accepted as setpoint commands (IoX dual-purposes the id), as are
