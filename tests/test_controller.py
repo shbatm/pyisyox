@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -727,6 +728,34 @@ async def test_run_network_resource_before_connect_raises() -> None:
     controller = Controller(BASE, LocalAuth("admin", "p"))
     with pytest.raises(ControllerNotConnectedError):
         await controller.run_network_resource(1)
+
+
+@pytest.mark.asyncio
+async def test_run_network_resource_logs_debug_with_url(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Fire-trigger calls leave a DEBUG breadcrumb — the controller
+    only acknowledges receipt (the response doesn't carry the result
+    of the underlying HTTP/TCP/UDP fire), so the client-side log line
+    is the only evidence a user filing a bug can show that the call
+    actually went out."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET", "/rest/networking/resources/5", 200, "<RestResponse status='200'/>"
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    try:
+        with caplog.at_level(logging.DEBUG, logger="pyisyox.client"):
+            await controller.run_network_resource(5)
+    finally:
+        await controller.stop()
+
+    assert any(
+        "Network resource fire" in msg and "/rest/networking/resources/5" in msg
+        for msg in caplog.messages
+    )
 
 
 @pytest.mark.asyncio

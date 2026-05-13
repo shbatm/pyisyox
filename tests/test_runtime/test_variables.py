@@ -11,6 +11,8 @@ hit the in-memory record directly so the test surface is just:
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from pyisyox.auth import LocalAuth
@@ -121,6 +123,25 @@ async def test_rename_posts_name_body_and_updates_record() -> None:
     assert kwargs["json"] == {"name": "New Name"}
     assert variable.name == "New Name"
     assert record.name == "New Name"
+
+
+@pytest.mark.asyncio
+async def test_set_value_logs_debug_with_url_and_body(caplog: pytest.LogCaptureFixture) -> None:
+    """Every wire write should leave a DEBUG breadcrumb at the client
+    layer so a user filing a bug can show the request that went out
+    (the WS echo only confirms the *change*, not the original call)."""
+    record = _make_record()
+    session = FakeSession(BASE)
+    session.set_route("POST", "/api/variables/2/8", 200, '{"successful": true}')
+    variable = Variable.from_record(record, _make_client(session))
+
+    with caplog.at_level(logging.DEBUG, logger="pyisyox.client"):
+        await variable.set_value(42)
+
+    assert any(
+        "Variable write" in msg and "/api/variables/2/8" in msg
+        for msg in caplog.messages
+    )
 
 
 @pytest.mark.asyncio

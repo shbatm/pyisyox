@@ -899,7 +899,18 @@ class IoXClient:
         Raises:
             HTTPError on non-2xx; ClientError on malformed response.
         """
-        return await self._post_json(VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id), body)
+        path = VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id)
+        _LOGGER.debug(
+            "Variable write type=%s id=%s body=%s -> POST %s",
+            var_type,
+            var_id,
+            body,
+            path,
+        )
+        response = await self._post_json(path, body)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "POST %s response: %s", path, response)
+        return response
 
     async def run_program_command(self, program_id: str, command: str) -> str:
         """Send a program / folder command via the legacy REST endpoint.
@@ -923,7 +934,12 @@ class IoXClient:
         The controller acknowledges receipt only — it doesn't return
         the result of the underlying HTTP / TCP / UDP fire.
         """
-        return await self._get_text(NETWORK_RESOURCE_ITEM_PATH.format(resource_id=resource_id))
+        path = NETWORK_RESOURCE_ITEM_PATH.format(resource_id=resource_id)
+        _LOGGER.debug("Network resource fire id=%s -> GET %s", resource_id, path)
+        body = await self._get_text(path)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, body)
+        return body
 
     async def post_node_update(self, address: str, body: dict[str, Any]) -> dict[str, Any]:
         """Issue ``POST /api/nodes/{address}`` with the supplied body.
