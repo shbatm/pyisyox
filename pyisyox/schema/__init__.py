@@ -14,11 +14,13 @@ decoding and command-parameter encoding with subset/range validation.
 from pyisyox.schema.cmd import Command, CommandParameter
 from pyisyox.schema.editor import Editor, EditorCodecError, EditorRange
 from pyisyox.schema.linkdef import LinkDef, LinkParameter
+from pyisyox.schema.nls import GLOBAL_NLS_FAMILY_ID, NLSTable
 from pyisyox.schema.nodedef import NodeCommands, NodeDef, NodeLinks, NodeProperty, Property
 from pyisyox.schema.profile import Family, Instance, Profile
 from pyisyox.schema.uom import PREDEFINED_UOMS, UNKNOWN_UOM, UOMEntry, get_uom
 
 __all__ = [
+    "GLOBAL_NLS_FAMILY_ID",
     "PREDEFINED_UOMS",
     "UNKNOWN_UOM",
     "Command",
@@ -30,6 +32,7 @@ __all__ = [
     "Instance",
     "LinkDef",
     "LinkParameter",
+    "NLSTable",
     "NodeCommands",
     "NodeDef",
     "NodeLinks",

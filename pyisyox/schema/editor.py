@@ -115,6 +115,13 @@ class EditorRange:
             then derive a step from ``precision``). Not used by the codec;
             it's a UI hint, surfaced for consumers that build number
             entities.
+        nls_prefix: The NLS string-table prefix this range's enum option
+            names live under (the ``_N_<nls>`` segment of an encoded
+            editor id, or a named editor's index nls). ``names`` stays
+            empty until something resolves it against an NLS table (the
+            controller does it inline for ``/rest/profiles`` families;
+            :meth:`Profile.find_editor` does it for encoded editors when
+            the profile has an NLS table loaded).
     """
 
     uom: str
@@ -124,6 +131,7 @@ class EditorRange:
     subset: set[int] = field(default_factory=set)
     names: dict[int, str] = field(default_factory=dict)
     step: float | None = None
+    nls_prefix: str | None = None
 
     @classmethod
     def from_json(cls, raw: dict) -> EditorRange:
@@ -207,9 +215,10 @@ class Editor:
 
         Returns ``None`` if ``editor_id`` doesn't parse as an encoding
         (so callers can fall back to a table lookup). The ``_N_<nls>``
-        part only names an NLS string table — which pyisyox doesn't
-        resolve — so ``names`` is left empty; range / subset validation
-        still works.
+        segment is captured as ``EditorRange.nls_prefix`` but not
+        resolved here — :meth:`Profile.find_editor` fills ``names`` from
+        it when the profile carries an NLS table. Range / subset
+        validation works regardless.
         """
         if not editor_id.startswith("_"):
             return None
@@ -217,9 +226,12 @@ class Editor:
         if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
             return None
         uom, prec_s, rest = parts[0], parts[1], parts[2:]
-        # Peel an optional trailing ``_N_<nls>`` (nls may contain "_").
+        # Peel an optional trailing ``_N_<nls>`` (nls may itself contain "_").
+        nls_prefix: str | None = None
         if "N" in rest:
-            rest = rest[: rest.index("N")]
+            nidx = rest.index("N")
+            nls_prefix = "_".join(rest[nidx + 1 :]) or None
+            rest = rest[:nidx]
         rng_min: float | None = None
         rng_max: float | None = None
         subset: set[int] = set()
@@ -237,7 +249,16 @@ class Editor:
             return None
         return cls(
             id=editor_id,
-            ranges=[EditorRange(uom=uom, min=rng_min, max=rng_max, precision=int(prec_s), subset=subset)],
+            ranges=[
+                EditorRange(
+                    uom=uom,
+                    min=rng_min,
+                    max=rng_max,
+                    precision=int(prec_s),
+                    subset=subset,
+                    nls_prefix=nls_prefix,
+                )
+            ],
         )
 
     def range_for(self, uom: str | None = None) -> EditorRange:

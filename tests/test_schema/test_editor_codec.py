@@ -288,14 +288,18 @@ def test_from_encoded_id_subset_bitmasks() -> None:
     )
 
 
-def test_from_encoded_id_trailing_nls_is_ignored_but_tolerated() -> None:
-    """A ``_N_<nls>`` tail (which can itself contain ``_``) names an NLS
-    table pyisyox doesn't resolve — parsing still succeeds, names empty."""
+def test_from_encoded_id_captures_trailing_nls_prefix() -> None:
+    """A ``_N_<nls>`` tail (which can itself contain ``_``) is captured as
+    ``EditorRange.nls_prefix`` — ``names`` stays empty until something
+    resolves it against an NLS table."""
     ed = Editor.from_encoded_id("_51_0_R_0_101_N_IX_DIM_REP")
     assert ed is not None
     rng = ed.ranges[0]
     assert (rng.uom, rng.precision, rng.min, rng.max) == ("51", 0, 0, 101)
+    assert rng.nls_prefix == "IX_DIM_REP"
     assert rng.names == {}
+    # No ``_N_`` segment ⇒ no prefix.
+    assert Editor.from_encoded_id("_1_3").ranges[0].nls_prefix is None  # type: ignore[union-attr]
 
 
 @pytest.mark.parametrize("bad", ["ZW_DIM_PERCENT", "_sys_notify_full", "_17_x", "_17", "_", "", "_17_1_Q_5"])

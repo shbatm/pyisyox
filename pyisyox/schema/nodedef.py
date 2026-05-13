@@ -99,6 +99,11 @@ class NodeDef:
         instance_id: Instance id within the family (typically equal to
             ``family_id`` for built-in families and equal to the plugin slot
             for PG3 instances).
+        name: Default display name (the ``NDN-<nls>-NAME`` NLS entry). Often
+            empty — the live node carries a user-assigned name; this is just
+            the discovery-time default. ``/rest/profiles`` families resolve
+            it inline; for dynamic Z-Wave nodedefs pyisyox fills it from the
+            family NLS table.
         properties: Property slots, keyed by property id.
         cmds: Sent and accepted commands.
         nls_key: Reference key into the NLS string table (e.g. ``"flume2"``);
@@ -111,6 +116,7 @@ class NodeDef:
     id: str
     family_id: str
     instance_id: str
+    name: str = ""
     properties: dict[str, NodeProperty] = field(default_factory=dict)
     cmds: NodeCommands = field(default_factory=NodeCommands)
     nls_key: str | None = None
@@ -151,6 +157,7 @@ class NodeDef:
             id=raw["id"],
             family_id=family_id,
             instance_id=instance_id,
+            name=raw.get("name", ""),
             properties=properties,
             cmds=cmds,
             nls_key=raw.get("nls"),

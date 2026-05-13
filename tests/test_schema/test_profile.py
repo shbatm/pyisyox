@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pyisyox.schema import Profile
+from pyisyox.schema import NLSTable, Profile
 from pyisyox.schema.nodedef import NodeDef
 
 
@@ -89,6 +89,19 @@ def test_find_editor_decodes_encoded_ids(profile: Profile) -> None:
     assert profile.find_editor("_sys_notify_full", "10", "10") is not None
     # A "_"-prefixed string that's neither a valid encoding nor a known id.
     assert profile.find_editor("_17_x", "10", "10") is None
+
+
+def test_find_editor_fills_encoded_enum_names_from_profile_nls(profile: Profile) -> None:
+    """When the profile carries an NLS table, an encoded editor's
+    ``_N_<prefix>`` enum option names are resolved on lookup."""
+    # No NLS loaded ⇒ names stay empty (the encoded id parses fine).
+    bare = profile.find_editor("_51_0_R_0_101_N_IX_DIM_REP", "4", "1")
+    assert bare is not None and bare.ranges[0].names == {}
+
+    profile.nls = NLSTable.parse("IX_DIM_REP-0 = Off\nIX_DIM_REP-101 = Unknown\n")
+    enriched = profile.find_editor("_51_0_R_0_101_N_IX_DIM_REP", "4", "1")
+    assert enriched is not None
+    assert enriched.ranges[0].names == {0: "Off", 101: "Unknown"}
 
 
 def test_register_nodedefs_adds_to_scope_and_lookup(profile: Profile) -> None:
