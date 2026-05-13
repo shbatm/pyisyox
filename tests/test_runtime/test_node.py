@@ -365,6 +365,184 @@ async def test_client_set_node_enabled_quotes_address() -> None:
     assert path == "/rest/nodes/3D%207D%2087%201/disable"
 
 
+# --- Z-Wave parameter wire surface ---------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_client_set_zwave_parameter_uses_legacy_path() -> None:
+    """Family ``4`` writes go to ``/rest/zwave/.../parameters/set/...``."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW003_1/config/set/24/1/1",
+        200,
+        "<RestResponse status='200'/>",
+    )
+    client = _make_client(session)
+    await client.set_zwave_parameter("ZW003_1", 24, 1, 1)
+    _, path, _ = session.calls[0]
+    assert path == "/rest/zwave/node/ZW003_1/config/set/24/1/1"
+
+
+@pytest.mark.asyncio
+async def test_client_set_zwave_parameter_zmatter_path() -> None:
+    """``zmatter=True`` routes the same write to the zmatter prefix."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zmatter/zwave/node/ZW100/config/set/3/255/2",
+        200,
+        "<ok/>",
+    )
+    client = _make_client(session)
+    await client.set_zwave_parameter("ZW100", 3, 255, 2, zmatter=True)
+    _, path, _ = session.calls[0]
+    assert path == "/rest/zmatter/zwave/node/ZW100/config/set/3/255/2"
+
+
+@pytest.mark.asyncio
+async def test_client_get_zwave_parameter_uses_legacy_path() -> None:
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET", "/rest/zwave/node/ZW003_1/config/query/7", 200, "<ok/>"
+    )
+    client = _make_client(session)
+    await client.get_zwave_parameter("ZW003_1", 7)
+    _, path, _ = session.calls[0]
+    assert path == "/rest/zwave/node/ZW003_1/config/query/7"
+
+
+@pytest.mark.asyncio
+async def test_node_set_zwave_parameter_picks_path_by_family(
+    real_profile: Profile,
+) -> None:
+    """A family-``4`` node uses the legacy path; a family-``12`` (Z-Matter)
+    node uses the ``/rest/zmatter/...`` prefix. Both go through the same
+    runtime method — caller doesn't pass a ``zmatter`` flag."""
+    legacy_session = FakeSession(BASE)
+    legacy_session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW003_1/config/set/24/1/1",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    legacy_record = _make_record(
+        address="ZW003_1", nodedef_id="UZW000F", family_id="4"
+    )
+    legacy_node = Node.from_record(
+        legacy_record, real_profile, _make_client(legacy_session)
+    )
+    await legacy_node.set_zwave_parameter(24, 1, 1)
+    assert legacy_session.calls[0][1] == (
+        "/rest/zwave/node/ZW003_1/config/set/24/1/1"
+    )
+
+    zmatter_session = FakeSession(BASE)
+    zmatter_session.set_route(
+        "GET",
+        "/rest/zmatter/zwave/node/ZW100/config/set/3/255/2",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    zmatter_record = _make_record(
+        address="ZW100", nodedef_id="UZW000F", family_id="12"
+    )
+    zmatter_node = Node.from_record(
+        zmatter_record, real_profile, _make_client(zmatter_session)
+    )
+    await zmatter_node.set_zwave_parameter(3, 255, 2)
+    assert zmatter_session.calls[0][1] == (
+        "/rest/zmatter/zwave/node/ZW100/config/set/3/255/2"
+    )
+
+
+@pytest.mark.asyncio
+async def test_node_get_zwave_parameter_parses_config_response(
+    real_profile: Profile,
+) -> None:
+    """A success ``<config paramNum size value/>`` is parsed into a
+    ``{"parameter", "size", "value"}`` dict of ints — matches PyISY 3.x's
+    structured-return shape so consumers don't have to parse the XML
+    themselves."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW003_1/config/query/24",
+        200,
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<config paramNum="24" size="1" value="2"/>',
+    )
+    record = _make_record(address="ZW003_1", nodedef_id="UZW000F", family_id="4")
+    node = Node.from_record(record, real_profile, _make_client(session))
+
+    result = await node.get_zwave_parameter(24)
+    assert result == {"parameter": 24, "size": 1, "value": 2}
+
+
+@pytest.mark.asyncio
+async def test_node_get_zwave_parameter_raises_on_rest_failure(
+    real_profile: Profile,
+) -> None:
+    """A ``<RestResponse succeeded="false"><status>404</status>...``
+    body raises :class:`NodeCommandError` so the caller learns the
+    write didn't land — not a silent ``None`` return."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW003_1/config/query/24",
+        200,
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<RestResponse succeeded="false"><status>404</status></RestResponse>',
+    )
+    record = _make_record(address="ZW003_1", nodedef_id="UZW000F", family_id="4")
+    node = Node.from_record(record, real_profile, _make_client(session))
+
+    with pytest.raises(NodeCommandError, match="status=404"):
+        await node.get_zwave_parameter(24)
+
+
+@pytest.mark.asyncio
+async def test_node_set_zwave_parameter_raises_on_rest_failure(
+    real_profile: Profile,
+) -> None:
+    """Symmetric failure on the set path: ``succeeded="false"`` raises."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW003_1/config/set/24/1/1",
+        200,
+        '<RestResponse succeeded="false"><status>500</status></RestResponse>',
+    )
+    record = _make_record(address="ZW003_1", nodedef_id="UZW000F", family_id="4")
+    node = Node.from_record(record, real_profile, _make_client(session))
+
+    with pytest.raises(NodeCommandError, match="status=500"):
+        await node.set_zwave_parameter(24, 1, 1)
+
+
+@pytest.mark.asyncio
+async def test_node_set_zwave_parameter_rejects_non_zwave_family(
+    real_profile: Profile,
+) -> None:
+    """Insteon nodes (family ``"1"``) don't have a parameters surface;
+    the helper raises before touching the wire."""
+    record = _make_record(family_id="1")
+    node = Node.from_record(record, real_profile, _make_client(FakeSession(BASE)))
+    with pytest.raises(NodeCommandError, match="not a Z-Wave node"):
+        await node.set_zwave_parameter(1, 0, 1)
+
+
+@pytest.mark.asyncio
+async def test_node_set_zwave_parameter_rejects_invalid_size(
+    real_profile: Profile,
+) -> None:
+    """Z-Wave parameter byte size is constrained to 1, 2, or 4."""
+    record = _make_record(address="ZW003_1", family_id="4", nodedef_id="UZW000F")
+    node = Node.from_record(record, real_profile, _make_client(FakeSession(BASE)))
+    with pytest.raises(NodeCommandError, match="size must be 1, 2, or 4"):
+        await node.set_zwave_parameter(1, 0, 3)
+
+
 # --- set_on_level (percent + UOM via the editor codec) -------------------
 
 

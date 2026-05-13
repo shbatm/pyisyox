@@ -702,6 +702,43 @@ def test_parse_preserves_event_info_with_tail_text_between_children() -> None:
     assert "tail-text" in event.event_info
 
 
+def test_parse_recovers_from_unescaped_ampersand_in_event_info() -> None:
+    """eisy occasionally emits ``_7`` REST-log frames whose
+    ``<eventInfo>`` echoes a query-string with unescaped ``&`` (e.g.
+    a Z-Wave ``submitCmd(..., NUM.107=24&VAL.111=1)`` call). Strict
+    XML rejects those, but the recovery path re-escapes stray
+    ampersands and re-parses so the frame still becomes an ``Event``.
+    """
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Event seqnum="74"><control>_7</control><action>1</action><node></node>'
+        "<eventInfo>U7 Rest:  submitCmd([ZW003_1],[CONFIG],[NUM.107=24&VAL.111=1])"
+        "</eventInfo></Event>"
+    )
+    event = parse_event_frame(xml)
+    assert event is not None
+    assert event.control == "_7"
+    assert event.action == "1"
+    # The recovered ``eventInfo`` carries the original ampersand back
+    # as part of the text payload — consumers reading it as a string
+    # (not re-parsing) see the source form they expect.
+    assert "NUM.107=24&VAL.111=1" in event.event_info
+
+
+def test_parse_preserves_existing_entity_refs_when_recovering() -> None:
+    """A frame that mixes a properly escaped ``&amp;`` with a stray
+    ``&`` must round-trip the escaped one verbatim — the recovery
+    regex skips known entity references so ``&amp;amp;`` doesn't
+    creep in."""
+    xml = (
+        '<Event seqnum="1"><control>_7</control><action>0</action><node></node>'
+        "<eventInfo>a &amp; b & c</eventInfo></Event>"
+    )
+    event = parse_event_frame(xml)
+    assert event is not None
+    assert "a & b & c" in event.event_info
+
+
 # --- _extract_lifecycle_node_xml direct unit tests -----------------------
 #
 # These edge cases aren't reachable through ``dispatcher.feed`` because

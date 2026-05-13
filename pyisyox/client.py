@@ -67,7 +67,11 @@ from pyisyox.paths import (
     VARIABLE_ITEM_PATH,
     VARIABLES_TYPE_PATH,
     ZMATTER_ZWAVE_NODEDEFS_PATH,
+    ZMATTER_ZWAVE_PARAMETER_GET_PATH,
+    ZMATTER_ZWAVE_PARAMETER_SET_PATH,
     ZWAVE_NODEDEFS_PATH,
+    ZWAVE_PARAMETER_GET_PATH,
+    ZWAVE_PARAMETER_SET_PATH,
 )
 from pyisyox.redactor import redact_sensitive
 from pyisyox.schema import (
@@ -711,6 +715,82 @@ class IoXClient:
         path_parts.extend(str(p) for p in params)
         path = "/".join(path_parts)
         return await self._get_text(path)
+
+    async def get_zwave_parameter(self, address: str, number: int, *, zmatter: bool = False) -> str:
+        """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/config/query/{n}``.
+
+        Triggers the controller to query parameter ``n`` from the device.
+        On success the response body is a ``<config paramNum="N"
+        size="SZ" value="V"/>`` element (PyISY 3.x verified shape); on a
+        controller-side failure (404, device unreachable, …) the body
+        is a ``<RestResponse succeeded="false"><status>404</status>...``
+        envelope which the caller must inspect — ``HTTPError`` only
+        covers transport-level non-2xx.
+
+        Args:
+            address: Wire address of the Z-Wave node (URL-quoted here).
+            number: Z-Wave parameter number (1-based; device-defined).
+            zmatter: ``True`` for Z-Matter (family ``12``) nodes, which
+                use the ``/rest/zmatter/zwave/...`` path prefix. The
+                runtime :meth:`Node.get_zwave_parameter` flips this from
+                the node's ``family_id`` automatically.
+        """
+        encoded_addr = quote(address, safe="")
+        path_tmpl = ZMATTER_ZWAVE_PARAMETER_GET_PATH if zmatter else ZWAVE_PARAMETER_GET_PATH
+        path = path_tmpl.format(address=encoded_addr, number=number)
+        _LOGGER.debug(
+            "Z-Wave get parameter %d on %s (zmatter=%s) -> GET %s",
+            number,
+            address,
+            zmatter,
+            path,
+        )
+        body = await self._get_text(path)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, body)
+        return body
+
+    async def set_zwave_parameter(
+        self,
+        address: str,
+        number: int,
+        value: int,
+        size: int,
+        *,
+        zmatter: bool = False,
+    ) -> str:
+        """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/config/set/{n}/{v}/{sz}``.
+
+        Args:
+            address: Wire address of the Z-Wave node (URL-quoted here).
+            number: Z-Wave parameter number (device-defined).
+            value: Parameter value to write (signed int; the controller
+                interprets the sign per the device's parameter spec).
+            size: Parameter byte size — ``1``, ``2``, or ``4``. The
+                controller forwards this to the device so multi-byte
+                parameters land correctly. The Insteon-style ``CONFIG``
+                ``cmd`` editor in ``/rest/profiles`` doesn't model
+                ``size`` (it's a NUM/VAL pair only), which is why this
+                path takes precedence over a ``send_command("CONFIG",
+                ...)`` for Z-Wave parameter writes.
+            zmatter: ``True`` for Z-Matter (family ``12``) nodes.
+        """
+        encoded_addr = quote(address, safe="")
+        path_tmpl = ZMATTER_ZWAVE_PARAMETER_SET_PATH if zmatter else ZWAVE_PARAMETER_SET_PATH
+        path = path_tmpl.format(address=encoded_addr, number=number, value=value, size=size)
+        _LOGGER.debug(
+            "Z-Wave set parameter %d=%d (size=%d) on %s (zmatter=%s) -> GET %s",
+            number,
+            value,
+            size,
+            address,
+            zmatter,
+            path,
+        )
+        body = await self._get_text(path)
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, body)
+        return body
 
     async def set_node_enabled(self, address: str, enabled: bool) -> str:
         """Issue ``GET /rest/nodes/{addr}/{enable|disable}``.
