@@ -188,6 +188,20 @@ class TriggerAction(StrEnum):
     #: The current subscription key, sent once right after a new
     #: subscription is established. ``<eventInfo>`` is the key.
     KEY = "8"
+    #: Variable table structurally changed — fires when a variable is
+    #: added or removed, or when its precision is changed (a metadata
+    #: change that the per-value :attr:`VARIABLE_VALUE` /
+    #: :attr:`VARIABLE_INIT` frames don't cover). ``<eventInfo>``
+    #: carries ``<var><type>N</type><id>0</id></var>`` (id=0 is the
+    #: wildcard sentinel — "this whole type's table changed"). The
+    #: right response is to re-fetch ``/api/variables/{type}`` for the
+    #: affected type so the registry mirrors the controller's metadata
+    #: (precision in particular — the wire ``val`` from the per-value
+    #: frames is raw, and a stale precision will mis-render the value).
+    #: The dispatcher recognises it and fires
+    #: :meth:`EventDispatcher.add_variable_table_change_listener`
+    #: callbacks; the dispatcher itself does not re-fetch.
+    VARIABLE_TABLE_CHANGED = "9"
 
     @classmethod
     def label(cls, value: str) -> str:
@@ -913,6 +927,33 @@ class ProgramStatusEvent:
 ProgramStatusListener = Callable[[ProgramStatusEvent], None]
 
 
+@dataclass(slots=True, frozen=True)
+class VariableTableChangeEvent:
+    """A ``_1`` / action ``"9"`` system event — variable table changed.
+
+    The eisy fires this when a variable is added, removed, or has its
+    precision changed (a structural / metadata change that the
+    per-value :class:`TriggerAction.VARIABLE_VALUE` / ``VARIABLE_INIT``
+    frames don't carry). ``<eventInfo>`` payload::
+
+        <var><type>N</type><id>0</id></var>
+
+    ``id=0`` is the wildcard sentinel — "this whole type's table
+    changed", not a specific variable. Consumers should re-fetch
+    ``/api/variables/{type_id}`` to pick up the new metadata
+    (precision in particular — the per-value frames carry raw ``val``
+    and a stale precision will mis-render every variable of this
+    type until the registry is refreshed).
+    """
+
+    #: Variable type — ``"1"`` (integer) or ``"2"`` (state).
+    type_id: str
+    seqnum: int
+
+
+VariableTableChangeListener = Callable[[VariableTableChangeEvent], None]
+
+
 def _parse_lifecycle_enabled(event_info: str) -> bool | None:
     """Pull the ``<enabled>`` flag off a ``NODE_ENABLED`` (``EN``) frame's
     ``<eventInfo>`` — ``EN`` covers both directions, the boolean says which.
@@ -976,6 +1017,7 @@ class EventDispatcher:
         "_nodes",
         "_program_status_listeners",
         "_programs",
+        "_variable_table_change_listeners",
         "_variables",
     )
 
@@ -1016,6 +1058,7 @@ class EventDispatcher:
         self._listeners: list[EventListener] = []
         self._lifecycle_listeners: list[NodeLifecycleListener] = []
         self._program_status_listeners: list[ProgramStatusListener] = []
+        self._variable_table_change_listeners: list[VariableTableChangeListener] = []
 
     def add_listener(self, callback: EventListener) -> Callable[[], None]:
         """Register ``callback`` to fire on every parsed event.
@@ -1052,6 +1095,30 @@ class EventDispatcher:
         def _unsubscribe() -> None:
             try:
                 self._program_status_listeners.remove(callback)
+            except ValueError:
+                pass
+
+        return _unsubscribe
+
+    def add_variable_table_change_listener(self, callback: VariableTableChangeListener) -> Callable[[], None]:
+        """Register ``callback`` to fire on every variable-table-change
+        frame (``<control>_1</control>`` action ``"9"``).
+
+        Fired when a variable is added, removed, or has its precision
+        changed on the controller. The dispatcher itself does **not**
+        re-fetch the variable table — the listener is the seam where
+        consumers wire in a focused re-fetch (e.g. by calling
+        :meth:`Controller.refresh`) so the registry mirrors the new
+        metadata. See :class:`VariableTableChangeEvent` for the payload.
+
+        Returns:
+            An unsubscribe function.
+        """
+        self._variable_table_change_listeners.append(callback)
+
+        def _unsubscribe() -> None:
+            try:
+                self._variable_table_change_listeners.remove(callback)
             except ValueError:
                 pass
 
@@ -1117,6 +1184,11 @@ class EventDispatcher:
             TriggerAction.VARIABLE_INIT,
         ):
             self._apply_variable_change(event)
+        elif (
+            event.control == SystemEventControl.TRIGGER
+            and event.action == TriggerAction.VARIABLE_TABLE_CHANGED
+        ):
+            self._apply_variable_table_change(event)
         elif _LOGGER.isEnabledFor(logging.DEBUG):
             _log_system_event(event)
         for listener in tuple(self._listeners):
@@ -1247,32 +1319,94 @@ class EventDispatcher:
             )
             return
 
-        val_text = (var_elem.findtext("val") or "").strip()
-        if not val_text:
+        # Action 6 carries the new value in <val>; action 7 (init change)
+        # carries it in <init>. Old code read <val> regardless and
+        # silently dropped every init frame — fix is to pick the
+        # right element per action, with <val> as a tolerant fallback
+        # for action 7 in case some firmwares reuse the value field.
+        if event.action == TriggerAction.VARIABLE_INIT:
+            primary_text = (var_elem.findtext("init") or "").strip()
+            fallback_text = (var_elem.findtext("val") or "").strip()
+            field = "init"
+        else:
+            primary_text = (var_elem.findtext("val") or "").strip()
+            fallback_text = ""
+            field = "value"
+
+        text = primary_text or fallback_text
+        if not text:
             return
         try:
-            new_value = int(val_text)
+            new_value: int | float = int(text)
         except ValueError:
-            _LOGGER.debug(
-                "WS variable-change event for %s.%s carried non-numeric value %r",
-                type_id,
-                var_id,
-                val_text,
-            )
-            return
+            try:
+                new_value = float(text)
+            except ValueError:
+                _LOGGER.debug(
+                    "WS variable-change event for %s.%s carried non-numeric value %r",
+                    type_id,
+                    var_id,
+                    text,
+                )
+                return
 
-        if event.action == TriggerAction.VARIABLE_VALUE:
+        if field == "value":
             record.value = new_value
-            field = "value"
-        else:  # TriggerAction.VARIABLE_INIT
+        else:
             record.init = new_value
-            field = "init"
 
         ts_text = (var_elem.findtext("ts") or "").strip()
         if ts_text:
             record.ts = ts_text
 
         _LOGGER.debug("Variable %s.%s %s updated to %s", type_id, var_id, field, new_value)
+
+    def _apply_variable_table_change(self, event: Event) -> None:
+        """Decode a ``_1`` / action ``"9"`` variable-table-change frame
+        and fan out to ``add_variable_table_change_listener`` callbacks.
+
+        Wire shape::
+
+            <control>_1</control><action>9</action>
+            <eventInfo><var><type>N</type><id>0</id></var></eventInfo>
+
+        ``id=0`` is the wildcard sentinel — the frame doesn't carry an
+        individual variable's new state, it just signals "this whole
+        type's table changed structurally (variable added / removed /
+        precision changed)". The dispatcher recognises the frame, logs
+        it, and emits a :class:`VariableTableChangeEvent` to registered
+        listeners. The dispatcher itself does **not** re-fetch — that's
+        the consumer's call (typically :meth:`Controller.refresh`).
+
+        Type is read from either an attribute (``<var type="2">``) or a
+        child element (``<var><type>2</type></var>``) — the wire shape
+        has been observed in both forms across firmwares.
+        """
+        if not self._variable_table_change_listeners:
+            _LOGGER.debug("Variable table change (no listener) %s", event.event_info or "<empty>")
+            return
+        if not event.event_info:
+            return
+        try:
+            info = ET.fromstring(  # noqa: S314 — eisy LAN traffic
+                f"<eventInfo>{event.event_info}</eventInfo>"
+            )
+        except ET.ParseError:
+            return
+        var_elem = info.find("var")
+        if var_elem is None:
+            return
+        type_id = (var_elem.get("type") or var_elem.findtext("type") or "").strip()
+        if not type_id:
+            return
+
+        evt = VariableTableChangeEvent(type_id=type_id, seqnum=event.seqnum)
+        _LOGGER.debug("Variable table change: type=%s seqnum=%s", type_id, event.seqnum)
+        for listener in tuple(self._variable_table_change_listeners):
+            try:
+                listener(evt)
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Variable table change listener raised")
 
     def _apply_program_status(self, event: Event) -> None:
         """Decode a program-status frame and update the matching record.
