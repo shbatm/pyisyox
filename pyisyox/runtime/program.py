@@ -17,8 +17,9 @@ shape the dispatcher mutates.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, ProgramRecord
@@ -123,6 +124,10 @@ class _ProgramBase:
         block evaluation of every program inside them.
         """
         await self._client.run_program_command(self._record.address, ProgramCommand.DISABLE)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten this program / folder to a JSON-compatible dict."""
+        return asdict(self._record)
 
 
 class Program(_ProgramBase):

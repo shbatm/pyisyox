@@ -13,7 +13,8 @@ returns nodes only.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyisyox.client import FolderRecord
@@ -47,6 +48,15 @@ class Folder:
     def family_id(self) -> str:
         """Family id — folders use family ``"13"`` (folder family) on IoX."""
         return self._record.family_id
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten this folder to a JSON-compatible dict.
+
+        Mirrors the underlying :class:`FolderRecord`'s fields; useful
+        for the dumper / diagnostics consumers that want a uniform
+        snapshot across the controller's collections.
+        """
+        return asdict(self._record)
 
     def __repr__(self) -> str:
         parent = f" parent={self.parent_address!r}" if self.parent_address else ""

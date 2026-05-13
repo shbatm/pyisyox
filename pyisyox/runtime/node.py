@@ -28,7 +28,8 @@ both :class:`PortalAuth` JWT and :class:`LocalAuth` HTTP basic accept
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 
 from pyisyox.client import NodeType
@@ -589,6 +590,19 @@ class Node:
         change without polling.
         """
         await self._client.post_node_update(self.address, {"name": name, "nodeType": NodeType.NODE})
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten this node to a JSON-compatible dict.
+
+        Includes the underlying record's structural fields (address,
+        nodedef triple, properties map, flag bitfield) plus the
+        derived :attr:`protocol`. Property values are already
+        :class:`NodePropertyValue` dataclasses so ``asdict`` walks them
+        recursively.
+        """
+        payload = asdict(self._record)
+        payload["protocol"] = self.protocol
+        return payload
 
     # --- Z-Wave parameter surface ------------------------------------
     #

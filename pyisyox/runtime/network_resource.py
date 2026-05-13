@@ -14,7 +14,8 @@ has been observed.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, NetworkResourceRecord
@@ -50,6 +51,10 @@ class NetworkResource:
         as fire-and-forget.
         """
         await self._client.run_network_resource(self._record.address)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten this resource to a JSON-compatible dict."""
+        return asdict(self._record)
 
     def __repr__(self) -> str:
         return f"NetworkResource(address={self.address!r}, name={self.name!r})"

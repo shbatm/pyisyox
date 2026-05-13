@@ -18,7 +18,8 @@ record so reads always reflect the latest value.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
 from pyisyox.client import VariableField
 
@@ -130,6 +131,10 @@ class Variable:
             self._record.type_id, self._record.id, {VariableField.NAME: name}
         )
         self._record.name = name
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten this variable to a JSON-compatible dict."""
+        return asdict(self._record)
 
     def __repr__(self) -> str:
         return f"Variable(type_id={self.type_id!r}, id={self.id!r}, name={self.name!r}, value={self.value})"
