@@ -687,7 +687,20 @@ class IoXClient:
                     continue
                 if resp.status >= 400:
                     raise HTTPError(resp.status, url)
-                return await resp.text()
+                text = await resp.text()
+            # Match the ``_get_json`` summary line so wire-trace
+            # debugging works regardless of payload format. Reads
+            # through ``_get_text`` (the legacy XML surfaces:
+            # ``/rest/nodes``, ``/rest/status``,
+            # ``/rest/networking/resources``) were previously silent,
+            # so a consumer comparing tcpdump output to a DEBUG log
+            # saw different request sets. VERBOSE-level body dumps
+            # are intentionally not added here — XML payloads can be
+            # multi-MB on a populated controller and would dominate
+            # the log; ``_get_json``'s VERBOSE body dump exists
+            # because the redactor is JSON-specific.
+            _LOGGER.debug("GET %s -> %d bytes", path, len(text))
+            return text
 
     async def _get_text_or_empty(self, path: str) -> str:
         """``_get_text`` that swallows HTTPError and returns an empty
