@@ -79,6 +79,29 @@ ZMATTER_ZWAVE_PARAMETER_GET_PATH = "/rest/zmatter/zwave/node/{address}/config/qu
 #: hardware-not-verified caveat as above.
 ZMATTER_ZWAVE_PARAMETER_SET_PATH = "/rest/zmatter/zwave/node/{address}/config/set/{number}/{value}/{size}"
 
+#: ``GET /rest/zwave/node/{address}/security/user/{user_num}/set/code/{code}`` —
+#: program a Z-Wave lock's user-code slot. PyISY 3.x verified shape on
+#: the legacy radio; reused untouched on IoX 6+ (no captures show the
+#: surface changed). Lock devices vary in how many slots they expose;
+#: pyisyox doesn't enumerate that — callers pass the slot they want.
+ZWAVE_LOCK_CODE_SET_PATH = "/rest/zwave/node/{address}/security/user/{user_num}/set/code/{code}"
+
+#: ``GET /rest/zwave/node/{address}/security/user/{user_num}/delete`` —
+#: clear a Z-Wave lock's user-code slot. PyISY 3.x verified shape.
+ZWAVE_LOCK_CODE_DELETE_PATH = "/rest/zwave/node/{address}/security/user/{user_num}/delete"
+
+#: ``GET /rest/zmatter/zwave/node/{address}/security/user/{user_num}/set/code/{code}`` —
+#: zmatter-radio counterpart of :data:`ZWAVE_LOCK_CODE_SET_PATH`. Not
+#: yet confirmed against hardware (same caveat as the zmatter parameter
+#: paths); needs a tester with an 800-series lock.
+ZMATTER_ZWAVE_LOCK_CODE_SET_PATH = (
+    "/rest/zmatter/zwave/node/{address}/security/user/{user_num}/set/code/{code}"
+)
+
+#: ``GET /rest/zmatter/zwave/node/{address}/security/user/{user_num}/delete`` —
+#: zmatter-radio counterpart of :data:`ZWAVE_LOCK_CODE_DELETE_PATH`.
+ZMATTER_ZWAVE_LOCK_CODE_DELETE_PATH = "/rest/zmatter/zwave/node/{address}/security/user/{user_num}/delete"
+
 #: ``GET /rest/status`` — XML property table. Merged into ``/api/nodes``
 #: records to fill missing property values (especially for plugin nodes).
 REST_STATUS_PATH = "/rest/status"

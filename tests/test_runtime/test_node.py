@@ -543,6 +543,161 @@ async def test_node_set_zwave_parameter_rejects_invalid_size(
         await node.set_zwave_parameter(1, 0, 3)
 
 
+# --- Z-Wave lock-code wire surface ---------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_client_set_zwave_lock_code_uses_legacy_path() -> None:
+    """Family-``4`` writes go to ``/rest/zwave/.../security/user/.../set/code/...``."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW100/security/user/3/set/code/1234",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    client = _make_client(session)
+    await client.set_zwave_lock_code("ZW100", 3, 1234)
+    _, path, _ = session.calls[0]
+    assert path == "/rest/zwave/node/ZW100/security/user/3/set/code/1234"
+
+
+@pytest.mark.asyncio
+async def test_client_delete_zwave_lock_code_uses_legacy_path() -> None:
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW100/security/user/3/delete",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    client = _make_client(session)
+    await client.delete_zwave_lock_code("ZW100", 3)
+    _, path, _ = session.calls[0]
+    assert path == "/rest/zwave/node/ZW100/security/user/3/delete"
+
+
+@pytest.mark.asyncio
+async def test_client_set_zwave_lock_code_zmatter_path() -> None:
+    """``zmatter=True`` flips the prefix."""
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zmatter/zwave/node/ZW100/security/user/3/set/code/1234",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    client = _make_client(session)
+    await client.set_zwave_lock_code("ZW100", 3, 1234, zmatter=True)
+    _, path, _ = session.calls[0]
+    assert path == "/rest/zmatter/zwave/node/ZW100/security/user/3/set/code/1234"
+
+
+@pytest.mark.asyncio
+async def test_node_set_zwave_lock_code_picks_path_by_family(
+    real_profile: Profile,
+) -> None:
+    legacy_session = FakeSession(BASE)
+    legacy_session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW100/security/user/3/set/code/1234",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    legacy_record = _make_record(
+        address="ZW100", nodedef_id="UZW000F", family_id="4"
+    )
+    legacy_node = Node.from_record(
+        legacy_record, real_profile, _make_client(legacy_session)
+    )
+    await legacy_node.set_zwave_lock_code(3, 1234)
+    assert legacy_session.calls[0][1] == (
+        "/rest/zwave/node/ZW100/security/user/3/set/code/1234"
+    )
+
+    zmatter_session = FakeSession(BASE)
+    zmatter_session.set_route(
+        "GET",
+        "/rest/zmatter/zwave/node/ZW100/security/user/3/set/code/1234",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    zmatter_record = _make_record(
+        address="ZW100", nodedef_id="UZW000F", family_id="12"
+    )
+    zmatter_node = Node.from_record(
+        zmatter_record, real_profile, _make_client(zmatter_session)
+    )
+    await zmatter_node.set_zwave_lock_code(3, 1234)
+    assert zmatter_session.calls[0][1] == (
+        "/rest/zmatter/zwave/node/ZW100/security/user/3/set/code/1234"
+    )
+
+
+@pytest.mark.asyncio
+async def test_node_delete_zwave_lock_code_uses_delete_path(
+    real_profile: Profile,
+) -> None:
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW100/security/user/3/delete",
+        200,
+        "<RestResponse succeeded='true'/>",
+    )
+    record = _make_record(address="ZW100", nodedef_id="UZW000F", family_id="4")
+    node = Node.from_record(record, real_profile, _make_client(session))
+    await node.delete_zwave_lock_code(3)
+    assert session.calls[0][1] == "/rest/zwave/node/ZW100/security/user/3/delete"
+
+
+@pytest.mark.asyncio
+async def test_node_set_zwave_lock_code_raises_on_rest_failure(
+    real_profile: Profile,
+) -> None:
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW100/security/user/3/set/code/1234",
+        200,
+        '<RestResponse succeeded="false"><status>500</status></RestResponse>',
+    )
+    record = _make_record(address="ZW100", nodedef_id="UZW000F", family_id="4")
+    node = Node.from_record(record, real_profile, _make_client(session))
+    with pytest.raises(NodeCommandError, match="status=500"):
+        await node.set_zwave_lock_code(3, 1234)
+
+
+@pytest.mark.asyncio
+async def test_node_delete_zwave_lock_code_raises_on_rest_failure(
+    real_profile: Profile,
+) -> None:
+    session = FakeSession(BASE)
+    session.set_route(
+        "GET",
+        "/rest/zwave/node/ZW100/security/user/3/delete",
+        200,
+        '<RestResponse succeeded="false"><status>404</status></RestResponse>',
+    )
+    record = _make_record(address="ZW100", nodedef_id="UZW000F", family_id="4")
+    node = Node.from_record(record, real_profile, _make_client(session))
+    with pytest.raises(NodeCommandError, match="status=404"):
+        await node.delete_zwave_lock_code(3)
+
+
+@pytest.mark.asyncio
+async def test_node_lock_code_rejects_non_zwave_family(
+    real_profile: Profile,
+) -> None:
+    """Insteon nodes have no ``/security/user/...`` surface."""
+    record = _make_record(family_id="1")
+    node = Node.from_record(record, real_profile, _make_client(FakeSession(BASE)))
+    with pytest.raises(NodeCommandError, match="not a Z-Wave node"):
+        await node.set_zwave_lock_code(1, 1234)
+    with pytest.raises(NodeCommandError, match="not a Z-Wave node"):
+        await node.delete_zwave_lock_code(1)
+
+
 # --- set_on_level (percent + UOM via the editor codec) -------------------
 
 
