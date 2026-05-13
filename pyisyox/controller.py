@@ -24,7 +24,8 @@ always reflect the latest controller state.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
@@ -363,6 +364,45 @@ class Controller:
             raise ControllerNotConnectedError("controller has no client")
         return {
             address: NetworkResource(record, client) for address, record in loaded.network_resources.items()
+        }
+
+    # --- snapshot -----------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten the full controller state to a JSON-compatible dict.
+
+        Aggregates every loaded collection (nodes / groups / folders /
+        programs / program_folders / variables / network_resources)
+        plus the controller's own config + WebSocket health. Each
+        nested object's structural fields come from its own
+        :meth:`to_dict` so the same code path drives the
+        ``pyisyox -m … --dump`` CLI flag and consumer diagnostics.
+        Raises :class:`ControllerNotConnectedError` when called before
+        :meth:`connect` (no loaded state to snapshot).
+        """
+        ws = self._ws
+        return {
+            "config": asdict(self.config),
+            "connected": self.connected,
+            "websocket": {
+                "status": ws.status.value if ws is not None else None,
+                "last_event_at": ws.last_event_at.isoformat()
+                if ws is not None and ws.last_event_at is not None
+                else None,
+            },
+            "profile": self.profile.to_dict(),
+            "nodes": {addr: node.to_dict() for addr, node in self.nodes.items()},
+            "groups": {addr: group.to_dict() for addr, group in self.groups.items()},
+            "folders": {addr: folder.to_dict() for addr, folder in self.folders.items()},
+            "programs": {addr: program.to_dict() for addr, program in self.programs.items()},
+            "program_folders": {addr: folder.to_dict() for addr, folder in self.program_folders.items()},
+            "variables": {
+                type_id: {vid: var.to_dict() for vid, var in vars_.items()}
+                for type_id, vars_ in self.variables.items()
+            },
+            "network_resources": {
+                addr: resource.to_dict() for addr, resource in self.network_resources.items()
+            },
         }
 
     # --- dynamic profile reload ---------------------------------------

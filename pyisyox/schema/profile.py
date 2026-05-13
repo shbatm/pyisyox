@@ -20,7 +20,8 @@ resolve those labels and to fill encoded editors' enum option names.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from pyisyox.schema.editor import Editor
 from pyisyox.schema.linkdef import LinkDef
@@ -247,6 +248,44 @@ class Profile:
         if instance is None:
             return None
         return instance.editors.get(editor_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten the profile to a JSON-compatible dict.
+
+        :attr:`nodedef_lookup` is dropped — its
+        ``(nodedef_id, family_id, instance_id)`` tuple keys are not
+        JSON-encodable and the same data lives under
+        ``families[fam].instances[inst].nodedefs``. ``nodedef_lookup_count``
+        is surfaced as a sanity-check counter.
+
+        :class:`pyisyox.schema.editor.EditorRange` carries
+        ``subset: set[int]`` which JSON can't encode either; the
+        walker below normalises every set into a sorted list so the
+        snapshot round-trips through ``json.dumps``.
+        """
+        return {
+            "timestamp": self.timestamp,
+            "families": _jsonify({family_id: asdict(family) for family_id, family in self.families.items()}),
+            "nls": asdict(self.nls),
+            "nodedef_lookup_count": len(self.nodedef_lookup),
+        }
+
+
+def _jsonify(value: Any) -> Any:
+    """Recursively normalise ``asdict`` output so :mod:`json` can encode it.
+
+    The schema dataclasses carry ``set[int]`` (``EditorRange.subset``)
+    which JSON rejects; this walker converts sets to sorted lists,
+    keeps dicts / lists / tuples flat, and passes scalars through.
+    Kept private — only the ``to_dict`` paths need it.
+    """
+    if isinstance(value, dict):
+        return {key: _jsonify(val) for key, val in value.items()}
+    if isinstance(value, (set, frozenset)):
+        return sorted(value)
+    if isinstance(value, (list, tuple)):
+        return [_jsonify(item) for item in value]
+    return value
 
 
 @dataclass(slots=True)

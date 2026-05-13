@@ -4,10 +4,12 @@ summary, and (by default) hold the WebSocket event stream open.
 Run with ``python3 -m pyisyox <url> <email|admin> <password>``. The
 URL determines the auth mode — port ``:443`` triggers PortalAuth (JWT
 bearer); port ``:8443`` triggers LocalAuth (HTTP basic). Pass
-``--no-events`` to skip starting the WebSocket reader. Logging
-defaults to ``INFO``; ``-d/--debug`` adds parsed event frames + the
-lifecycle / reconnect chatter, ``-v/--verbose`` additionally dumps raw
-WS frames and full ``/api/*`` payloads.
+``--no-events`` to skip starting the WebSocket reader. Pass
+``--dump <path>`` to write a full controller snapshot
+(:meth:`pyisyox.Controller.to_dict`) to disk as JSON. Logging defaults
+to ``INFO``; ``-d/--debug`` adds parsed event frames + the lifecycle /
+reconnect chatter, ``-v/--verbose`` additionally dumps raw WS frames
+and full ``/api/*`` payloads.
 
 It's a thin wrapper over the library — handy for connecting to a
 controller from the shell, watching the event stream, or sanity-
@@ -20,8 +22,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pyisyox import (
@@ -42,6 +46,24 @@ def _build_auth(url: str, username: str, password: str) -> Auth:
     if "@" in username:
         return PortalAuth(username, password)
     return LocalAuth(username, password)
+
+
+def _write_snapshot(controller: Controller, path: Path) -> None:
+    """Write ``Controller.to_dict()`` to ``path`` as pretty-printed JSON.
+
+    Parent dirs auto-create (mirrors v1-beta ``util/output.write_to_file``
+    convenience). ``default=str`` is a guardrail for any datetime /
+    unexpected object that slips through ``to_dict()``. Extracted into a
+    sync helper so :func:`main` can off-load it via
+    :func:`asyncio.to_thread` and stay friendly to async-only lint rules
+    that ban blocking I/O in coroutines.
+    """
+    if path.parent and not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(controller.to_dict(), indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
 
 
 async def main(args: argparse.Namespace) -> int:
@@ -74,6 +96,11 @@ async def main(args: argparse.Namespace) -> int:
                 f"{pid}={prop.formatted or prop.value}" for pid, prop in list(node.properties.items())[:3]
             )
             _LOGGER.info("  [%s] %s (%s) %s", address, node.name, nodedef_id, prop_summary)
+
+        if args.dump is not None:
+            path = Path(args.dump)
+            await asyncio.to_thread(_write_snapshot, controller, path)
+            _LOGGER.info("Wrote controller snapshot to %s", path)
 
         if args.events:
             _LOGGER.info("Event stream running — press Ctrl-C to exit")
@@ -125,6 +152,12 @@ def parse_args() -> argparse.Namespace:
         "--verify-ssl",
         action="store_true",
         help="Enforce SSL certificate verification (default: off; eisy ships self-signed)",
+    )
+    parser.add_argument(
+        "--dump",
+        metavar="PATH",
+        default=None,
+        help="Write Controller.to_dict() to PATH as pretty-printed JSON after load",
     )
     return parser.parse_args()
 

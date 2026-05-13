@@ -27,7 +27,8 @@ representing the controller itself) is filtered out at parse time.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
 from pyisyox.client import NodeType
 from pyisyox.constants import INSTEON_STATELESS_NODEDEFID, PROP_STATUS
@@ -252,6 +253,18 @@ class Group:
         already disambiguates — without it the call is rejected.
         """
         await self._client.post_node_update(self.address, {"name": name, "nodeType": NodeType.GROUP})
+
+    def to_dict(self) -> dict[str, Any]:
+        """Flatten this scene to a JSON-compatible dict.
+
+        Adds the live aggregate flags (``group_all_on`` / ``group_any_on``)
+        on top of the structural record so a snapshot reflects whether
+        the scene is currently active.
+        """
+        payload = asdict(self._record)
+        payload["group_all_on"] = self.group_all_on
+        payload["group_any_on"] = self.group_any_on
+        return payload
 
     def __repr__(self) -> str:
         return f"Group(address={self.address!r}, name={self.name!r}, members={len(self.member_addresses)})"

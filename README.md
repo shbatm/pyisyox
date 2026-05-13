@@ -74,6 +74,14 @@ python3 -m pyisyox https://eisy.local:443 you@example.com portal-password
 python3 -m pyisyox https://eisy.local:8443 admin local-password
 ```
 
+Pass `--dump <path>` to write a full controller snapshot (every node, group, program, variable, network resource, plus the loaded profile and WS health) as pretty-printed JSON — handy when filing a bug report or diffing controller state between firmware versions:
+
+```bash
+python3 -m pyisyox https://eisy.local:443 you@example.com pw --no-events --dump ~/snapshots/eisy.json
+```
+
+The snapshot is produced by `Controller.to_dict()`; every runtime class (`Node`, `Group`, `Folder`, `Program`, `Variable`, `NetworkResource`, `Profile`) also exposes a `.to_dict()` so embedding consumers can serialise individual objects.
+
 ## Public surface
 
 ```text
