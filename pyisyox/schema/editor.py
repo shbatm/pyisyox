@@ -1,41 +1,20 @@
 """Editor dataclasses and bidirectional codec for IoX profile editors.
 
-In IoX 6's profile schema an *editor* is referenced by id (e.g. ``"I_OL"``,
-``"I_TSTAT_MODE"``, ``"GALLONS"``) from both nodedef properties and
-command parameters. The editor is **not just display metadata** — it
-defines a bidirectional contract:
-
-- Read-side: how a raw integer value reported by the controller decodes
-  to a display string and unit.
-- Write-side: which integer values are *valid* to send as a command
-  parameter, and how a user-provided enum name maps back to the integer
-  the controller expects.
-
-Three write-side fields beyond UOM/min/max/prec:
-
-* ``min``/``max`` plus ``prec`` (decimal precision) — slider bounds and
-  outbound validation.
-* ``subset`` — narrower than min/max. ``"0-3,5-7"`` excludes 4. Outbound
-  commands MUST respect this.
-* ``names`` — enum option list AND int↔string mapping both directions.
-
-The same editor commonly applies to both a property and a related command
-parameter (``I_TSTAT_MODE`` covers reading ``CLIMD`` state and writing
-``CLIMD`` setpoints), so editor-handling code is one shared codec.
-
-Source schema: ``/rest/profiles`` ``editors[]``.
+An *editor* (e.g. ``"I_OL"``, ``"I_TSTAT_MODE"``) is referenced by both
+nodedef properties and command parameters and defines a bidirectional
+contract — read-side decode and write-side validation/encode. Write-side
+constraints beyond ``min``/``max``/``prec`` are the ``subset`` mask
+(``"0-3,5-7"`` excludes 4) and the ``names`` enum option list.
 
 UOM-101 quirk
 -------------
 
-Insteon thermostats encode 0.5°-precision temps as ``raw = 2 * displayed``,
-not as a normal ``prec=1`` decimal. The IoX legacy alias ``"degrees"``
-behaves the same way. When an editor's range carries one of those UOMs and
-declares ``prec=0`` (i.e. it's not already using the modern decimal-prec
-convention) we double on encode / halve on decode to keep the codec
-symmetric. UOM 101 *can* appear with ``prec=1`` on modern profiles too —
-in that case the regular prec scaling already handles it and the doubling
-is skipped.
+Insteon thermostats encode 0.5°-precision temps as ``raw = 2 * displayed``
+(not a normal ``prec=1`` decimal); the legacy alias ``"degrees"`` behaves
+the same way. When a range carries one of those UOMs and declares
+``prec=0`` we double on encode / halve on decode for codec symmetry. Skip
+when ``prec=1`` (modern profiles), since the regular prec scaling
+already handles it.
 """
 
 from __future__ import annotations

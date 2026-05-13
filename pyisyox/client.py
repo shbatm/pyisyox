@@ -1,42 +1,17 @@
 """JSON-first HTTP client for IoX 6+ controllers.
 
-Sits between the auth layer (:mod:`pyisyox.auth`) and the schema layer
-(:mod:`pyisyox.schema`) and orchestrates the initial connect:
-
-* ``GET /api/config`` — uuid, version, portalHost (small, prerequisite
-  for anything else).
-* ``GET /rest/profiles?include=nodedefs,editors,linkdefs`` — single
-  ~117 KB JSON blob; the source for every nodedef + editor.
-* Parallel fan-out:
-    * ``GET /api/nodes`` — JSON structure with three parallel arrays
-      under ``data.nodes``: ``node`` (family/instance, addresses,
-      parent/pnode; plugin nodes have **no** ``property[]`` field),
-      ``group`` (scenes with members + ``flag`` bit for the
-      controller-self root group whose ``<name>`` is the friendly
-      controller label), and ``folder`` (organisational tree).
-      Each entry tagged with ``nodeType``.
-    * ``GET /rest/status`` — XML, the canonical full-property table for
-      both native and plugin nodes. PyISY 3.x already merges this into
-      ``/rest/nodes`` to fill in Insteon thermostat properties; the
-      same merge step handles plugin nodes uniformly here.
-    * ``GET /api/programs``, ``/api/triggers`` — JSON.
-    * ``GET /api/variables/1`` and ``/api/variables/2`` — JSON.
+Orchestrates the initial load (``/api/config`` → ``/rest/profiles`` →
+parallel fan-out of nodes/status/programs/triggers/variables) and
+exposes mutation methods. Auth-mode-agnostic — accepts any
+:class:`pyisyox.auth.Auth` and retries once on 401 if recovery succeeds.
 
 Total: ≤ 6 HTTP + 1 WebSocket regardless of node-server count
-(``/rest/nodes`` was dropped from the fan-out in #127 — its
-group/folder data is fully covered by ``/api/nodes`` JSON, saving one
-round-trip per connect).
+(``/rest/nodes`` was dropped from the fan-out in #127 — its group /
+folder data is fully covered by ``/api/nodes`` JSON).
 
-The client is auth-mode-agnostic — it accepts any :class:`pyisyox.auth.Auth`
-implementation (``PortalAuth`` or ``LocalAuth``). On a 401 it asks the
-auth strategy to recover, retrying the original request once if recovery
-succeeds.
-
-XML decoders here are deliberately narrow — the only legacy XML surfaces
-left after the JSON-first cut are ``/rest/status`` (used here),
-``/rest/nodes/{addr}/cmd/...`` responses (touched at command-send time),
-and ``/rest/subscribe`` event frames (handled by the WebSocket pipeline).
-``xml.etree.ElementTree`` from the stdlib covers all three.
+The remaining legacy XML surfaces are ``/rest/status``,
+``/rest/nodes/{addr}/cmd/...`` responses, and ``/rest/subscribe`` event
+frames; stdlib ``xml.etree.ElementTree`` covers all three.
 """
 
 from __future__ import annotations
@@ -115,16 +90,9 @@ class HTTPError(ClientError):
 
 
 class NodeType(StrEnum):
-    """String discriminator the eisy requires in ``POST /api/nodes/{address}``
-    bodies — even though the address already disambiguates which kind
-    of object is being mutated. The same ``"node"`` / ``"group"`` /
-    ``"folder"`` vocabulary appears on lifecycle events, so this enum
-    doubles as the typed name for that wire vocabulary.
-
-    The legacy XML surface uses the numeric hierarchy codes instead
-    (``0`` notset / ``1`` node / ``2`` group / ``3`` folder) — see
-    :class:`pyisyox.constants.UDHierarchyNodeType`.
-    """
+    """Required ``nodeType`` body field on ``POST /api/nodes/{address}``;
+    also the lifecycle-event vocabulary. Legacy XML surface uses numeric
+    codes — see :class:`pyisyox.constants.UDHierarchyNodeType`."""
 
     NODE = "node"
     GROUP = "group"
@@ -132,13 +100,8 @@ class NodeType(StrEnum):
 
 
 class VariableField(StrEnum):
-    """Body keys accepted by ``POST /api/variables/{type}/{id}``.
-
-    The eisy only honours one key per request — :class:`VALUE`,
-    :class:`INIT`, or :class:`NAME`. The runtime
-    :class:`pyisyox.Variable` wrapper enforces that contract by
-    exposing one coroutine per key.
-    """
+    """Body keys accepted by ``POST /api/variables/{type}/{id}``;
+    one key per request."""
 
     VALUE = "value"
     INIT = "init"
@@ -156,21 +119,10 @@ class ControllerConfig:
 
 @dataclass(slots=True)
 class NodePropertyValue:
-    """One live property value, normalised to a single shape regardless of
-    whether it arrived from ``/api/nodes`` JSON or ``/rest/status`` XML.
+    """One live property value (JSON ``/api/nodes`` or XML ``/rest/status``).
 
-    The shape mirrors :class:`pyisyox.schema.nodedef.Property` but is kept
-    here as a private data carrier so the client can produce values
-    without importing the runtime Node classes.
-
-    ``precision`` is the decimal precision the controller declares for
-    this value (``raw / 10**precision`` is the displayed number). The
-    wire keyed it as ``"prec"`` across all three ingest paths —
-    ``/api/nodes`` JSON has ``"prec": <int>``, ``/rest/status`` XML uses
-    ``prec="<int>"``, and WS frames put it on the ``<action prec="...">``
-    element — but the Python attribute spells it out for readability
-    (matches PyISY 3.x's ``precision`` naming). Defaults to ``0`` (= no
-    scaling) when the controller omits it.
+    ``precision``: decimal precision (``raw / 10**precision``). Wire
+    field is ``prec``; defaults to ``0`` when omitted.
     """
 
     id: str
@@ -209,16 +161,10 @@ class NodeRecord:
 
 @dataclass(slots=True)
 class GroupRecord:
-    """One scene/group from ``/rest/nodes``.
+    """One scene/group. Commands to ``address`` broadcast to every member.
 
-    A group represents a controller-managed collection of nodes.
-    Sending a command to ``address`` causes the controller to
-    broadcast it to every entry in ``member_addresses``.
-
-    Sourced from ``<group flag="132">`` elements in the legacy
-    ``/rest/nodes`` XML. ``flag="12"`` (the special "ISY" group
-    representing the controller itself) is filtered out at parse
-    time and does not appear in the registry.
+    Sourced from ``<group flag="132">`` elements; the special ``flag="12"``
+    controller-self group is filtered out at parse time.
     """
 
     address: str
@@ -238,11 +184,7 @@ class GroupRecord:
 
 @dataclass(slots=True)
 class FolderRecord:
-    """One folder from ``/rest/nodes`` (organisational, no command surface).
-
-    Folders use family ``"13"`` (folder family) on IoX. Sourced from
-    ``<folder>`` elements.
-    """
+    """One folder (organisational, no command surface). Family ``"13"``."""
 
     address: str
     name: str
@@ -252,47 +194,15 @@ class FolderRecord:
 
 @dataclass(slots=True)
 class ProgramRecord:
-    """One program from ``/api/programs``.
+    """One program or program-folder from ``/api/programs``.
 
-    Programs and program-folders live in the same flat list on the
-    wire, discriminated by ``is_folder``. Folders carry only
-    identity + status; programs additionally carry timing /
-    enabled / running fields.
-
-    The eisy returns ``status`` as the strings ``"true"`` or
-    ``"false"`` (matching the legacy XML convention). They're
-    decoded into a Python bool here. Empty time strings become
-    ``None``.
-
-    ``path`` is reconstructed from the ``parent_address`` chain at
-    parse time so consumers can use the legacy ``HA.<platform>/...``
-    folder convention without walking the tree themselves.
-
-    Attributes:
-        address: Program / folder id (4-character hex string).
-        name: User-assigned label.
-        path: Slash-joined ancestry, e.g. ``"My Programs/HA.switch/Foo/status"``.
-            Excludes the root folder name ``"My Programs"`` to match
-            the convention pyisy 3.x consumers used.
-        parent_address: Parent folder id, or ``None`` for the root.
-        is_folder: ``True`` for folders, ``False`` for programs.
-        status: True when the program's last evaluation was True.
-            Folder status reflects the AND of children. Empty string
-            on the wire is treated as ``False``.
-        enabled: ``False`` when the program is disabled. Always
-            ``True`` for folders (which have no enabled flag on
-            the wire). ``None`` if absent.
-        run_at_startup: ``True`` if the program is set to run on
-            controller boot. ``None`` for folders.
-        running: Free-form runtime state — ``"idle"`` on idle
-            programs; running programs report variants like
-            ``"running then"`` / ``"running else"`` /
-            ``"running if"``. ``None`` for folders.
-        last_run_time / last_finish_time / next_scheduled_run_time:
-            ISO 8601 timestamps as strings (``"2026-05-10T14:49:53.000Z"``)
-            or ``None`` when absent. Kept as strings to avoid pulling
-            in a datetime parser at this layer; consumers that need
-            datetime objects can parse on read.
+    Programs and folders share the flat list, discriminated by ``is_folder``.
+    Status strings ``"true"``/``"false"`` are decoded to bool; empty time
+    strings become ``None``. ``path`` is the slash-joined ancestry (excluding
+    the ``"My Programs"`` root) to match the pyisy 3.x convention.
+    Timestamps stay as ISO 8601 strings so this layer doesn't pull in a
+    datetime parser; ``running`` is free-form (``"idle"``,
+    ``"running then"``, …).
     """
 
     address: str
@@ -311,27 +221,9 @@ class ProgramRecord:
 
 @dataclass(slots=True)
 class VariableRecord:
-    """One entry from ``/api/variables/{type}``.
-
-    The IoX controller exposes two variable types — integer (``"1"``)
-    and state (``"2"``) — and each carries an int value (``val``),
-    init/restore-on-startup value, decimal precision, a user-assigned
-    name, and a last-change timestamp. The wire JSON uses ``val`` for
-    the current value; we expose it here as ``value`` so consumers
-    don't have to track the wire spelling.
-
-    Attributes:
-        type_id: ``"1"`` (integer) or ``"2"`` (state).
-        id: Variable id within the type.
-        name: User-assigned label.
-        value: Current value (wire field ``val``).
-        init: Restore-on-startup value.
-        precision: Decimal precision (``displayed = raw / 10**precision``).
-            The wire keyed it as ``"prec"`` — Python attribute spells
-            it out (matches PyISY 3.x).
-        ts: Last-change timestamp as the controller emits it (ISO 8601
-            UTC). Empty string when the controller omits it.
-    """
+    """One entry from ``/api/variables/{type}``. ``type_id`` is ``"1"``
+    (integer) or ``"2"`` (state). Wire field ``val`` is exposed as
+    ``value``; ``prec`` is exposed as ``precision``."""
 
     type_id: str
     id: str
@@ -343,27 +235,15 @@ class VariableRecord:
 
     @property
     def address(self) -> str:
-        """``"{type_id}.{id}"`` — composite identifier that joins into
-        controller endpoints and is useful for unique-id derivation in
-        downstream consumers (HA entity unique ids, log lines, etc.)."""
+        """Composite ``{type_id}.{id}`` identifier."""
         return f"{self.type_id}.{self.id}"
 
 
 @dataclass(slots=True)
 class NetworkResourceRecord:
-    """One entry from ``/rest/networking/resources``.
-
-    Network resources are user-defined HTTP / TCP / UDP fire-triggers
-    on the controller (e.g. "ping the router", "post to a webhook").
-    The runtime wrapper :class:`pyisyox.runtime.NetworkResource`
-    surfaces ``run()`` which fires the resource by id.
-
-    Attributes:
-        address: Resource id, kept as a string for symmetry with
-            node / group records (the wire is ``<id>5</id>``, an
-            integer, but consumers want it joinable into URL paths).
-        name: User-assigned label.
-    """
+    """One user-defined HTTP/TCP/UDP fire-trigger from
+    ``/rest/networking/resources``. ``address`` is the integer id as a
+    string for URL-path symmetry."""
 
     address: str
     name: str
@@ -371,33 +251,7 @@ class NetworkResourceRecord:
 
 @dataclass(slots=True)
 class LoadResult:
-    """Output of :meth:`IoXClient.connect`.
-
-    Attributes:
-        config: Parsed ``/api/config`` slice.
-        profile: Decoded ``/rest/profiles`` blob, ready for nodedef
-            lookups via ``profile.find_nodedef(...)``.
-        nodes: Map of address → :class:`NodeRecord` with merged properties.
-        groups: Map of address → :class:`GroupRecord` for IoX scenes.
-        folders: Map of address → :class:`FolderRecord` for the
-            organisational tree shown in the controller UI.
-        programs: Map of id → :class:`ProgramRecord` for both
-            programs and program-folders (discriminated by
-            ``is_folder``). Empty when the controller has no
-            programs configured.
-        triggers: Raw ``/api/triggers`` payload — the program AST as JSON.
-        variables: Map of variable type id (``"1"`` or ``"2"``) to the
-            raw ``/api/variables/{type}`` ``data`` list.
-        network_resources: Map of id → :class:`NetworkResourceRecord`,
-            empty when the controller has no networking module
-            enabled (the endpoint returns an empty ``<NetConfig/>``).
-        root_name: User-assigned name of the controller (the
-            ``<name>`` of the root group in ``/rest/nodes``, e.g.
-            ``"Main eisy"``). Empty string when the controller hasn't
-            been named or the legacy endpoint isn't available.
-            :attr:`Controller.name` exposes this with hostname / uuid
-            fallbacks for consumer ergonomics.
-    """
+    """Output of :meth:`IoXClient.connect`. See attributes for shape."""
 
     config: ControllerConfig
     profile: Profile
@@ -625,15 +479,7 @@ class IoXClient:
                         prop.name = resolved
 
     async def _fetch_config(self) -> ControllerConfig:
-        """``GET /api/config`` — minimal, used to confirm IoX 6+ + uuid.
-
-        Authenticated like every other endpoint: ``/api/config`` is
-        gated on both auth modes (``LocalAuth`` HTTP-basic on
-        ``:8443``, ``PortalAuth`` JWT on ``:443``), so an earlier
-        ``authenticated=False`` here 401'd the local-credentials flow.
-        ``_authenticate_once`` is a no-op for ``LocalAuth`` (basic auth
-        attaches per request) and runs the login POST for ``PortalAuth``.
-        """
+        """``GET /api/config`` — confirms IoX 6+ and returns uuid/version."""
         raw = await self._get_json(CONFIG_PATH)
         data = raw.get("data", raw)
         return ControllerConfig(
@@ -643,21 +489,13 @@ class IoXClient:
         )
 
     async def _authenticate_once(self) -> None:
-        """Run ``auth.authenticate`` exactly once across concurrent callers.
-
-        The lock-then-recheck pattern collapses concurrent first-use
-        callers onto a single ``auth.authenticate`` round-trip. Without
-        it, two parallel requests during ``connect()`` setup could both
-        observe ``_authenticated is False`` and each call ``authenticate``.
-        """
+        """Run ``auth.authenticate`` exactly once across concurrent callers."""
         if self._authenticated:
             return
         if self._auth_lock is None:
             self._auth_lock = asyncio.Lock()
         async with self._auth_lock:
-            # Double-checked: another coroutine may have authenticated
-            # while we were queued for the lock. We deliberately re-read
-            # via a local so mypy doesn't narrow it away as unreachable.
+            # Re-read via a local so mypy doesn't narrow it away as unreachable.
             already_authenticated: bool = self._authenticated
             if already_authenticated:
                 return
@@ -665,17 +503,14 @@ class IoXClient:
             self._authenticated = True
 
     async def _get_json(self, path: str, *, authenticated: bool = True) -> Any:
-        """GET a JSON endpoint. Applies auth (if requested) and retries
-        once on 401 if the auth strategy can recover."""
+        """GET a JSON endpoint. Applies auth and retries once on 401."""
         text = await self._get_text(path, authenticated=authenticated)
         try:
             payload = _loads_json(text)
         except ValueError as exc:
             raise ClientError(f"invalid JSON from {path}: {exc}") from exc
-        # Full payloads are high-volume on initial load (the profiles
-        # blob alone is ~117 KB); keep them at VERBOSE so DEBUG stays
-        # readable. A one-line summary at DEBUG keeps the load trail.
-        _LOGGER.debug("GET %s -> %d bytes", path, len(text))
+        # _get_text already logged the GET summary at DEBUG. JSON bodies
+        # stay at VERBOSE because the profiles blob is ~117 KB.
         if _LOGGER.isEnabledFor(LOG_VERBOSE):
             _LOGGER.log(LOG_VERBOSE, "GET %s body: %s", path, redact_sensitive(payload))
         return payload
@@ -699,25 +534,15 @@ class IoXClient:
                 if resp.status >= 400:
                     raise HTTPError(resp.status, url)
                 text = await resp.text()
-            # Match the ``_get_json`` summary line so wire-trace
-            # debugging works regardless of payload format. Reads
-            # through ``_get_text`` (the legacy XML surfaces:
-            # ``/rest/nodes``, ``/rest/status``,
-            # ``/rest/networking/resources``) were previously silent,
-            # so a consumer comparing tcpdump output to a DEBUG log
-            # saw different request sets. VERBOSE-level body dumps
-            # are intentionally not added here — XML payloads can be
-            # multi-MB on a populated controller and would dominate
-            # the log; ``_get_json``'s VERBOSE body dump exists
-            # because the redactor is JSON-specific.
+            # Wire-trace summary for every GET (JSON + XML). No VERBOSE
+            # body dump: XML payloads can be multi-MB and the redactor is
+            # JSON-specific.
             _LOGGER.debug("GET %s -> %d bytes", path, len(text))
             return text
 
     async def _get_text_or_empty(self, path: str) -> str:
-        """``_get_text`` that swallows HTTPError and returns an empty
-        string. Used for optional-module endpoints (networking) where a
-        missing module surfaces as a 404 / 503 rather than an empty
-        document — we don't want those to abort initial load."""
+        """``_get_text`` that swallows HTTPError → ``""``. For optional
+        endpoints (networking) where a missing module 404s."""
         try:
             return await self._get_text(path)
         except HTTPError as exc:
@@ -727,26 +552,8 @@ class IoXClient:
     async def send_node_command(self, address: str, command_id: str, *params: int | str) -> str:
         """Issue ``GET /rest/nodes/{addr}/cmd/{cmd}[/{p1}[/{p2}...]]``.
 
-        The legacy XML command surface is still the only command path
-        on IoX 6 — no ``/api/*`` equivalent has surfaced in captures.
-        Both auth modes (PortalAuth JWT, LocalAuth basic) accept this
-        path. ``address`` is URL-quoted because Insteon addresses
-        contain spaces (``"3D 7D 87 1"``).
-
-        Args:
-            address: Wire address of the target node.
-            command_id: IoX command id (e.g. ``"DON"``).
-            *params: Already-encoded path segments (the runtime
-                :meth:`Node.send_command` runs the editor codec and
-                interleaves each value with its UOM — ``75, "51"`` →
-                ``.../DON/75/51``; this client method just stringifies
-                and joins what it's given).
-
-        Returns:
-            The text body of the response — typically a small
-            ``<RestResponse status="200">...</RestResponse>`` envelope.
-            Caller doesn't usually need to parse it; HTTPError covers
-            non-2xx.
+        Params are stringified and joined as-is — the editor codec runs
+        in :meth:`Node.send_command`. ``address`` is URL-quoted.
         """
         encoded_addr = quote(address, safe="")
         path_parts = [NODE_COMMAND_PATH.format(address=encoded_addr, command=command_id)]
@@ -757,21 +564,10 @@ class IoXClient:
     async def get_zwave_parameter(self, address: str, number: int, *, zmatter: bool = False) -> str:
         """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/config/query/{n}``.
 
-        Triggers the controller to query parameter ``n`` from the device.
-        On success the response body is a ``<config paramNum="N"
-        size="SZ" value="V"/>`` element (PyISY 3.x verified shape); on a
-        controller-side failure (404, device unreachable, …) the body
-        is a ``<RestResponse succeeded="false"><status>404</status>...``
-        envelope which the caller must inspect — ``HTTPError`` only
-        covers transport-level non-2xx.
-
-        Args:
-            address: Wire address of the Z-Wave node (URL-quoted here).
-            number: Z-Wave parameter number (1-based; device-defined).
-            zmatter: ``True`` for Z-Matter (family ``12``) nodes, which
-                use the ``/rest/zmatter/zwave/...`` path prefix. The
-                runtime :meth:`Node.get_zwave_parameter` flips this from
-                the node's ``family_id`` automatically.
+        Body on success: ``<config paramNum="N" size="SZ" value="V"/>``.
+        Controller failure surfaces as a ``<RestResponse succeeded="false">``
+        envelope (caller must inspect — HTTPError covers transport only).
+        ``zmatter=True`` switches to the family-12 path prefix.
         """
         encoded_addr = quote(address, safe="")
         path_tmpl = ZMATTER_ZWAVE_PARAMETER_GET_PATH if zmatter else ZWAVE_PARAMETER_GET_PATH
@@ -799,19 +595,9 @@ class IoXClient:
     ) -> str:
         """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/config/set/{n}/{v}/{sz}``.
 
-        Args:
-            address: Wire address of the Z-Wave node (URL-quoted here).
-            number: Z-Wave parameter number (device-defined).
-            value: Parameter value to write (signed int; the controller
-                interprets the sign per the device's parameter spec).
-            size: Parameter byte size — ``1``, ``2``, or ``4``. The
-                controller forwards this to the device so multi-byte
-                parameters land correctly. The Insteon-style ``CONFIG``
-                ``cmd`` editor in ``/rest/profiles`` doesn't model
-                ``size`` (it's a NUM/VAL pair only), which is why this
-                path takes precedence over a ``send_command("CONFIG",
-                ...)`` for Z-Wave parameter writes.
-            zmatter: ``True`` for Z-Matter (family ``12``) nodes.
+        ``size`` (1/2/4 bytes) is carried explicitly; the Insteon-style
+        ``CONFIG`` command editor doesn't model byte size, so this path
+        takes precedence over ``send_command("CONFIG", ...)`` for Z-Wave.
         """
         encoded_addr = quote(address, safe="")
         path_tmpl = ZMATTER_ZWAVE_PARAMETER_SET_PATH if zmatter else ZWAVE_PARAMETER_SET_PATH
@@ -840,17 +626,9 @@ class IoXClient:
     ) -> str:
         """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/security/user/{n}/set/code/{c}``.
 
-        Program one user-code slot on a Z-Wave lock. The HTTP body is a
-        ``<RestResponse>`` envelope — callers should pass it through
-        :meth:`Node.set_zwave_lock_code`'s parser, which raises on
-        ``succeeded="false"``.
-
-        Args:
-            address: Wire address of the Z-Wave lock node (URL-quoted here).
-            user_num: User-code slot number (device-defined, 1-based).
-            code: Numeric PIN to program into the slot. Stored on the
-                device; pyisyox doesn't read it back.
-            zmatter: ``True`` for Z-Matter (family ``12``) locks.
+        Programs one user-code slot. Returns a ``<RestResponse>`` envelope
+        — callers should pass it through :meth:`Node.set_zwave_lock_code`'s
+        parser, which raises on ``succeeded="false"``.
         """
         encoded_addr = quote(address, safe="")
         path_tmpl = ZMATTER_ZWAVE_LOCK_CODE_SET_PATH if zmatter else ZWAVE_LOCK_CODE_SET_PATH
@@ -876,12 +654,7 @@ class IoXClient:
     ) -> str:
         """Issue ``GET /rest/(zmatter/)?zwave/node/{addr}/security/user/{n}/delete``.
 
-        Clear one user-code slot on a Z-Wave lock.
-
-        Args:
-            address: Wire address of the Z-Wave lock node (URL-quoted here).
-            user_num: User-code slot number to clear.
-            zmatter: ``True`` for Z-Matter (family ``12``) locks.
+        Clears one user-code slot.
         """
         encoded_addr = quote(address, safe="")
         path_tmpl = ZMATTER_ZWAVE_LOCK_CODE_DELETE_PATH if zmatter else ZWAVE_LOCK_CODE_DELETE_PATH
@@ -901,11 +674,8 @@ class IoXClient:
     async def set_node_enabled(self, address: str, enabled: bool) -> str:
         """Issue ``GET /rest/nodes/{addr}/{enable|disable}``.
 
-        Re-enables or disables a node on the controller (a disabled node
-        stays in the table but the controller stops polling / commanding
-        it). ``address`` is URL-quoted. Returns the response text body
-        (a small ``<RestResponse>`` envelope — callers don't usually
-        parse it; ``HTTPError`` covers non-2xx).
+        A disabled node stays in the table; the controller stops polling
+        and commanding it.
         """
         encoded_addr = quote(address, safe="")
         path = (NODE_ENABLE_PATH if enabled else NODE_DISABLE_PATH).format(address=encoded_addr)
@@ -916,22 +686,12 @@ class IoXClient:
     ) -> dict[str, Any]:
         """Issue ``POST /api/variables/{type}/{id}`` with the supplied body.
 
-        Three documented body shapes (verified against eisy-ui captures):
+        Three documented body shapes (one key per call; eisy-ui doesn't
+        mix them):
 
         * ``{"value": <int>}`` — set the current value
-        * ``{"init": <int>}`` — set the initial / restore value
-        * ``{"name": "<str>"}`` — rename the variable
-
-        Mixing keys in one call wasn't observed; eisy-ui issues separate
-        calls for each. Higher-level helpers in
-        :class:`pyisyox.controller.Controller` enforce one-key-per-call
-        for clarity.
-
-        Returns the parsed response body (a ``{successful, data}``
-        envelope).
-
-        Raises:
-            HTTPError on non-2xx; ClientError on malformed response.
+        * ``{"init": <int>}`` — set the initial/restore value
+        * ``{"name": "<str>"}`` — rename
         """
         path = VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id)
         _LOGGER.debug(
@@ -1646,6 +1406,5 @@ def _unwrap_data(raw: Any, *, source: str = "endpoint") -> list[dict[str, Any]]:
 
 
 def _loads_json(text: str) -> Any:
-    """Local alias for json.loads — kept as a thin wrapper so tests can
-    monkey-patch one symbol if they need to inject decode failures."""
+    """Local alias for ``json.loads`` — monkey-patchable from tests."""
     return json.loads(text)
