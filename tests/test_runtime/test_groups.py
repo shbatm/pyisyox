@@ -32,7 +32,7 @@ def test_parse_rest_nodes_extracts_groups_and_folders() -> None:
     """The captured fixture has 94 groups + folders; the parser keeps them
     separated and ignores ``<node>`` entries (those come from /api/nodes)."""
     xml = (FIXTURE_DIR / "rest_nodes.xml").read_text()
-    groups, folders = parse_rest_nodes_groups_folders(xml)
+    groups, folders, _ = parse_rest_nodes_groups_folders(xml)
 
     # The fixture has 94 <group> entries; one is the "ISY" controller-self
     # group (flag="12") which is filtered out — leaving 93 user scenes.
@@ -61,7 +61,7 @@ def test_parse_rest_nodes_filters_isy_self_group() -> None:
     </members>
   </group>
 </nodes>"""
-    groups, _ = parse_rest_nodes_groups_folders(xml)
+    groups, _, _ = parse_rest_nodes_groups_folders(xml)
     assert "00:21:b9:00:00:00" not in groups
     assert "1234" in groups
 
@@ -80,7 +80,7 @@ def test_parse_rest_nodes_captures_member_addresses_in_order() -> None:
     </members>
   </group>
 </nodes>"""
-    groups, _ = parse_rest_nodes_groups_folders(xml)
+    groups, _, _ = parse_rest_nodes_groups_folders(xml)
     assert groups["5000"].member_addresses == ("A1", "A2", "A3")
 
 
@@ -96,7 +96,7 @@ def test_parse_rest_nodes_handles_empty_members() -> None:
     <members/>
   </group>
 </nodes>"""
-    groups, _ = parse_rest_nodes_groups_folders(xml)
+    groups, _, _ = parse_rest_nodes_groups_folders(xml)
     assert groups["EMPTY"].member_addresses == ()
 
 
@@ -115,14 +115,41 @@ def test_parse_rest_nodes_records_folder_parent() -> None:
     <parent type="3">10</parent>
   </folder>
 </nodes>"""
-    _, folders = parse_rest_nodes_groups_folders(xml)
+    _, folders, _ = parse_rest_nodes_groups_folders(xml)
     assert folders["10"].parent_address is None
     assert folders["20"].parent_address == "10"
 
 
 def test_parse_rest_nodes_handles_empty_or_missing_xml() -> None:
-    assert parse_rest_nodes_groups_folders("") == ({}, {})
-    assert parse_rest_nodes_groups_folders('<?xml version="1.0"?><nodes/>') == ({}, {})
+    assert parse_rest_nodes_groups_folders("") == ({}, {}, "")
+    assert parse_rest_nodes_groups_folders('<?xml version="1.0"?><nodes/>') == (
+        {},
+        {},
+        "",
+    )
+
+
+def test_parse_rest_nodes_captures_root_group_name() -> None:
+    """The root group (``flag="12"`` = ``ROOT | IS_A_GROUP``) is filtered
+    out of the groups registry but its user-assigned ``<name>`` is
+    surfaced as the third return value so consumers can use the
+    friendly controller name for device labels (the same value the
+    legacy ``/rest/config`` ``<configuration><root><name>`` path
+    carried in PyISY 3.x)."""
+    xml = (
+        '<?xml version="1.0"?><nodes>'
+        '<group flag="12"><address>00:21:b9:01:23:45</address>'
+        "<name>Main eisy</name></group>"
+        '<group flag="132"><address>0030</address>'
+        "<name>Living Room</name><members/></group>"
+        "</nodes>"
+    )
+    groups, folders, root_name = parse_rest_nodes_groups_folders(xml)
+    assert root_name == "Main eisy"
+    # Root group is filtered; only the user-facing scene survives.
+    assert "00:21:b9:01:23:45" not in groups
+    assert "0030" in groups
+    assert folders == {}
 
 
 # --- Folder runtime wrapper ---------------------------------------------
@@ -262,7 +289,7 @@ def test_parse_rest_nodes_separates_controllers_from_responders() -> None:
     </members>
   </group>
 </nodes>"""
-    groups, _ = parse_rest_nodes_groups_folders(xml)
+    groups, _, _ = parse_rest_nodes_groups_folders(xml)
     rec = groups["5000"]
     assert rec.member_addresses == ("CTRL 1", "RESP 1", "RESP 2", "CTRL 2")
     assert rec.controller_addresses == ("CTRL 1", "CTRL 2")
@@ -281,7 +308,7 @@ def test_parse_rest_nodes_controller_addresses_empty_when_none() -> None:
     </members>
   </group>
 </nodes>"""
-    groups, _ = parse_rest_nodes_groups_folders(xml)
+    groups, _, _ = parse_rest_nodes_groups_folders(xml)
     assert groups["5000"].controller_addresses == ()
 
 

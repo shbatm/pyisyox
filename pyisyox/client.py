@@ -384,6 +384,12 @@ class LoadResult:
         network_resources: Map of id → :class:`NetworkResourceRecord`,
             empty when the controller has no networking module
             enabled (the endpoint returns an empty ``<NetConfig/>``).
+        root_name: User-assigned name of the controller (the
+            ``<name>`` of the root group in ``/rest/nodes``, e.g.
+            ``"Main eisy"``). Empty string when the controller hasn't
+            been named or the legacy endpoint isn't available.
+            :attr:`Controller.name` exposes this with hostname / uuid
+            fallbacks for consumer ergonomics.
     """
 
     config: ControllerConfig
@@ -395,6 +401,7 @@ class LoadResult:
     triggers: list[dict[str, Any]]
     variables: dict[str, dict[str, VariableRecord]]
     network_resources: dict[str, NetworkResourceRecord]
+    root_name: str = ""
 
 
 class IoXClient:
@@ -438,7 +445,9 @@ class IoXClient:
         await self._authenticate_once()
         return await self.load(config)
 
-    async def load(self, config: ControllerConfig | None = None) -> LoadResult:
+    async def load(  # pylint: disable=too-many-locals
+        self, config: ControllerConfig | None = None
+    ) -> LoadResult:
         """Run the parallel load fan-out and return a fresh :class:`LoadResult`.
 
         Used both by :meth:`connect` (which prepends config + auth) and
@@ -485,7 +494,7 @@ class IoXClient:
         profile = Profile.load_from_json(profile_raw)
         nodes = parse_api_nodes(nodes_raw)
         merge_status_into_nodes(nodes, parse_rest_status(status_xml))
-        groups, folders = parse_rest_nodes_groups_folders(rest_nodes_xml)
+        groups, folders, root_name = parse_rest_nodes_groups_folders(rest_nodes_xml)
         await self._load_dynamic_zwave_nodedefs(profile, nodes)
 
         return LoadResult(
@@ -505,6 +514,7 @@ class IoXClient:
                 ),
             },
             network_resources=parse_rest_networking_resources(networking_xml),
+            root_name=root_name,
         )
 
     #: Family id → ordered ``def/get`` path candidates for radios whose
@@ -1154,8 +1164,8 @@ def merge_status_into_nodes(
 
 def parse_rest_nodes_groups_folders(
     xml: str,
-) -> tuple[dict[str, GroupRecord], dict[str, FolderRecord]]:
-    """Decode ``/rest/nodes`` XML into separate group + folder registries.
+) -> tuple[dict[str, GroupRecord], dict[str, FolderRecord], str]:
+    """Decode ``/rest/nodes`` XML into group + folder registries + root name.
 
     Node entries (``<node>``) in the legacy XML are ignored — the
     JSON ``/api/nodes`` endpoint is the canonical source for those
@@ -1168,19 +1178,26 @@ def parse_rest_nodes_groups_folders(
     eisy stringifies it — ``"12"`` is ``IS_A_GROUP | ROOT``). The one
     group with :attr:`~pyisyox.constants.NodeFlag.ROOT` set is the
     controller-self pseudo-group (its address is the controller MAC,
-    not a user-facing scene) — it's filtered out here.
+    not a user-facing scene) — it's filtered out of the returned
+    ``groups`` map, but its ``<name>`` is surfaced as the third return
+    value so consumers can use the user-assigned controller name
+    (e.g. "Main eisy") for device naming. Returns an empty string
+    when the root group is absent or unnamed.
     """
     if not xml:
-        return {}, {}
+        return {}, {}, ""
     try:
         root = ET.fromstring(xml)  # noqa: S314 — eisy LAN traffic
     except ET.ParseError as exc:
         raise ClientError(f"failed to parse /rest/nodes XML: {exc}") from exc
 
     groups: dict[str, GroupRecord] = {}
+    root_name = ""
     for group_el in root.findall("group"):
         if _flag_int(group_el.get("flag")) & NodeFlag.ROOT:
             # The controller's own root group — not a user-facing scene.
+            # Capture the user-assigned name on the way past.
+            root_name = group_el.findtext("name") or root_name
             continue
         addr = group_el.findtext("address") or ""
         if not addr:
@@ -1221,7 +1238,7 @@ def parse_rest_nodes_groups_folders(
             family_id=folder_el.findtext("family") or "13",
             parent_address=parent_text or None,
         )
-    return groups, folders
+    return groups, folders, root_name
 
 
 def _zwave_cmd_from_xml(cmd_el: ET.Element) -> Command:

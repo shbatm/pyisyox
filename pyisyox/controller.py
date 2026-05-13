@@ -242,6 +242,22 @@ class Controller:
         return self._loaded_or_raise().config
 
     @property
+    def name(self) -> str:
+        """User-assigned controller name (e.g. ``"Main eisy"``).
+
+        Sourced from the ``<name>`` of the root group in
+        ``/rest/nodes`` (the same value the eisy admin UI shows and
+        that the legacy ``/rest/config`` ``<configuration><root><name>``
+        path carried). Empty string when the controller hasn't been
+        named or the legacy endpoint isn't available.
+
+        Consumers driving HA device names should prefer this over the
+        hostname so users see the friendly label they set on the
+        controller, with the hostname as a fallback.
+        """
+        return self._loaded_or_raise().root_name
+
+    @property
     def profile(self) -> Profile:
         """The decoded ``/rest/profiles`` blob with built nodedef lookup."""
         return self._loaded_or_raise().profile
@@ -382,6 +398,7 @@ class Controller:
         """
         ws = self._ws
         return {
+            "name": self.name,
             "config": asdict(self.config),
             "connected": self.connected,
             "websocket": {
