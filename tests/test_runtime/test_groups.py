@@ -1,4 +1,6 @@
-"""Tests for Group + Folder runtime wrappers + the /rest/nodes XML parser."""
+"""Tests for Group + Folder runtime wrappers + the /api/nodes and
+/rest/nodes parsers (both shapes — JSON is the default load path; XML
+stays available for LocalAuth)."""
 
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ from pyisyox.client import (
     IoXClient,
     NodePropertyValue,
     NodeRecord,
+    parse_api_nodes_groups_folders,
     parse_rest_nodes_groups_folders,
 )
 from pyisyox.constants import INSTEON_STATELESS_NODEDEFID
@@ -22,6 +25,7 @@ from pyisyox.schema import Profile
 from tests.test_client.conftest import FakeSession
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "eisy6"
+JSON_FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "eisy6_json"
 BASE = "https://eisy.local"
 
 
@@ -127,6 +131,59 @@ def test_parse_rest_nodes_handles_empty_or_missing_xml() -> None:
         {},
         "",
     )
+
+
+# --- /api/nodes JSON parser (the default load path post-#127) ----------
+
+
+def _load_json_fixture() -> dict:
+    return json.loads((JSON_FIXTURE_DIR / "api_nodes_full.json").read_text())
+
+
+def test_parse_api_nodes_extracts_groups_and_folders() -> None:
+    """Captured controller has 94 groups + 30 folders in the JSON payload
+    (the same shape the legacy ``/rest/nodes`` XML used to carry).
+    One group is the root pseudo-group (``flag="12"``) — filtered out
+    of the returned dict, surfaced via the third tuple element."""
+    raw = _load_json_fixture()
+    groups, folders, root_name = parse_api_nodes_groups_folders(raw)
+    # 94 group entries in the fixture; the root pseudo-group is excluded.
+    assert len(groups) == 93
+    assert len(folders) == 30
+    assert root_name == "eisy-anon"
+
+
+def test_parse_api_nodes_captures_member_controller_marker() -> None:
+    """``link.type == "16"`` marks a scene controller in the JSON, same
+    as the legacy XML. Verified against captures with mixed member
+    types (``Main Bedroom Fan*`` scenes are controller+responder)."""
+    raw = _load_json_fixture()
+    groups, _, _ = parse_api_nodes_groups_folders(raw)
+    # ``Main Bedroom Fan Light`` (address 11937) has a mix of types.
+    fan = groups["11937"]
+    assert fan.name == "Main Bedroom Fan Light"
+    # Each ``type="16"`` member appears in both lists; responders only
+    # in member_addresses.
+    assert set(fan.controller_addresses).issubset(set(fan.member_addresses))
+    assert fan.controller_addresses, "expected at least one controller"
+
+
+def test_parse_api_nodes_filters_root_pseudo_group() -> None:
+    """The controller-self pseudo-group (``flag="12"``,
+    ``IS_A_GROUP | ROOT``) is removed from the groups dict — its
+    address is the controller MAC, not a user-facing scene."""
+    raw = _load_json_fixture()
+    groups, _, root_name = parse_api_nodes_groups_folders(raw)
+    assert root_name  # non-empty
+    for group_addr in groups:
+        # MAC-style addresses (colons) wouldn't be there post-filter.
+        assert ":" not in group_addr or len(group_addr) != 17
+
+
+def test_parse_api_nodes_handles_empty_or_missing_payload() -> None:
+    assert parse_api_nodes_groups_folders({}) == ({}, {}, "")
+    assert parse_api_nodes_groups_folders({"data": {}}) == ({}, {}, "")
+    assert parse_api_nodes_groups_folders({"data": {"nodes": {}}}) == ({}, {}, "")
 
 
 def test_parse_rest_nodes_captures_root_group_name() -> None:
