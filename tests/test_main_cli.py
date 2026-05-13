@@ -9,6 +9,8 @@ the suite reaches only through synthetic FakeSession scaffolding.
 from __future__ import annotations
 
 import argparse
+import json as _json
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -92,6 +94,7 @@ def _ns(**overrides) -> argparse.Namespace:
         "events": False,  # don't loop forever
         "tls_version": None,
         "verify_ssl": False,
+        "dump": None,
     }
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -144,3 +147,57 @@ async def test_main_passes_tls_and_verify_ssl(fake_controller) -> None:
     _, kwargs = fake_controller.call_args
     assert kwargs["tls_version"] == 1.3
     assert kwargs["verify_ssl"] is True
+
+
+# --- --dump: controller snapshot to JSON ----------------------------------
+
+
+def test_parse_args_dump_defaults_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--dump`` is optional; absent means no snapshot."""
+    monkeypatch.setattr("sys.argv", ["pyisyox", "https://x", "u", "p"])
+    assert parse_args().dump is None
+
+
+def test_parse_args_dump_captures_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv", ["pyisyox", "https://x", "u", "p", "--dump", "./snap.json"]
+    )
+    assert parse_args().dump == "./snap.json"
+
+
+async def test_main_dump_writes_controller_snapshot(
+    fake_controller, tmp_path
+) -> None:
+    """``--dump <path>`` writes ``Controller.to_dict()`` as pretty
+    JSON to ``path``. Parent dirs auto-create so the user can pass a
+    nested path (mirrors the v1-beta dumper)."""
+    snapshot = {"config": {"uuid": "TEST-UUID"}, "nodes": {}}
+    fake_controller.return_value.to_dict.return_value = snapshot
+
+    target = tmp_path / "nested" / "snap.json"
+    rc = await main(_ns(dump=str(target)))
+
+    assert rc == 0
+    assert target.exists()
+    body = target.read_text(encoding="utf-8")
+    # Pretty-printed (indented) and ends with a trailing newline.
+    assert body.endswith("\n")
+    assert "  " in body
+    # Round-trips back to the original dict.
+    assert _json.loads(body) == snapshot
+    fake_controller.return_value.to_dict.assert_called_once_with()
+
+
+async def test_main_dump_handles_unexpected_objects_via_default_str(
+    fake_controller, tmp_path
+) -> None:
+    """``default=str`` is a guardrail — if ``to_dict()`` ever returns a
+    non-JSON-native value (datetime, Path, dataclass that slipped
+    through), the dump should stringify it rather than crashing."""
+    snapshot = {"timestamp": datetime(2026, 5, 13, 12, 0, 0)}
+    fake_controller.return_value.to_dict.return_value = snapshot
+
+    target = tmp_path / "snap.json"
+    rc = await main(_ns(dump=str(target)))
+    assert rc == 0
+    assert "2026-05-13" in target.read_text(encoding="utf-8")
