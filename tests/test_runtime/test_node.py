@@ -178,11 +178,26 @@ async def test_send_command_unknown_command_id_raises(real_profile: Profile) -> 
 
 
 @pytest.mark.asyncio
-async def test_send_command_no_nodedef_raises(real_profile: Profile) -> None:
-    record = _make_record(nodedef_id="NoSuchType")
-    node = Node.from_record(record, real_profile, _make_client(FakeSession(BASE)))
-    with pytest.raises(NodeCommandError, match="no nodedef resolved"):
-        await node.send_command("DON")
+async def test_send_command_no_nodedef_passes_through(real_profile: Profile) -> None:
+    """A node with no resolved nodedef (e.g. a dynamic Z-Wave node whose
+    ``UZW*`` nodedef isn't published in ``/rest/profiles``) still issues
+    the command — params verbatim, numeric coerced to int, no UOM."""
+    record = _make_record(
+        address="ZW003_1", nodedef_id="UZW0009", family_id="4", instance_id="1"
+    )
+    session = FakeSession(BASE)
+    session.set_route("GET", "/rest/nodes/ZW003_1/cmd/DON/100", 200, "<ok/>")
+    session.set_route("GET", "/rest/nodes/ZW003_1/cmd/DOF", 200, "<ok/>")
+    node = Node.from_record(record, real_profile, _make_client(session))
+    assert node.nodedef is None
+
+    await node.send_command("DON", 100)
+    await node.send_command("DOF")
+
+    assert [p for _, p, _ in session.calls] == [
+        "/rest/nodes/ZW003_1/cmd/DON/100",
+        "/rest/nodes/ZW003_1/cmd/DOF",
+    ]
 
 
 @pytest.mark.asyncio

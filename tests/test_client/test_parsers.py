@@ -80,6 +80,45 @@ def test_parse_api_nodes_plugin_node_carries_no_properties() -> None:
     assert node.properties == {}, "plugin nodes must arrive empty in /api/nodes"
 
 
+def test_parse_api_nodes_bare_scalar_family() -> None:
+    """Built-in non-Insteon families (Z-Wave, Z-Matter-Z-Wave, …) give
+    ``family`` as a plain string on /api/nodes — profile instance is "1"."""
+    raw = {
+        "data": {
+            "nodes": {
+                "node": [
+                    {
+                        "address": "ZW002_1",
+                        "name": "ZW 002 Dimmer Switch",
+                        "nodeDefId": "UZW000E",
+                        "family": "4",  # bare string, not {"_": ..., "instance": ...}
+                        "type": "4.17.1.0",
+                        "enabled": "true",
+                        "pnode": "ZW002_1",
+                        "property": [
+                            {"id": "ST", "value": "37", "formatted": "37%", "uom": "51"}
+                        ],
+                    },
+                    {
+                        "address": "n012_1",
+                        "name": "ZMatter node",
+                        "nodeDefId": "UZM0001",
+                        "family": 12,  # int form, also handled
+                        "type": "12.1.1.0",
+                        "enabled": "true",
+                    },
+                ]
+            }
+        }
+    }
+    nodes = parse_api_nodes(raw)
+    zw = nodes["ZW002_1"]
+    assert (zw.family_id, zw.instance_id) == ("4", "1")
+    assert zw.properties["ST"].value == "37"
+    zm = nodes["n012_1"]
+    assert (zm.family_id, zm.instance_id) == ("12", "1")
+
+
 def test_parse_api_nodes_handles_empty_payload() -> None:
     assert parse_api_nodes({}) == {}
     assert parse_api_nodes({"data": {}}) == {}
