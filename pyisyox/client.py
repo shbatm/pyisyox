@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -51,6 +52,7 @@ from pyisyox.paths import (
     CONFIG_PATH,
     NETWORK_RESOURCE_ITEM_PATH,
     NETWORKING_RESOURCES_PATH,
+    NLS_PATH,
     NODE_COMMAND_PATH,
     NODE_DISABLE_PATH,
     NODE_ENABLE_PATH,
@@ -69,8 +71,10 @@ from pyisyox.paths import (
 )
 from pyisyox.redactor import redact_sensitive
 from pyisyox.schema import (
+    GLOBAL_NLS_FAMILY_ID,
     Command,
     CommandParameter,
+    NLSTable,
     NodeCommands,
     NodeDef,
     NodeLinks,
@@ -547,7 +551,49 @@ class IoXClient:
                         instance_id,
                         path,
                     )
+                    await self._apply_family_nls(profile, family_id, instance_id, nodedefs.values())
                     break
+
+    async def _apply_family_nls(
+        self, profile: Profile, family_id: str, instance_id: str, nodedefs: Iterable[NodeDef]
+    ) -> None:
+        """Fill in NLS labels on dynamically-loaded nodedefs.
+
+        The ``UZW*`` nodedefs parsed from ``def/get`` XML carry no
+        command / property / display labels — those live in the per-family
+        NLS string tables. Fetch the GLOBAL table (radio-independent
+        command + status names) and overlay the radio family's table
+        (device-class overrides + enum names) on top, store it on
+        ``profile.nls`` (so :meth:`Profile.find_editor` can resolve encoded
+        editors' enum names from it), then resolve each nodedef's
+        ``Command.name`` (sends + accepts), ``NodeProperty.name``, and
+        ``NodeDef.name``. Best-effort: a missing table (404) just leaves
+        the relevant labels blank — consumers fall back to the id.
+        """
+        table = NLSTable()
+        for fam in (GLOBAL_NLS_FAMILY_ID, family_id):
+            text = await self._get_text_or_empty(NLS_PATH.format(family=fam, instance=instance_id))
+            if text.strip():
+                table = table.overlay(NLSTable.parse(text))
+        if not table.entries:
+            return
+        profile.nls = profile.nls.overlay(table)
+        for nodedef in nodedefs:
+            base = nodedef.nls_key
+            if not nodedef.name and base:
+                resolved = table.nodedef_name(base)
+                if resolved:
+                    nodedef.name = resolved
+            for command in (*nodedef.cmds.sends, *nodedef.cmds.accepts):
+                if not command.name:
+                    resolved = table.command_name(command.id, base)
+                    if resolved:
+                        command.name = resolved
+            for prop in nodedef.properties.values():
+                if not prop.name:
+                    resolved = table.property_name(prop.id, base)
+                    if resolved:
+                        prop.name = resolved
 
     async def _fetch_config(self) -> ControllerConfig:
         """``GET /api/config`` — minimal, used to confirm IoX 6+ + uuid.

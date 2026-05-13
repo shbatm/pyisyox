@@ -9,11 +9,13 @@ This module knows the JSON wire shape but does no HTTP. Callers pass
 already-fetched dicts to :meth:`Profile.load_from_json`.
 
 Source schema: ``/rest/profiles?include=nodedefs,editors,linkdefs`` JSON.
-The optional ``?include=...,nls`` is honoured by the controller as a
-*reference key* on each nodedef (``nls`` field), but the NLS string table
-is **not** returned and is not needed by pyisyox — every visible string is
-already inline-resolved in property/command ``name`` fields and in WS
-event ``<fmtName>``/``<fmtAct>`` elements.
+For its families the controller inline-resolves every visible string into
+the ``name`` fields, so the NLS string table isn't needed there. The
+*dynamically* generated Z-Wave nodedefs (fetched from ``def/get`` XML, not
+``/rest/profiles``) are the exception: their commands/properties arrive
+label-less, so :mod:`pyisyox.client` fetches the relevant per-family NLS
+tables and stashes the merged result on :attr:`Profile.nls` — used to
+resolve those labels and to fill encoded editors' enum option names.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from dataclasses import dataclass, field
 
 from pyisyox.schema.editor import Editor
 from pyisyox.schema.linkdef import LinkDef
+from pyisyox.schema.nls import NLSTable
 from pyisyox.schema.nodedef import NodeDef
 
 
@@ -66,6 +69,9 @@ class Profile:
     timestamp: str = ""
     families: dict[str, Family] = field(default_factory=dict)
     nodedef_lookup: dict[tuple[str, str, str], NodeDef] = field(default_factory=dict)
+    #: Merged NLS string table for any dynamically-loaded families (Z-Wave).
+    #: Empty unless :mod:`pyisyox.client` fetched per-family NLS during load.
+    nls: NLSTable = field(default_factory=NLSTable)
 
     @classmethod
     def load_from_json(cls, raw: dict) -> Profile:
@@ -224,6 +230,9 @@ class Profile:
         if editor_id.startswith("_"):
             encoded = Editor.from_encoded_id(editor_id)
             if encoded is not None:
+                for rng in encoded.ranges:
+                    if rng.nls_prefix and not rng.names:
+                        rng.names = self.nls.enum_names(rng.nls_prefix)
                 return encoded
         editor = self._editor_in(family_id, instance_id, editor_id)
         if editor is not None:

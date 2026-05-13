@@ -58,6 +58,16 @@ ZMATTER_ZWAVE_NODEDEFS_PATH = "/rest/zmatter/zwave/node/{address}/def/get"
 #: records to fill missing property values (especially for plugin nodes).
 REST_STATUS_PATH = "/rest/status"
 
+#: ``GET /rest/profiles/family/{family}/profile/{instance}/download/nls/en_US.txt``
+#: — the per-family NLS string table (flat ``KEY = VALUE`` text). Family
+#: ``-1`` is GLOBAL (radio-independent command / status labels); a
+#: per-radio family (``4`` Z-Wave, ``12`` Z-Matter) overlays it with
+#: device-class overrides + editor enum names. Only fetched for
+#: dynamically-loaded Z-Wave nodedefs, whose ``UZW*`` commands arrive
+#: label-less (``/rest/profiles`` bakes its families' labels inline).
+#: 404 tolerated.
+NLS_PATH = "/rest/profiles/family/{family}/profile/{instance}/download/nls/en_US.txt"
+
 #: ``GET /rest/networking/resources`` — optional networking module.
 #: 404 / 503 tolerated; load doesn't abort if the module is absent.
 NETWORKING_RESOURCES_PATH = "/rest/networking/resources"

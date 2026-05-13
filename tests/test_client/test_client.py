@@ -287,6 +287,18 @@ async def test_load_fetches_and_merges_dynamic_zwave_nodedefs(session: FakeSessi
         200,
         (FIXTURE_DIR / "rest_zwave_nodedefs.xml").read_text(),
     )
+    session.set_route(
+        "GET",
+        "/rest/profiles/family/-1/profile/1/download/nls/en_US.txt",
+        200,
+        "# global\nCMD-DON-NAME = On\nCMD-FDUP-NAME = Fade Up\n",
+    )
+    session.set_route(
+        "GET",
+        "/rest/profiles/family/4/profile/1/download/nls/en_US.txt",
+        200,
+        "ST-ST-NAME = Status\n",
+    )
 
     client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
     client._authenticated = True  # skip the connect-time handshake
@@ -296,6 +308,12 @@ async def test_load_fetches_and_merges_dynamic_zwave_nodedefs(session: FakeSessi
     assert nd is not None
     assert any(c.id == "DON" for c in nd.cmds.accepts)
     assert ("GET", "/rest/zwave/node/0/def/get", {}) in [(m, p, {}) for m, p, _ in session.calls]
+    # NLS labels merged onto the dynamically-loaded nodedef + its commands.
+    assert result.profile.nls.command_name("FDUP") == "Fade Up"
+    don = next(c for c in nd.cmds.accepts if c.id == "DON")
+    assert don.name == "On"
+    if "ST" in nd.properties:
+        assert nd.properties["ST"].name == "Status"
 
 
 @pytest.mark.asyncio
