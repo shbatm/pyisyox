@@ -38,6 +38,14 @@ from pyisyox.schema.profile import Profile
 from pyisyox.testing import (
     DEFAULT_HOST,
     DEFAULT_UUID,
+    INSTEON_BSENSOR_SUBNODE_DISABLED,
+    INSTEON_BSENSOR_SUBNODE_DUSK_DAWN,
+    INSTEON_BSENSOR_SUBNODE_HEARTBEAT,
+    INSTEON_BSENSOR_SUBNODE_LOW_BATTERY,
+    INSTEON_BSENSOR_SUBNODE_NEGATIVE,
+    INSTEON_BSENSOR_SUBNODE_TAMPER,
+    INSTEON_THERMOSTAT_SUBNODE_COOL,
+    INSTEON_THERMOSTAT_SUBNODE_HEAT,
     NODEDEF_FOR_PLATFORM,
     PLUGIN_COVER_FAMILY_ID,
     PLUGIN_DIMMER_FAMILY_ID,
@@ -52,12 +60,16 @@ from pyisyox.testing import (
     make_controller,
     make_cover_load_result,
     make_dimmer_plugin_load_result,
+    make_door_sensor_records,
     make_folder,
     make_folder_record,
     make_group,
     make_group_record,
     make_hub_plugin_load_result,
+    make_insteon_binary_sensor_records,
+    make_leak_sensor_records,
     make_load_result,
+    make_motion_sensor_records,
     make_network_resource,
     make_network_resource_record,
     make_node,
@@ -72,6 +84,7 @@ from pyisyox.testing import (
     make_profile_with_trigger_plugin,
     make_program,
     make_program_record,
+    make_thermostat_binary_records,
     make_trigger_plugin_load_result,
     make_variable,
     make_variable_record,
@@ -408,3 +421,118 @@ def test_fake_client_stubs_zwave_and_enable_methods(method_name: str) -> None:
     controller = make_controller(make_load_result())
     method = getattr(controller._client, method_name)
     assert isinstance(method, AsyncMock)
+
+
+# --- make_program_record runtime-field kwargs --------------------------------
+
+
+def test_make_program_record_runtime_fields_default_to_none() -> None:
+    """The new runtime kwargs preserve back-compat: omit them and the
+    record's runtime fields stay ``None``."""
+    record = make_program_record("0010", "Sunset Lights", path="Lighting/Sunset")
+    assert record.run_at_startup is None
+    assert record.running is None
+    assert record.last_run_time is None
+    assert record.last_finish_time is None
+    assert record.next_scheduled_run_time is None
+
+
+def test_make_program_record_accepts_runtime_fields() -> None:
+    """Every runtime field can now be supplied via the helper instead
+    of forcing consumers to ``dataclasses.replace`` after the fact."""
+    record = make_program_record(
+        "0010",
+        "Sunset Lights",
+        path="Lighting/Sunset",
+        run_at_startup=True,
+        running="idle",
+        last_run_time="2026-05-13T18:42:11.000Z",
+        last_finish_time="2026-05-13T18:42:13.000Z",
+        next_scheduled_run_time="2026-05-14T18:42:00.000Z",
+    )
+    assert record.run_at_startup is True
+    assert record.running == "idle"
+    assert record.last_run_time == "2026-05-13T18:42:11.000Z"
+    assert record.last_finish_time == "2026-05-13T18:42:13.000Z"
+    assert record.next_scheduled_run_time == "2026-05-14T18:42:00.000Z"
+
+
+# --- Insteon binary-sensor families ------------------------------------------
+
+
+def test_make_leak_sensor_records_returns_primary_plus_heartbeat() -> None:
+    """Two records: primary plus heartbeat subnode 4."""
+    records = make_leak_sensor_records()
+    assert len(records) == 2
+    primary = next(r for r in records.values() if r.pnode == r.address)
+    heartbeat = next(r for r in records.values() if r.pnode != r.address)
+    assert primary.type.startswith("16.8.")
+    assert "sensor" in primary.name.lower(), "name must trip the consumer override"
+    assert heartbeat.pnode == primary.address
+    assert int(heartbeat.address.split(" ")[-1], 16) == INSTEON_BSENSOR_SUBNODE_HEARTBEAT
+
+
+def test_make_door_sensor_records_returns_primary_plus_negative() -> None:
+    """Door / opening: primary plus the negative-mirror subnode (id 2)."""
+    records = make_door_sensor_records()
+    primary = next(r for r in records.values() if r.pnode == r.address)
+    negative = next(r for r in records.values() if r.pnode != r.address)
+    assert primary.type.startswith("16.9.")
+    assert int(negative.address.split(" ")[-1], 16) == INSTEON_BSENSOR_SUBNODE_NEGATIVE
+    assert negative.pnode == primary.address
+
+
+def test_make_motion_sensor_records_covers_every_documented_subnode() -> None:
+    """Motion: primary + dusk/dawn + low-battery + heartbeat + tamper +
+    disabled. Pin the addresses each subnode index resolves to so the
+    consumer's hex-byte parse stays in sync."""
+    records = make_motion_sensor_records()
+    primary = next(r for r in records.values() if r.pnode == r.address)
+    assert primary.type.startswith("16.1.")
+    sub_ids = {
+        int(r.address.split(" ")[-1], 16)
+        for r in records.values()
+        if r.pnode != r.address
+    }
+    assert sub_ids == {
+        INSTEON_BSENSOR_SUBNODE_DUSK_DAWN,
+        INSTEON_BSENSOR_SUBNODE_LOW_BATTERY,
+        INSTEON_BSENSOR_SUBNODE_HEARTBEAT,
+        INSTEON_BSENSOR_SUBNODE_TAMPER,
+        INSTEON_BSENSOR_SUBNODE_DISABLED,
+    }
+
+
+def test_make_thermostat_binary_records_has_cool_and_heat_subnodes() -> None:
+    """Insteon thermostat: primary + cool (subnode 2) + heat (subnode 3)."""
+    records = make_thermostat_binary_records()
+    primary = next(r for r in records.values() if r.pnode == r.address)
+    assert primary.type.startswith("5.16.")
+    sub_ids = {
+        int(r.address.split(" ")[-1], 16)
+        for r in records.values()
+        if r.pnode != r.address
+    }
+    assert sub_ids == {
+        INSTEON_THERMOSTAT_SUBNODE_COOL,
+        INSTEON_THERMOSTAT_SUBNODE_HEAT,
+    }
+
+
+def test_make_insteon_binary_sensor_records_combines_all_families() -> None:
+    """The one-call shortcut returns every family's records in one dict."""
+    combined = make_insteon_binary_sensor_records()
+    expected_size = (
+        len(make_leak_sensor_records())
+        + len(make_door_sensor_records())
+        + len(make_motion_sensor_records())
+        + len(make_thermostat_binary_records())
+    )
+    assert len(combined) == expected_size
+    # Address space distinct across families — no key collisions.
+    primary_types = {
+        r.type
+        for r in combined.values()
+        if r.pnode == r.address
+    }
+    assert {"16.8.1.0", "16.9.1.0", "16.1.1.0", "5.16.0.0"} <= primary_types
