@@ -15,7 +15,6 @@ Subpackages
    pyisyox.helpers
    pyisyox.runtime
    pyisyox.schema
-   pyisyox.util
 
 Submodules
 ----------
