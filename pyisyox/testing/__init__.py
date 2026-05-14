@@ -211,7 +211,20 @@ def make_program_record(
     enabled: bool | None = True,
     is_folder: bool = False,
     parent_address: str | None = None,
+    run_at_startup: bool | None = None,
+    running: str | None = None,
+    last_run_time: str | None = None,
+    last_finish_time: str | None = None,
+    next_scheduled_run_time: str | None = None,
 ) -> ProgramRecord:
+    """Build a :class:`ProgramRecord` for tests.
+
+    The runtime fields (``run_at_startup`` / ``running`` / the three
+    timestamps) default to ``None`` so existing call sites stay
+    unchanged. Pass them explicitly when the entity under test reads
+    those properties off the wrapper — e.g. consumers exposing
+    ``Program.next_scheduled_run_time`` as a sensor.
+    """
     return ProgramRecord(
         address=address,
         name=name,
@@ -220,6 +233,11 @@ def make_program_record(
         enabled=enabled,
         is_folder=is_folder,
         parent_address=parent_address,
+        run_at_startup=run_at_startup,
+        running=running,
+        last_run_time=last_run_time,
+        last_finish_time=last_finish_time,
+        next_scheduled_run_time=next_scheduled_run_time,
     )
 
 
@@ -975,9 +993,218 @@ def make_variable(record: VariableRecord, controller: Controller) -> Variable:
     return Variable.from_record(record, client)
 
 
+# ---------------------------------------------------------------------------
+# Insteon binary-sensor families.
+#
+# Real Insteon sensors (leak / door / motion / climate) use the bundled
+# ``BinaryAlarm`` nodedef and pyisyox's classifier sees them as plain
+# SENSORs — the hacs-udi-iox consumer routes them to ``BINARY_SENSOR``
+# via two paths:
+#
+# 1. user-forced override (``"sensor"`` substring in the node's name);
+# 2. ``binary_sensor._detect_device_type_and_class`` matching the
+#    Insteon ``type`` triple's ``family.category`` prefix
+#    (``16.8.*`` = leak, ``16.9.*`` = door, ``16.1.*`` = motion,
+#    ``5.16.*`` = climate / thermostat).
+#
+# Real devices ship with a subnode tree (negative / heartbeat /
+# dusk-dawn / low-battery / tamper / disabled / cool / heat) that the
+# consumer's ``async_setup_entry`` enumerates by parsing the last hex
+# byte of the subnode's address. These helpers produce that full tree
+# so consumer tests can drive the orchestration end-to-end. ``name``
+# defaults include ``"sensor"`` so the user-override route fires
+# without callers having to remember.
+# ---------------------------------------------------------------------------
+
+#: Subnode address index for the "negative" status mirror on Insteon
+#: leak / door sensors (firmware-dependent extra status node).
+INSTEON_BSENSOR_SUBNODE_NEGATIVE = 2
+
+#: Heartbeat subnode index — fires periodically to prove the device is
+#: still alive (consumer surfaces it as its own binary_sensor).
+INSTEON_BSENSOR_SUBNODE_HEARTBEAT = 4
+
+#: Motion-sensor extras.
+INSTEON_BSENSOR_SUBNODE_DUSK_DAWN = 2
+INSTEON_BSENSOR_SUBNODE_LOW_BATTERY = 3
+INSTEON_BSENSOR_SUBNODE_TAMPER = 10  # firmware variants also emit 16
+INSTEON_BSENSOR_SUBNODE_DISABLED = 13  # firmware variants also emit 19
+
+#: Insteon Thermostat subnodes for the cool / heat indicator sensors.
+INSTEON_THERMOSTAT_SUBNODE_COOL = 2
+INSTEON_THERMOSTAT_SUBNODE_HEAT = 3
+
+
+def _insteon_subnode_address(primary: str, subnode: int) -> str:
+    """Replace the trailing byte of a wire address with ``subnode`` (hex).
+
+    Wire convention: ``"AA BB CC 1"`` primary → ``"AA BB CC 2"`` first
+    subnode. The consumer parses the last byte with ``int(.., 16)`` so
+    the value is rendered uppercase with no zero-padding (``A`` not
+    ``0A``) to match how the eisy reports addresses.
+    """
+    head, _, _ = primary.rpartition(" ")
+    if not head:
+        raise ValueError(f"primary address must have a trailing byte: {primary!r}")
+    return f"{head} {subnode:X}"
+
+
+def _make_insteon_subnode(
+    primary_address: str,
+    primary_name: str,
+    subnode: int,
+    *,
+    type_: str,
+    label: str,
+    status_uom: str = "2",
+) -> NodeRecord:
+    """Build one Insteon-binary-sensor subnode record.
+
+    Subnodes inherit ``type_`` from the primary so the consumer's type-
+    triple device-class detection sees the same family.category prefix.
+    UOM ``"2"`` is the on/off binary type the consumer routes to
+    BINARY_SENSOR for the aux-property fan-out path.
+    """
+    address = _insteon_subnode_address(primary_address, subnode)
+    return make_node_record(
+        address,
+        f"{primary_name} {label}",
+        nodedef_id="BinaryAlarm",
+        type_=type_,
+        pnode=primary_address,
+        status_uom=status_uom,
+    )
+
+
+def make_leak_sensor_records(
+    address: str = "30 30 30 1",
+    name: str = "Garage Leak Sensor",
+    *,
+    type_: str = "16.8.1.0",
+) -> dict[str, NodeRecord]:
+    """A leak sensor primary + heartbeat subnode.
+
+    Returns a dict keyed by address, ready to splat into
+    :func:`make_load_result`. Default ``type_`` matches the
+    ``MOISTURE`` device-class prefix; override per-test if exercising
+    a non-default sub-category. Default name contains ``"sensor"`` so
+    the consumer's user-string-match override routes the primary to
+    BINARY_SENSOR without further fixture wiring.
+    """
+    primary = make_node_record(address, name, nodedef_id="BinaryAlarm", type_=type_, status_uom="2")
+    heartbeat = _make_insteon_subnode(
+        address,
+        name,
+        INSTEON_BSENSOR_SUBNODE_HEARTBEAT,
+        type_=type_,
+        label="Heartbeat",
+    )
+    return {primary.address: primary, heartbeat.address: heartbeat}
+
+
+def make_door_sensor_records(
+    address: str = "31 31 31 1",
+    name: str = "Front Door Sensor",
+    *,
+    type_: str = "16.9.1.0",
+) -> dict[str, NodeRecord]:
+    """A door / opening sensor primary + negative-mirror subnode."""
+    primary = make_node_record(address, name, nodedef_id="BinaryAlarm", type_=type_, status_uom="2")
+    negative = _make_insteon_subnode(
+        address,
+        name,
+        INSTEON_BSENSOR_SUBNODE_NEGATIVE,
+        type_=type_,
+        label="Negative",
+    )
+    return {primary.address: primary, negative.address: negative}
+
+
+def make_motion_sensor_records(
+    address: str = "32 32 32 1",
+    name: str = "Hallway Motion Sensor",
+    *,
+    type_: str = "16.1.1.0",
+) -> dict[str, NodeRecord]:
+    """A motion sensor primary + every documented Insteon-motion subnode.
+
+    Includes the dusk/dawn (light), low-battery, heartbeat, tamper, and
+    disabled subnodes — exercising every branch in the consumer's
+    motion-sensor sub-tree handler.
+    """
+    primary = make_node_record(address, name, nodedef_id="BinaryAlarm", type_=type_, status_uom="2")
+    subnodes = {
+        INSTEON_BSENSOR_SUBNODE_DUSK_DAWN: "Dusk/Dawn",
+        INSTEON_BSENSOR_SUBNODE_LOW_BATTERY: "Low Battery",
+        INSTEON_BSENSOR_SUBNODE_HEARTBEAT: "Heartbeat",
+        INSTEON_BSENSOR_SUBNODE_TAMPER: "Tamper",
+        INSTEON_BSENSOR_SUBNODE_DISABLED: "Disabled",
+    }
+    records: dict[str, NodeRecord] = {primary.address: primary}
+    for sub, label in subnodes.items():
+        record = _make_insteon_subnode(address, name, sub, type_=type_, label=label)
+        records[record.address] = record
+    return records
+
+
+def make_thermostat_binary_records(
+    address: str = "33 33 33 1",
+    name: str = "Living Thermostat Sensor",
+    *,
+    type_: str = "5.16.0.0",
+) -> dict[str, NodeRecord]:
+    """An Insteon thermostat primary + cool / heat indicator subnodes.
+
+    The ``"sensor"`` substring routes the primary to BINARY_SENSOR via
+    the consumer's user-override; the consumer's binary_sensor
+    orchestration then attaches the cool / heat subnodes as
+    ``BinarySensorDeviceClass.COLD`` / ``HEAT`` indicators.
+    """
+    primary = make_node_record(address, name, nodedef_id="BinaryAlarm", type_=type_, status_uom="2")
+    cool = _make_insteon_subnode(
+        address,
+        name,
+        INSTEON_THERMOSTAT_SUBNODE_COOL,
+        type_=type_,
+        label="Cool",
+    )
+    heat = _make_insteon_subnode(
+        address,
+        name,
+        INSTEON_THERMOSTAT_SUBNODE_HEAT,
+        type_=type_,
+        label="Heat",
+    )
+    return {primary.address: primary, cool.address: cool, heat.address: heat}
+
+
+def make_insteon_binary_sensor_records() -> dict[str, NodeRecord]:
+    """One-call shortcut: every Insteon binary-sensor family in one dict.
+
+    Returns a single ``{address: NodeRecord}`` covering the leak / door
+    / motion / thermostat fixtures with default addresses + names. Use
+    when a test wants the *full* binary-sensor surface in one go;
+    compose the per-family helpers when you only need one or two.
+    """
+    records: dict[str, NodeRecord] = {}
+    records.update(make_leak_sensor_records())
+    records.update(make_door_sensor_records())
+    records.update(make_motion_sensor_records())
+    records.update(make_thermostat_binary_records())
+    return records
+
+
 __all__ = [
     "DEFAULT_HOST",
     "DEFAULT_UUID",
+    "INSTEON_BSENSOR_SUBNODE_DISABLED",
+    "INSTEON_BSENSOR_SUBNODE_DUSK_DAWN",
+    "INSTEON_BSENSOR_SUBNODE_HEARTBEAT",
+    "INSTEON_BSENSOR_SUBNODE_LOW_BATTERY",
+    "INSTEON_BSENSOR_SUBNODE_NEGATIVE",
+    "INSTEON_BSENSOR_SUBNODE_TAMPER",
+    "INSTEON_THERMOSTAT_SUBNODE_COOL",
+    "INSTEON_THERMOSTAT_SUBNODE_HEAT",
     "NODEDEF_FOR_PLATFORM",
     "PLUGIN_COVER_FAMILY_ID",
     "PLUGIN_COVER_INSTANCE_ID",
@@ -1000,12 +1227,16 @@ __all__ = [
     "make_controller",
     "make_cover_load_result",
     "make_dimmer_plugin_load_result",
+    "make_door_sensor_records",
     "make_folder",
     "make_folder_record",
     "make_group",
     "make_group_record",
     "make_hub_plugin_load_result",
+    "make_insteon_binary_sensor_records",
+    "make_leak_sensor_records",
     "make_load_result",
+    "make_motion_sensor_records",
     "make_network_resource",
     "make_network_resource_record",
     "make_node",
@@ -1020,6 +1251,7 @@ __all__ = [
     "make_profile_with_trigger_plugin",
     "make_program",
     "make_program_record",
+    "make_thermostat_binary_records",
     "make_trigger_plugin_load_result",
     "make_variable",
     "make_variable_record",
