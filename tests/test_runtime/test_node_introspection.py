@@ -372,6 +372,29 @@ def test_is_dimmable_false_when_st_property_missing_from_nodedef(real_profile: P
     assert node.is_dimmable is False
 
 
+@pytest.mark.parametrize(
+    "nodedef_id",
+    [
+        # Battery-powered scene remote — ST is a multilevel LED bookkeeping
+        # range, accepts is just ``WDU``.
+        "RemoteLinc2_ADV",
+        # Energy meter — multilevel ST (the meter reading), accepts is
+        # ``QUERY`` / ``RESET`` / ``WDU``. No DON.
+        "IMETER_SOLO",
+    ],
+)
+def test_is_dimmable_false_when_nodedef_does_not_accept_don(
+    real_profile: Profile, nodedef_id: str
+) -> None:
+    """Nodes with a multilevel ``ST`` editor but no ``DON`` in
+    ``cmds.accepts`` aren't actually dimmable — sending ``DON`` would
+    fail. ``is_dimmable`` must return False so the consumer doesn't
+    route them onto the LIGHT platform where ``turn_on`` would silently
+    break (this is the user-reported RemoteLinc2 / IMETER bug)."""
+    node = _make_node(_make_record(nodedef_id=nodedef_id), real_profile)
+    assert node.is_dimmable is False
+
+
 # --- ergonomic wrappers: end-to-end via real fixture nodedefs ------------
 
 

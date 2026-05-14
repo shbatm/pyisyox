@@ -21,6 +21,7 @@ from pyisyox.constants import (
     CMD_CLIMATE_MODE,
     CMD_MANUAL_DIM_BEGIN,
     CMD_MANUAL_DIM_STOP,
+    CMD_ON,
     CMD_SECURE,
     PROP_BATTERY_LEVEL,
     PROP_ON_LEVEL,
@@ -281,14 +282,27 @@ class Node:
 
     @property
     def is_dimmable(self) -> bool:
-        """True if the node reports a multilevel ``ST`` state.
+        """True if the node has a multilevel ``ST`` state **and** accepts ``DON``.
 
-        Derived from the ``ST`` property editor: a binary subset
-        (``{0, 100}``) → not dimmable; a multilevel range → dimmable.
-        Relay nodedefs accept ``DON`` with an ignored level param, so
-        ``DON``'s editor is unreliable — ``ST`` is the source of truth.
+        Two conditions must both hold for a real dimmer:
+
+        1. ``ST`` editor reports a multilevel range (not a binary
+           ``{0, 100}`` subset). Relay nodedefs accept ``DON`` with an
+           ignored level param, so ``DON``'s editor alone is
+           unreliable — ``ST`` is the source of truth for "can the
+           node hold a non-binary level".
+        2. The nodedef accepts ``DON``. Some Insteon nodedefs
+           (RemoteLinc2_ADV scene buttons, IMETER_SOLO meters) carry a
+           multilevel ``ST`` editor — meaningful for the device's own
+           bookkeeping — but only accept ``WDU`` / ``QUERY``, so they
+           can't actually be commanded on. Without this check
+           ``is_dimmable`` returns True for them and consumers route
+           them onto the LIGHT platform where DON-based turn_on
+           silently fails.
         """
         if self._nodedef is None:
+            return False
+        if not self._has_command(CMD_ON):
             return False
         st_prop = self._nodedef.properties.get(PROP_STATUS)
         if st_prop is None or st_prop.editor_id is None:
