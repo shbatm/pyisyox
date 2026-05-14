@@ -5,8 +5,8 @@
     "dockerfile": "Dockerfile",
     "args": {
       // Python version. pyproject.toml requires >=3.11; CI tests on
-      // 3.11 / 3.13 / 3.14. 3.13 is the default for local dev — bump
-      // to 3.14-bookworm to mirror the newest CI matrix entry.
+      // 3.11 / 3.13 / 3.14. 3.13 matches the stable CI runner; change
+      // to 3.14-bookworm to mirror the bleeding-edge matrix entry.
       "VARIANT": "3.13-bookworm"
     }
   },
