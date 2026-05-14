@@ -75,6 +75,7 @@ def _make_node(record: NodeRecord, profile: Profile, session: FakeSession | None
         ("4", Protocol.ZWAVE),  # legacy attached Z-Wave radio
         ("12", Protocol.ZWAVE),  # Z-Matter radio as a Z-Wave controller
         ("15", Protocol.MATTER),  # Z-Matter radio as a Matter controller
+        ("14", Protocol.ZIGBEE),  # Zigbee radio
         ("10", Protocol.NODE_SERVER),  # NODESERVER family / PG3 slot
         ("99", Protocol.NODE_SERVER),  # any id outside the core family set
         ("13", Protocol.UNKNOWN),  # folder family — recognised but no protocol

@@ -246,6 +246,8 @@ class Node:
             return Protocol.ZWAVE
         if fid == NodeFamily.MATTER:
             return Protocol.MATTER
+        if fid == NodeFamily.ZIGBEE:
+            return Protocol.ZIGBEE
         # NODESERVER family, or any id we don't recognise — PG3
         # plugin nodes report their slot id in this field.
         if fid and fid not in _CORE_FAMILY_IDS:
