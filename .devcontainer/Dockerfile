@@ -1,5 +1,5 @@
-ARG VARIANT=3-bullseye
-FROM mcr.microsoft.com/vscode/devcontainers/python:0-${VARIANT}
+ARG VARIANT=3.13-bookworm
+FROM mcr.microsoft.com/vscode/devcontainers/python:1-${VARIANT}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
