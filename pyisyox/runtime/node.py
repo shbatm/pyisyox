@@ -302,8 +302,7 @@ class Node:
         """
         if self._nodedef is None:
             return False
-        accepts = {cmd.id for cmd in self._nodedef.cmds.accepts}
-        if CMD_ON not in accepts:
+        if not self._has_command(CMD_ON):
             return False
         st_prop = self._nodedef.properties.get(PROP_STATUS)
         if st_prop is None or st_prop.editor_id is None:
