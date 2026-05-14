@@ -48,7 +48,6 @@ from pyisyox.testing import (
     fire_program_status,
     fire_variable_table_change,
     load_profile,
-    make_button_plugin_load_result,
     make_classified_node_record,
     make_controller,
     make_cover_load_result,
@@ -57,6 +56,7 @@ from pyisyox.testing import (
     make_folder_record,
     make_group,
     make_group_record,
+    make_hub_plugin_load_result,
     make_load_result,
     make_network_resource,
     make_network_resource_record,
@@ -66,9 +66,9 @@ from pyisyox.testing import (
     make_plugin_dimmer_node_record,
     make_plugin_hub_node_record,
     make_plugin_trigger_node_record,
-    make_profile_with_button_plugin,
     make_profile_with_cover_plugin,
     make_profile_with_dimmer_plugin,
+    make_profile_with_hub_plugin,
     make_profile_with_trigger_plugin,
     make_program,
     make_program_record,
@@ -276,10 +276,10 @@ def test_make_cover_load_result_routes_to_classifier() -> None:
 
 
 def test_button_plugin_profile_grafts_family_101() -> None:
-    profile = make_profile_with_button_plugin()
+    profile = make_profile_with_hub_plugin()
     assert PLUGIN_HUB_FAMILY_ID in profile.families
     hub_rec = make_plugin_hub_node_record()
-    lr = make_button_plugin_load_result(nodes={hub_rec.address: hub_rec})
+    lr = make_hub_plugin_load_result(nodes={hub_rec.address: hub_rec})
     assert PLUGIN_HUB_FAMILY_ID in lr.profile.families
 
 

@@ -591,7 +591,7 @@ def _build_plugin_hub_nodedef() -> NodeDef:
     )
 
 
-def make_profile_with_button_plugin() -> Profile:
+def make_profile_with_hub_plugin() -> Profile:
     """Bundled eisy6 profile with the synthetic ``PluginHub`` nodedef
     grafted under plugin slot ``"101"``. Built fresh per call (the
     cached :func:`load_profile` instance must not be mutated)."""
@@ -607,7 +607,7 @@ def make_profile_with_button_plugin() -> Profile:
     return profile
 
 
-def make_button_plugin_load_result(
+def make_hub_plugin_load_result(
     *,
     uuid: str = DEFAULT_UUID,
     version: str = "6.0.0a1",
@@ -621,7 +621,7 @@ def make_button_plugin_load_result(
     """
     return LoadResult(
         config=ControllerConfig(uuid=uuid, version=version),
-        profile=make_profile_with_button_plugin(),
+        profile=make_profile_with_hub_plugin(),
         nodes=nodes or {},
         groups={},
         folders={},
@@ -996,7 +996,6 @@ __all__ = [
     "fire_program_status",
     "fire_variable_table_change",
     "load_profile",
-    "make_button_plugin_load_result",
     "make_classified_node_record",
     "make_controller",
     "make_cover_load_result",
@@ -1005,6 +1004,7 @@ __all__ = [
     "make_folder_record",
     "make_group",
     "make_group_record",
+    "make_hub_plugin_load_result",
     "make_load_result",
     "make_network_resource",
     "make_network_resource_record",
@@ -1014,9 +1014,9 @@ __all__ = [
     "make_plugin_dimmer_node_record",
     "make_plugin_hub_node_record",
     "make_plugin_trigger_node_record",
-    "make_profile_with_button_plugin",
     "make_profile_with_cover_plugin",
     "make_profile_with_dimmer_plugin",
+    "make_profile_with_hub_plugin",
     "make_profile_with_trigger_plugin",
     "make_program",
     "make_program_record",
