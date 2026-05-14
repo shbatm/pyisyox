@@ -170,6 +170,56 @@ async def test_set_value_logs_debug_with_url_and_body(caplog: pytest.LogCaptureF
 
 
 @pytest.mark.asyncio
+async def test_set_precision_posts_prec_body_and_updates_record() -> None:
+    """``set_precision`` hits POST /api/variables/{type}/{id} with
+    ``{"prec": N}`` and reflects the new precision on the wrapper. The
+    controller fires VARIABLE_TABLE_CHANGED on this write (not the
+    per-value 6/7 frames), so the in-place record update is the only
+    way the wrapper sees the new value before the next refresh."""
+    record = _make_record(precision=0)
+    session = FakeSession(BASE)
+    session.set_route("POST", "/api/variables/2/8", 200, '{"successful": true}')
+    variable = Variable.from_record(record, _make_client(session))
+
+    await variable.set_precision(1)
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("POST", "/api/variables/2/8")
+    assert kwargs["json"] == {"prec": 1}
+    assert variable.precision == 1
+    assert record.precision == 1
+
+
+@pytest.mark.parametrize("bad", [-1, 1.5, True, "1", None])
+@pytest.mark.asyncio
+async def test_set_precision_rejects_non_int_or_negative(bad: object) -> None:
+    """Defensive guard — caller-side validation so a bad value can't
+    silently corrupt the wire write."""
+    record = _make_record()
+    variable = Variable.from_record(record, _make_client(FakeSession(BASE)))
+    with pytest.raises(ValueError):
+        await variable.set_precision(bad)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_delete_hits_delete_endpoint() -> None:
+    """``delete`` hits DELETE /api/variables/{type}/{id}. The wrapper
+    doesn't drop itself from the controller's registry — the
+    accompanying VARIABLE_TABLE_CHANGED frame triggers the controller's
+    auto-refresh listener which prunes the entry."""
+    record = _make_record()
+    session = FakeSession(BASE)
+    # DELETE returns no body in many controller versions; FakeSession
+    # serves a `None` body which becomes "" — _send_json handles that.
+    session.set_route("DELETE", "/api/variables/2/8", 200, None)
+    variable = Variable.from_record(record, _make_client(session))
+
+    await variable.delete()
+
+    method, path, _ = session.calls[-1]
+    assert (method, path) == ("DELETE", "/api/variables/2/8")
+
+
 async def test_variable_repr_includes_identifying_fields() -> None:
     """Debuggability — ``repr`` should show enough to identify the variable
     without dumping the timestamp / init noise."""

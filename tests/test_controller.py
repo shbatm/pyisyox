@@ -53,6 +53,12 @@ class FakeSession:
     def post(self, url: str, **kwargs: Any) -> Any:
         return self._http.post(url, **kwargs)
 
+    def put(self, url: str, **kwargs: Any) -> Any:
+        return self._http.put(url, **kwargs)
+
+    def delete(self, url: str, **kwargs: Any) -> Any:
+        return self._http.delete(url, **kwargs)
+
     async def ws_connect(self, url: str, **kwargs: Any) -> FakeWebSocket:
         self.ws_calls.append((url, kwargs))
         if not self._ws_responses:
@@ -618,6 +624,247 @@ async def test_rename_variable_posts_name_body() -> None:
     assert kwargs["json"] == {"name": "State_8_Renamed"}
 
     await controller.stop()
+
+
+# --- Variable create / refresh / table-change auto-refresh ---------------
+
+
+@pytest.mark.asyncio
+async def test_create_variable_inserts_record_and_returns_wrapper() -> None:
+    """``Controller.create_variable`` PUTs the request, parses the new
+    id from the response, inserts a :class:`VariableRecord` into the
+    loaded registry in place, and returns a typed :class:`Variable`."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "PUT",
+        "/api/variables/1",
+        200,
+        {"successful": True, "data": {"id": "3", "name": "New Int Var", "prec": 1}},
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    try:
+        before_bucket = controller._loaded.variables["1"]  # type: ignore[union-attr]
+        wrapper = await controller.create_variable(1, "New Int Var", prec=1)
+
+        assert wrapper.type_id == "1"
+        assert wrapper.id == "3"
+        assert wrapper.name == "New Int Var"
+        assert wrapper.precision == 1
+        # PUT silently drops init/value — wrapper reflects 0/0 even
+        # though the request didn't send them in the first place.
+        assert wrapper.value == 0
+        assert wrapper.init == 0
+        # Same dict object — dispatcher binding survives.
+        assert controller._loaded.variables["1"] is before_bucket  # type: ignore[union-attr]
+        assert before_bucket["3"].name == "New Int Var"
+    finally:
+        await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_create_variable_raises_when_response_missing_id() -> None:
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "PUT",
+        "/api/variables/1",
+        200,
+        {"successful": True, "data": {"name": "X"}},  # no id
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    try:
+        with pytest.raises(Exception, match="missing id"):
+            await controller.create_variable(1, "X")
+    finally:
+        await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_create_variable_raises_when_response_missing_data() -> None:
+    """Defensive: a controller that returns ``{successful: true}`` with
+    no ``data`` key at all should produce a clear error rather than an
+    AttributeError downstream."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route("PUT", "/api/variables/1", 200, {"successful": True})
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    try:
+        with pytest.raises(Exception, match="missing data"):
+            await controller.create_variable(1, "X")
+    finally:
+        await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_refresh_variables_mutates_bucket_in_place() -> None:
+    """The dispatcher holds a reference to ``loaded.variables[type]``,
+    so ``refresh_variables`` must clear+update the same dict — not
+    swap it. Otherwise the dispatcher would route value/init updates
+    into the orphaned old bucket."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    try:
+        original_bucket = controller._loaded.variables["1"]  # type: ignore[union-attr]
+        # Re-script the GET with a non-empty payload; refresh re-fetches.
+        session.set_route(
+            "GET",
+            "/api/variables/1",
+            200,
+            {
+                "successful": True,
+                "data": [{"id": "9", "name": "Just Created", "val": 0, "init": 0, "prec": 0}],
+            },
+        )
+        await controller.refresh_variables(1)
+
+        assert controller._loaded.variables["1"] is original_bucket  # type: ignore[union-attr]
+        assert "9" in original_bucket
+        assert original_bucket["9"].name == "Just Created"
+    finally:
+        await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_variable_table_changed_triggers_auto_refresh() -> None:
+    """End-to-end: feed a synthetic ``_1``/``9`` frame and assert the
+    auto-wired listener re-fetches ``/api/variables/{type}`` and
+    overlays the result onto the live registry. Issue #125 acceptance
+    criterion — proves the precision-change path lands without an
+    explicit consumer call."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    try:
+        bucket = controller._loaded.variables["2"]  # type: ignore[union-attr]
+        assert bucket == {}
+
+        # Re-script the GET so the auto-refresh sees a new variable
+        # appear; this stands in for "controller emitted a TABLE_CHANGED
+        # because something happened on the wire that the listener
+        # should react to".
+        session.set_route(
+            "GET",
+            "/api/variables/2",
+            200,
+            {
+                "successful": True,
+                "data": [
+                    {"id": "5", "name": "Boost Mode", "val": 1, "init": 0, "prec": 2}
+                ],
+            },
+        )
+
+        controller.feed_event_frame(
+            "<?xml version='1.0'?>"
+            "<Event>"
+            "<control>_1</control>"
+            "<action>9</action>"
+            "<node></node>"
+            "<eventInfo><var type=\"2\"/></eventInfo>"
+            "</Event>"
+        )
+
+        # _on_variable_table_changed scheduled refresh as a Task; let
+        # the loop run a tick so it can complete.
+        for _ in range(5):
+            if "5" in bucket:
+                break
+            await asyncio.sleep(0)
+
+        assert "5" in bucket
+        assert bucket["5"].precision == 2
+        assert bucket["5"].name == "Boost Mode"
+    finally:
+        await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_auto_refresh_logs_when_get_fails(caplog: pytest.LogCaptureFixture) -> None:
+    """If the auto-refresh GET fails after a TABLE_CHANGED frame, the
+    failure must land in the logger — never in the dispatcher loop."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    try:
+        # Re-script the GET to 500 so the auto-refresh raises.
+        session.set_route("GET", "/api/variables/2", 500, "boom")
+        caplog.set_level(logging.ERROR, logger="pyisyox.controller")
+
+        controller.feed_event_frame(
+            "<?xml version='1.0'?>"
+            "<Event>"
+            "<control>_1</control>"
+            "<action>9</action>"
+            "<node></node>"
+            "<eventInfo><var type=\"2\"/></eventInfo>"
+            "</Event>"
+        )
+        # Let the scheduled task run.
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert any(
+            "auto-refresh of variables[type=2] failed" in r.getMessage()
+            for r in caplog.records
+        )
+    finally:
+        await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_add_variable_table_change_listener_fires(caplog: pytest.LogCaptureFixture) -> None:
+    """Consumers can register their own listener on top of the
+    auto-refresh — both fire on the same event."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+    received: list[Any] = []
+    try:
+        controller.add_variable_table_change_listener(received.append)
+        controller.feed_event_frame(
+            "<?xml version='1.0'?>"
+            "<Event>"
+            "<control>_1</control>"
+            "<action>9</action>"
+            "<node></node>"
+            "<eventInfo><var type=\"1\"/></eventInfo>"
+            "</Event>"
+        )
+        # Give the auto-refresh task a chance to run / fail silently.
+        await asyncio.sleep(0)
+        assert len(received) == 1
+        assert received[0].type_id == "1"
+    finally:
+        await controller.stop()
+
+
+@pytest.mark.asyncio
+async def test_add_variable_table_change_listener_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        controller.add_variable_table_change_listener(lambda evt: None)
+
+
+@pytest.mark.asyncio
+async def test_create_variable_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.create_variable(1, "x")
+
+
+@pytest.mark.asyncio
+async def test_refresh_variables_before_connect_raises() -> None:
+    controller = Controller(BASE, LocalAuth("admin", "p"))
+    with pytest.raises(ControllerNotConnectedError):
+        await controller.refresh_variables(1)
 
 
 @pytest.mark.asyncio

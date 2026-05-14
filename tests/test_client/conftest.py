@@ -66,6 +66,12 @@ class FakeSession:
     def post(self, url: str, **kwargs: Any) -> FakeResponse:
         return self._dispatch("POST", url, kwargs)
 
+    def put(self, url: str, **kwargs: Any) -> FakeResponse:
+        return self._dispatch("PUT", url, kwargs)
+
+    def delete(self, url: str, **kwargs: Any) -> FakeResponse:
+        return self._dispatch("DELETE", url, kwargs)
+
     # --- internals -----------------------------------------------------
 
     def _dispatch(self, method: str, url: str, kwargs: dict[str, Any]) -> FakeResponse:

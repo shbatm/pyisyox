@@ -23,13 +23,20 @@ always reflect the latest controller state.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
-from pyisyox.client import IoXClient, NodeType, VariableField
+from pyisyox.client import (
+    ClientError,
+    IoXClient,
+    NodeType,
+    VariableField,
+    VariableRecord,
+)
 from pyisyox.helpers.session import build_sslcontext
 from pyisyox.paths import PROFILES_PATH, SUBSCRIBE_PATH
 from pyisyox.runtime.events import EventDispatcher
@@ -52,6 +59,8 @@ if TYPE_CHECKING:
         EventListener,
         NodeLifecycleListener,
         ProgramStatusListener,
+        VariableTableChangeEvent,
+        VariableTableChangeListener,
     )
     from pyisyox.runtime.ws import StatusListener
 
@@ -78,6 +87,7 @@ class Controller:
 
     __slots__ = (
         "_auth",
+        "_background_tasks",
         "_base_url",
         "_client",
         "_dispatcher",
@@ -139,6 +149,11 @@ class Controller:
         self._dispatcher: EventDispatcher | None = None
         self._ws: WebSocketEventStream | None = None
         self._loaded: LoadResult | None = None
+        # Strong-ref jail for fire-and-forget tasks (auto-refresh on
+        # variable-table-change). Without a reference asyncio may GC
+        # the task before it runs to completion. Tasks remove
+        # themselves on done.
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     # --- lifecycle -----------------------------------------------------
 
@@ -178,6 +193,12 @@ class Controller:
             programs=self._loaded.programs,
             variables=self._loaded.variables,
         )
+        # Auto-refresh the affected variable type whenever the
+        # controller emits VARIABLE_TABLE_CHANGED (create / delete /
+        # precision change). The event handler is sync; the refresh
+        # is fire-and-forget — failures land in the logger, not in
+        # the dispatcher loop.
+        self._dispatcher.add_variable_table_change_listener(self._on_variable_table_changed)
 
         if start_websocket:
             self._ws = WebSocketEventStream(self._client, self._dispatcher, path=self._ws_path)
@@ -550,6 +571,29 @@ class Controller:
             )
         return self._dispatcher.add_program_status_listener(callback)
 
+    def add_variable_table_change_listener(self, callback: VariableTableChangeListener) -> Callable[[], None]:
+        """Subscribe to ``_1``/``9`` ``VARIABLE_TABLE_CHANGED`` frames.
+
+        These fire on variable create / delete / rename / precision
+        change — not on per-value writes (those use ``_1``/``6`` and
+        ``_1``/``7``). The :class:`Controller` already wires its own
+        listener that auto-refreshes
+        ``self.variables[type_id]``; consumers add their own listener
+        on top to drive UI invalidation, telemetry, etc.
+
+        Returns:
+            An unsubscribe function.
+
+        Raises:
+            ControllerNotConnectedError: When called before
+                :meth:`connect`.
+        """
+        if self._dispatcher is None:
+            raise ControllerNotConnectedError(
+                "add_variable_table_change_listener requires connect() to have completed"
+            )
+        return self._dispatcher.add_variable_table_change_listener(callback)
+
     # --- mutation -----------------------------------------------------
 
     async def refresh(self) -> ProfileMergeResult:
@@ -656,6 +700,104 @@ class Controller:
         ``{"name": "<str>"}``.
         """
         await self._post_variable(var_type, var_id, {VariableField.NAME: name})
+
+    async def create_variable(
+        self,
+        var_type: int | str,
+        name: str,
+        *,
+        prec: int = 0,
+    ) -> Variable:
+        """Create a new variable on the controller.
+
+        Wire shape: ``PUT /api/variables/{type}`` with body
+        ``{"name": "<str>", "prec": <int>}``. The controller assigns
+        the id and returns the new record.
+
+        Inserts a :class:`VariableRecord` into the loaded registry
+        in place (so the dispatcher's binding survives) and returns
+        a :class:`Variable` wrapper bound to it. Per issue #125, the
+        controller silently drops ``init`` / ``value`` keys on PUT —
+        call :meth:`Variable.set_value` / :meth:`Variable.set_init`
+        on the returned wrapper to populate them.
+
+        Raises:
+            ControllerNotConnectedError: When called before :meth:`connect`.
+            ClientError: When the response payload is missing the new id.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        response = await client.create_variable(var_type, name, prec=prec)
+        data = response.get("data") if isinstance(response, dict) else None
+        if not isinstance(data, dict):
+            raise ClientError(f"create_variable response missing data: {response!r}")
+        raw_id = data.get("id")
+        new_id = str(raw_id).strip() if raw_id not in (None, "") else ""
+        if not new_id:
+            raise ClientError(f"create_variable response missing id: {response!r}")
+        type_str = str(var_type)
+        record = VariableRecord(
+            type_id=type_str,
+            id=new_id,
+            name=str(data.get("name", name)),
+            # PUT silently drops init / value (issue #125 capture
+            # confirms a fresh variable is always val=0 / init=0).
+            value=0,
+            init=0,
+            precision=int(data.get("prec", prec) or 0),
+            ts="",
+        )
+        loaded.variables.setdefault(type_str, {})[new_id] = record
+        return Variable.from_record(record, client)
+
+    async def refresh_variables(self, var_type: int | str) -> None:
+        """Re-fetch one variable type and mutate the registry in place.
+
+        Wire shape: ``GET /api/variables/{type}``. Mutates
+        ``self._loaded.variables[type]`` in place (clear + update) so
+        the dispatcher's binding to the same dict survives — a full
+        :meth:`refresh` would replace the dict and break per-record
+        WS overlay routing.
+
+        Used internally by the auto-wired
+        ``VARIABLE_TABLE_CHANGED`` listener; also callable directly
+        when a consumer wants to force a re-sync.
+        """
+        loaded = self._loaded_or_raise()
+        client = self._client
+        if client is None:  # pragma: no cover
+            raise ControllerNotConnectedError("controller has no client")
+        type_str = str(var_type)
+        fresh = await client.get_variables_type(type_str)
+        bucket = loaded.variables.setdefault(type_str, {})
+        bucket.clear()
+        bucket.update(fresh)
+
+    def _on_variable_table_changed(self, event: VariableTableChangeEvent) -> None:
+        """Auto-wired listener: refresh the affected variable type.
+
+        Sync handler (the dispatcher's contract); schedules the
+        async refresh as a background task. Failures land in the
+        log — they don't break the dispatcher loop or future
+        listeners.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover — listener fires inside the WS reader task
+            _LOGGER.debug("variable-table-change fired outside an event loop; skipping refresh")
+            return
+        task = loop.create_task(self._auto_refresh_variables(event.type_id))
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _auto_refresh_variables(self, type_id: str) -> None:
+        """Wrapper that swallows + logs failures from the auto-refresh path."""
+        try:
+            await self.refresh_variables(type_id)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.exception("auto-refresh of variables[type=%s] failed", type_id)
 
     async def _post_variable(self, var_type: int | str, var_id: int | str, body: dict) -> None:
         """Internal: route a variable mutation through the IoXClient."""

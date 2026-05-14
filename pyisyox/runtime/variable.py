@@ -168,6 +168,38 @@ class Variable:
         )
         self._record.name = name
 
+    async def set_precision(self, prec: int) -> None:
+        """Set decimal precision (``displayed = raw / 10**precision``).
+
+        Wire shape: ``POST /api/variables/{type}/{id}`` with
+        ``{"prec": <int>}``.
+
+        A precision change fires ``_1``/``9`` (``VARIABLE_TABLE_CHANGED``)
+        on the WebSocket — *not* the per-value ``6``/``7`` frames — so
+        consumers that only listen on value/init updates won't see the
+        new precision until they refresh. The
+        :class:`pyisyox.Controller` auto-refreshes the affected type
+        on this event when its dispatcher is wired.
+        """
+        if not isinstance(prec, int) or isinstance(prec, bool) or prec < 0:
+            raise ValueError(f"prec must be a non-negative int, got {prec!r}")
+        await self._client.post_variable_update(
+            self._record.type_id, self._record.id, {VariableField.PREC: prec}
+        )
+        self._record.precision = prec
+
+    async def delete(self) -> None:
+        """Delete this variable on the controller.
+
+        Wire shape: ``DELETE /api/variables/{type}/{id}``. Fires a
+        ``VARIABLE_TABLE_CHANGED`` frame so an auto-refresh listener
+        can drop the entry from the registry; the wrapper itself
+        becomes inert (subsequent mutations would 404 — the wrapper
+        carries no flag for this; consumers should drop their
+        reference).
+        """
+        await self._client.delete_variable(self._record.type_id, self._record.id)
+
     def to_dict(self) -> dict[str, Any]:
         """Flatten this variable to a JSON-compatible dict."""
         return asdict(self._record)
