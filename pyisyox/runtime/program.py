@@ -21,8 +21,58 @@ from dataclasses import asdict
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from pyisyox.runtime.events import (
+    ProgramEvalState,
+    ProgramRunState,
+    _decode_program_status_byte,
+)
+
 if TYPE_CHECKING:
     from pyisyox.client import IoXClient, ProgramRecord
+
+
+# REST `/api/programs` returns the running state as a human label
+# rather than the cookbook ``<s>`` byte. Older firmware also varies
+# the spacing/casing. Lower-case + collapse whitespace before lookup.
+_REST_RUN_LABEL_TO_STATE: dict[str, ProgramRunState] = {
+    "idle": ProgramRunState.IDLE,
+    "running then": ProgramRunState.THEN,
+    "running else": ProgramRunState.ELSE,
+}
+_REST_EVAL_LABEL_TO_STATE: dict[str, ProgramEvalState] = {
+    "true": ProgramEvalState.TRUE,
+    "false": ProgramEvalState.FALSE,
+    "unknown": ProgramEvalState.UNKNOWN,
+    "not loaded": ProgramEvalState.NOT_LOADED,
+}
+
+
+def _split_running_field(
+    raw: str | None,
+) -> tuple[ProgramRunState | None, ProgramEvalState | None]:
+    """Decode :attr:`Program.running` to typed (run, eval) states.
+
+    Handles both wire shapes the controller emits:
+
+    * REST ``/api/programs`` returns a human label
+      (``"idle"`` / ``"running then"`` / ...). Eval state isn't
+      separately reported on the REST load — the dispatcher derives it
+      from ``ProgramRecord.status`` instead, so this branch returns
+      ``None`` for eval.
+    * The WebSocket ``<s>`` byte (cookbook §8.5.3) — two ASCII hex
+      digits ORing a low-nibble :class:`ProgramRunState` with a
+      high-nibble :class:`ProgramEvalState`.
+    """
+    if raw is None:
+        return (None, None)
+    label = " ".join(raw.split()).lower()
+    if (run := _REST_RUN_LABEL_TO_STATE.get(label)) is not None:
+        return (run, None)
+    try:
+        byte = int(raw, 16)
+    except ValueError:
+        return (None, None)
+    return _decode_program_status_byte(byte)
 
 
 class ProgramCommand(StrEnum):
@@ -147,10 +197,35 @@ class Program(_ProgramBase):
 
     @property
     def running(self) -> str | None:
-        """Free-form runtime state: ``"idle"`` for idle programs;
-        running programs report ``"running then"`` / ``"running else"``
-        / ``"running if"`` etc."""
+        """Raw runtime-state field as the controller reported it.
+
+        Two wire shapes: REST ``/api/programs`` emits a human label
+        (``"idle"`` / ``"running then"`` / ``"running else"``); the WS
+        event stream emits the cookbook ``<s>`` byte (two ASCII hex
+        digits). Use :attr:`run_state` / :attr:`eval_state` for a
+        firmware-agnostic typed view.
+        """
         return self._record.running
+
+    @property
+    def run_state(self) -> ProgramRunState | None:
+        """Typed run-clause state — one of ``IDLE`` / ``THEN`` / ``ELSE``.
+
+        ``None`` when the program errored
+        (:attr:`ProgramEvalState.NOT_LOADED`) or the controller hasn't
+        reported a running field yet.
+        """
+        run, _eval = _split_running_field(self._record.running)
+        return run
+
+    @property
+    def eval_state(self) -> ProgramEvalState | None:
+        """Typed if-clause evaluation state — disambiguates the three
+        "not really True/False" cases that :attr:`status` collapses.
+        ``None`` from REST loads (which only carry the run label) and
+        when the controller hasn't reported a running field yet."""
+        _run, eval_state = _split_running_field(self._record.running)
+        return eval_state
 
     @property
     def last_run_time(self) -> str | None:

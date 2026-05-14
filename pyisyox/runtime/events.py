@@ -1500,15 +1500,19 @@ class EventDispatcher:
         running_text = (info.findtext("s") or "").strip()
         running_int: int | None
         try:
-            running_int = int(running_text) if running_text else None
+            # Cookbook §8.5.3: the byte is two ASCII hex digits
+            # (high nibble = eval state, low nibble = run state).
+            running_int = int(running_text, 16) if running_text else None
         except ValueError:
             running_int = None
 
         record.status = new_status
         if running_int is not None:
-            # Stored as the wire string so consumers can compare or
-            # parse; the typed ProgramStatusEvent carries the int form.
-            record.running = str(running_int)
+            # Stored as the wire string verbatim so the typed Program
+            # accessors and consumers reading the raw byte agree on the
+            # source of truth; the typed ProgramStatusEvent carries the
+            # decoded int form.
+            record.running = running_text
 
         _LOGGER.debug(
             "Program %s status -> %s%s",

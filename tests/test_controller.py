@@ -1347,7 +1347,8 @@ async def test_program_status_event_updates_record_in_place() -> None:
 
     assert received and received[0].address == "008D"
     assert received[0].status is True
-    assert received[0].running == 31
+    # `<s>31</s>` is two ASCII hex digits per cookbook §8.5.3 → 0x31.
+    assert received[0].running == 0x31
     # Record mutated in place — Program wrapper sees the new status.
     assert controller.programs["008D"].status is True
 
