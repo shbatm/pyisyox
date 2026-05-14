@@ -968,6 +968,10 @@ def test_decode_program_status_byte_splits_nibbles() -> None:
     # Unrecognised bit pattern → both None (defensive against future
     # firmware additions, doesn't raise).
     assert _decode_program_status_byte(0xAB) == (None, None)
+    # Partial validity is decoded independently — a recognised low
+    # nibble survives an unknown high nibble (and vice versa).
+    assert _decode_program_status_byte(0xA3) == (ProgramRunState.ELSE, None)
+    assert _decode_program_status_byte(0x2C) == (None, ProgramEvalState.TRUE)
 
 
 def test_program_status_event_carries_decoded_run_and_eval_state() -> None:

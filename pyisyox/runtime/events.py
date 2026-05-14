@@ -876,12 +876,11 @@ NodeLifecycleListener = Callable[[NodeLifecycleEvent], None]
 class ProgramRunState(IntEnum):
     """Low-nibble of the ``<s>`` byte on a program-status frame.
 
-    Cookbook §8.5.3: the program's current run-clause state. Mutually
-    exclusive with itself (one of three) but ORed with a
-    :class:`ProgramEvalState` in the byte. Absent (``None`` on the
-    event) when the high nibble is ``ST_NOT_LOADED`` (``0xF0``) — the
-    controller hasn't loaded the program so it has no run-state to
-    report.
+    Cookbook §8.5.3: exactly one of three run-clause states per frame,
+    ORed with a :class:`ProgramEvalState` (high nibble) in the byte.
+    Absent (``None`` on the event) when the high nibble is
+    ``ST_NOT_LOADED`` (``0xF0``) — the controller hasn't loaded the
+    program so it has no run-state to report.
     """
 
     IDLE = 0x01
@@ -1508,9 +1507,9 @@ class EventDispatcher:
             f" (running={running_int})" if running_int is not None else "",
         )
 
+        run_state, eval_state = _decode_program_status_byte(running_int)
         if not self._program_status_listeners:
             return
-        run_state, eval_state = _decode_program_status_byte(running_int)
         status_event = ProgramStatusEvent(
             address=record.address,
             status=new_status,
