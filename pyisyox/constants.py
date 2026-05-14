@@ -73,7 +73,7 @@ class NodeFamily(StrEnum):
     latest published WSDL). 10 (Node Server / PG3) and 12-15 are IoX 6
     additions confirmed against eisy hardware: 12 is the Z-Matter
     radio acting as a Z-Wave controller, 15 the same radio acting as
-    a Matter/Thread controller, 13 the folder family.
+    a Matter/Thread controller, 13 the folder family, 14 Zigbee.
     """
 
     CORE = "0"
@@ -89,6 +89,7 @@ class NodeFamily(StrEnum):
     NODESERVER = "10"
     ZMATTER_ZWAVE = "12"
     FOLDER = "13"
+    ZIGBEE = "14"
     MATTER = "15"
 
 
