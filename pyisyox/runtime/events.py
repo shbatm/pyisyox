@@ -879,8 +879,8 @@ class ProgramRunState(IntEnum):
     Cookbook §8.5.3: exactly one of three run-clause states per frame,
     ORed with a :class:`ProgramEvalState` (high nibble) in the byte.
     Absent (``None`` on the event) when the high nibble is
-    ``ST_NOT_LOADED`` (``0xF0``) — the controller hasn't loaded the
-    program so it has no run-state to report.
+    :attr:`ProgramEvalState.NOT_LOADED` — the program errored so
+    there's no clause currently running.
     """
 
     IDLE = 0x01
@@ -894,8 +894,16 @@ class ProgramEvalState(IntEnum):
     Cookbook §8.5.3: the program's last if-clause evaluation result.
     The ``status: bool`` field on :class:`ProgramStatusEvent` derives
     from the same source (the ``<on/>``/``<off/>`` element) but this
-    enum disambiguates ``UNKNOWN`` and ``NOT_LOADED`` from a real
-    True/False evaluation.
+    enum disambiguates the three "not really True/False" cases that
+    the bool collapses.
+
+    .. note::
+       :attr:`NOT_LOADED` is the cookbook's literal label, but in
+       practice the controller emits ``0xF0`` when the program **failed
+       to compile or hit a runtime error** — not (only) when it hasn't
+       been loaded yet. Treat this as the program-error sentinel; see
+       :class:`ProgramRunState` for why ``run_state`` is ``None`` in
+       this case.
     """
 
     UNKNOWN = 0x10
@@ -958,7 +966,9 @@ class ProgramStatusEvent:
             ``FALSE`` / ``NOT_LOADED``, or ``None`` when the wire
             byte was absent / unrecognised. Disambiguates the
             three "not really True/False" cases that ``status: bool``
-            collapses.
+            collapses. ``NOT_LOADED`` is the cookbook label for what
+            is in practice the **program-errored** sentinel — see
+            :class:`ProgramEvalState`.
         seqnum: Sequence number of the underlying :class:`Event`.
     """
 
