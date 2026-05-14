@@ -18,9 +18,12 @@ from pyisyox.runtime.events import (
     Event,
     EventDispatcher,
     NodeLifecycleEvent,
+    ProgramEvalState,
+    ProgramRunState,
     ProgramStatusEvent,
     SystemEventControl,
     VariableTableChangeEvent,
+    _decode_program_status_byte,
     _extract_lifecycle_node_xml,
     parse_event_frame,
 )
@@ -937,6 +940,86 @@ def test_program_status_with_non_integer_running_is_dropped() -> None:
     dispatcher.feed(_program_frame("<id>8D</id><on /><s>not-a-number</s>"))
     assert program.status is True
     assert program.running is None, "non-int <s> leaves running unchanged"
+
+
+def test_decode_program_status_byte_splits_nibbles() -> None:
+    """Cookbook §8.5.3: ``<s>`` is a bitwise OR of RUN_* (low nibble)
+    and ST_* (high nibble); decode each separately."""
+    assert _decode_program_status_byte(0x21) == (
+        ProgramRunState.IDLE,
+        ProgramEvalState.TRUE,
+    )
+    assert _decode_program_status_byte(0x22) == (
+        ProgramRunState.THEN,
+        ProgramEvalState.TRUE,
+    )
+    assert _decode_program_status_byte(0x33) == (
+        ProgramRunState.ELSE,
+        ProgramEvalState.FALSE,
+    )
+    assert _decode_program_status_byte(0x11) == (
+        ProgramRunState.IDLE,
+        ProgramEvalState.UNKNOWN,
+    )
+    # NOT_LOADED has no run state — the program isn't running.
+    assert _decode_program_status_byte(0xF0) == (None, ProgramEvalState.NOT_LOADED)
+    # Missing wire field → both None.
+    assert _decode_program_status_byte(None) == (None, None)
+    # Unrecognised bit pattern → both None (defensive against future
+    # firmware additions, doesn't raise).
+    assert _decode_program_status_byte(0xAB) == (None, None)
+    # Partial validity is decoded independently — a recognised low
+    # nibble survives an unknown high nibble (and vice versa).
+    assert _decode_program_status_byte(0xA3) == (ProgramRunState.ELSE, None)
+    assert _decode_program_status_byte(0x2C) == (None, ProgramEvalState.TRUE)
+
+
+def test_program_status_event_carries_decoded_run_and_eval_state() -> None:
+    """The :class:`ProgramStatusEvent` exposes typed ``run_state`` and
+    ``eval_state`` derived from the same ``<s>`` byte."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+    received: list[ProgramStatusEvent] = []
+    dispatcher.add_program_status_listener(received.append)
+
+    # ELSE | FALSE → 0x33 = 51 decimal
+    dispatcher.feed(_program_frame("<id>8D</id><off /><s>51</s>"))
+    assert len(received) == 1
+    event = received[0]
+    assert event.running == 51
+    assert event.run_state is ProgramRunState.ELSE
+    assert event.eval_state is ProgramEvalState.FALSE
+
+
+def test_program_status_event_run_state_is_none_when_not_loaded() -> None:
+    """``ST_NOT_LOADED`` has no low-nibble run code; ``run_state`` is
+    ``None`` while ``eval_state`` carries the NOT_LOADED marker."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+    received: list[ProgramStatusEvent] = []
+    dispatcher.add_program_status_listener(received.append)
+
+    # NOT_LOADED = 0xF0 = 240 decimal
+    dispatcher.feed(_program_frame("<id>8D</id><on /><s>240</s>"))
+    assert len(received) == 1
+    event = received[0]
+    assert event.run_state is None
+    assert event.eval_state is ProgramEvalState.NOT_LOADED
+
+
+def test_program_status_event_run_state_is_none_when_running_absent() -> None:
+    """When ``<s>`` is missing entirely, both typed fields are ``None``."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+    received: list[ProgramStatusEvent] = []
+    dispatcher.add_program_status_listener(received.append)
+
+    dispatcher.feed(_program_frame("<id>8D</id><on />"))
+    assert len(received) == 1
+    event = received[0]
+    assert event.running is None
+    assert event.run_state is None
+    assert event.eval_state is None
 
 
 def test_program_status_listener_exception_does_not_break_others() -> None:

@@ -17,7 +17,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
@@ -873,6 +873,68 @@ EventListener = Callable[[Event], None]
 NodeLifecycleListener = Callable[[NodeLifecycleEvent], None]
 
 
+class ProgramRunState(IntEnum):
+    """Low-nibble of the ``<s>`` byte on a program-status frame.
+
+    Cookbook §8.5.3: exactly one of three run-clause states per frame,
+    ORed with a :class:`ProgramEvalState` (high nibble) in the byte.
+    Absent (``None`` on the event) when the high nibble is
+    :attr:`ProgramEvalState.NOT_LOADED` — the program errored so
+    there's no clause currently running.
+    """
+
+    IDLE = 0x01
+    THEN = 0x02
+    ELSE = 0x03
+
+
+class ProgramEvalState(IntEnum):
+    """High-nibble of the ``<s>`` byte on a program-status frame.
+
+    Cookbook §8.5.3: the program's last if-clause evaluation result.
+    The ``status: bool`` field on :class:`ProgramStatusEvent` derives
+    from the same source (the ``<on/>``/``<off/>`` element) but this
+    enum disambiguates the three "not really True/False" cases that
+    the bool collapses.
+
+    .. note::
+       :attr:`NOT_LOADED` is the cookbook's literal label, but in
+       practice the controller emits ``0xF0`` when the program **failed
+       to compile or hit a runtime error** — not (only) when it hasn't
+       been loaded yet. Treat this as the program-error sentinel; see
+       :class:`ProgramRunState` for why ``run_state`` is ``None`` in
+       this case.
+    """
+
+    UNKNOWN = 0x10
+    TRUE = 0x20
+    FALSE = 0x30
+    NOT_LOADED = 0xF0
+
+
+def _decode_program_status_byte(
+    raw: int | None,
+) -> tuple[ProgramRunState | None, ProgramEvalState | None]:
+    """Split the cookbook ``<s>`` byte into (run, eval) typed enums.
+
+    Each nibble's value is looked up against the matching enum;
+    unknown bit patterns yield ``None`` for that nibble rather than
+    raising, so a future firmware addition doesn't break the
+    dispatcher.
+    """
+    if raw is None:
+        return (None, None)
+    try:
+        run_state: ProgramRunState | None = ProgramRunState(raw & 0x0F)
+    except ValueError:
+        run_state = None
+    try:
+        eval_state: ProgramEvalState | None = ProgramEvalState(raw & 0xF0)
+    except ValueError:
+        eval_state = None
+    return (run_state, eval_state)
+
+
 @dataclass(slots=True, frozen=True)
 class ProgramStatusEvent:
     """A program toggled true/false on the controller.
@@ -891,10 +953,22 @@ class ProgramStatusEvent:
             for ``<off/>``. Other markers (``<onAdj/>`` etc.) are
             normalised to ``True`` since they all imply
             "the if-clause matched".
-        running: New running-state code as the integer the eisy
-            sent (``<s>NN</s>``), or ``None`` if absent. Decoding
-            depends on firmware version; consumers can compare
-            against known constants if they care.
+        running: Raw ``<s>`` byte the eisy sent, or ``None`` if
+            absent. Cookbook §8.5.3: the byte is a bitwise OR of a
+            :class:`ProgramRunState` (low nibble) and a
+            :class:`ProgramEvalState` (high nibble); use
+            ``run_state`` / ``eval_state`` for the typed view.
+        run_state: Decoded low nibble — ``IDLE`` / ``THEN`` / ``ELSE``,
+            or ``None`` when the program isn't loaded
+            (``eval_state == NOT_LOADED``) or the wire byte was
+            absent / unrecognised.
+        eval_state: Decoded high nibble — ``UNKNOWN`` / ``TRUE`` /
+            ``FALSE`` / ``NOT_LOADED``, or ``None`` when the wire
+            byte was absent / unrecognised. Disambiguates the
+            three "not really True/False" cases that ``status: bool``
+            collapses. ``NOT_LOADED`` is the cookbook label for what
+            is in practice the **program-errored** sentinel — see
+            :class:`ProgramEvalState`.
         seqnum: Sequence number of the underlying :class:`Event`.
     """
 
@@ -902,6 +976,8 @@ class ProgramStatusEvent:
     status: bool
     running: int | None
     seqnum: int
+    run_state: ProgramRunState | None = None
+    eval_state: ProgramEvalState | None = None
 
 
 ProgramStatusListener = Callable[[ProgramStatusEvent], None]
@@ -1388,7 +1464,9 @@ class EventDispatcher:
 
         ``<s>`` is decoded as int into ``record.running`` so
         consumers can compare against firmware-version-specific
-        running-state codes.
+        running-state codes; the typed :class:`ProgramRunState` /
+        :class:`ProgramEvalState` decode of the same byte rides on
+        the emitted :class:`ProgramStatusEvent`.
         """
         if not event.event_info:
             return
@@ -1439,6 +1517,7 @@ class EventDispatcher:
             f" (running={running_int})" if running_int is not None else "",
         )
 
+        run_state, eval_state = _decode_program_status_byte(running_int)
         if not self._program_status_listeners:
             return
         status_event = ProgramStatusEvent(
@@ -1446,6 +1525,8 @@ class EventDispatcher:
             status=new_status,
             running=running_int,
             seqnum=event.seqnum,
+            run_state=run_state,
+            eval_state=eval_state,
         )
         for listener in tuple(self._program_status_listeners):
             try:
