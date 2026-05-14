@@ -162,13 +162,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def _resolve_log_level(args: argparse.Namespace) -> int:
+    """Pick the log level from the parsed args (verbose > debug > info)."""
+    if args.verbose:
+        return LOG_VERBOSE
+    if args.debug:
+        return logging.DEBUG
+    return logging.INFO
+
+
+def run() -> int:
+    """CLI entry point: parse args, configure logging, run :func:`main`.
+
+    Extracted from the ``if __name__ == "__main__"`` block so the
+    bootstrap is exercisable from tests.
+    """
     cli_args = parse_args()
-    if cli_args.verbose:
-        log_level = LOG_VERBOSE
-    elif cli_args.debug:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
-    enable_logging(log_level)
-    sys.exit(asyncio.run(main(cli_args)))
+    enable_logging(_resolve_log_level(cli_args))
+    return asyncio.run(main(cli_args))
+
+
+if __name__ == "__main__":
+    sys.exit(run())
