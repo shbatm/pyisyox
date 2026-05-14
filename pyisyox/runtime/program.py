@@ -34,6 +34,11 @@ if TYPE_CHECKING:
 # REST `/api/programs` returns the running state as a human label
 # rather than the cookbook ``<s>`` byte. Older firmware also varies
 # the spacing/casing. Lower-case + collapse whitespace before lookup.
+# Cookbook §8.5.3 defines exactly three run states (and v1 mirrored
+# them). "running if" — sometimes mentioned in older docs — describes
+# a transient mid-evaluation moment that resolves to THEN/ELSE before
+# the controller can render a stable status, so it's intentionally
+# absent here; an unknown label falls through to ``None``.
 _REST_RUN_LABEL_TO_STATE: dict[str, ProgramRunState] = {
     "idle": ProgramRunState.IDLE,
     "running then": ProgramRunState.THEN,
