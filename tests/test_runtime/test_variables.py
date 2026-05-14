@@ -170,7 +170,6 @@ async def test_set_value_logs_debug_with_url_and_body(caplog: pytest.LogCaptureF
 
 
 @pytest.mark.asyncio
-@pytest.mark.asyncio
 async def test_set_precision_posts_prec_body_and_updates_record() -> None:
     """``set_precision`` hits POST /api/variables/{type}/{id} with
     ``{"prec": N}`` and reflects the new precision on the wrapper. The

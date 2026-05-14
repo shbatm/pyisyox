@@ -411,3 +411,43 @@ async def test_delete_variable_accepts_envelope_body(session: FakeSession) -> No
     client._authenticated = True
 
     await client.delete_variable("2", "8")
+
+
+@pytest.mark.asyncio
+async def test_get_variables_type_returns_parsed_records(session: FakeSession) -> None:
+    """``get_variables_type`` is the thin GET+parse wrapper the
+    controller uses for ``refresh_variables``. Asserting it produces
+    typed records keeps controller-side tests focused on the in-place
+    update behavior rather than re-asserting the parser shape."""
+    session.set_route(
+        "GET",
+        "/api/variables/1",
+        200,
+        {
+            "successful": True,
+            "data": [
+                {"id": "5", "name": "Mode", "val": 3, "init": 0, "prec": 1, "ts": ""},
+            ],
+        },
+    )
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    out = await client.get_variables_type("1")
+
+    assert "5" in out
+    assert out["5"].name == "Mode"
+    assert out["5"].value == 3
+    assert out["5"].precision == 1
+
+
+@pytest.mark.asyncio
+async def test_send_json_rejects_unsupported_method(session: FakeSession) -> None:
+    """Passing a method outside the allowlist raises ``ValueError``
+    rather than silently dispatching to a different session attribute
+    via ``getattr``."""
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    with pytest.raises(ValueError, match="unsupported _send_json method"):
+        await client._send_json("PATCH", "/anywhere", {"x": 1})  # type: ignore[arg-type]

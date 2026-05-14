@@ -22,7 +22,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
@@ -73,6 +73,17 @@ from pyisyox.schema import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+#: Method-name → ``aiohttp.ClientSession`` attribute lookup for
+#: :meth:`IoXClient._send_json`. Explicit allowlist (rather than
+#: ``getattr(session, method.lower())``) so a typo or unsupported verb
+#: surfaces as a clear ``ValueError`` instead of silently dispatching
+#: to a different session method.
+_SEND_JSON_METHODS: dict[str, str] = {
+    "POST": "post",
+    "PUT": "put",
+    "DELETE": "delete",
+}
 
 
 class ClientError(Exception):
@@ -726,6 +737,10 @@ class IoXClient:
         ``init=0`` regardless of what was sent). Pass ``prec`` here
         and follow up with :meth:`post_variable_update` for value /
         init.
+
+        ``prec=0`` (the controller default) is omitted from the
+        request body — there's no "reset to 0" path, only creation,
+        so sending the default would just bloat the wire.
         """
         body: dict[str, Any] = {"name": name}
         if prec:
@@ -751,6 +766,18 @@ class IoXClient:
         path = VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id)
         _LOGGER.debug("Variable delete type=%s id=%s -> DELETE %s", var_type, var_id, path)
         await self._send_json("DELETE", path)
+
+    async def get_variables_type(self, var_type: str | int) -> dict[str, VariableRecord]:
+        """Fetch + parse one variable type as ``{id: VariableRecord}``.
+
+        Wire shape: ``GET /api/variables/{type}``. Wrapper over the
+        connect-time fan-out so consumers (and ``Controller.refresh_variables``)
+        don't have to import the private ``_unwrap_data`` /
+        ``parse_api_variables_type`` helpers themselves.
+        """
+        path = VARIABLES_TYPE_PATH.format(type_id=var_type)
+        raw = await self._get_json(path)
+        return parse_api_variables_type(_unwrap_data(raw, source=path), str(var_type))
 
     async def run_program_command(self, program_id: str, command: str) -> str:
         """Send a program / folder command via the legacy REST endpoint.
@@ -810,7 +837,7 @@ class IoXClient:
 
     async def _send_json(
         self,
-        method: str,
+        method: Literal["POST", "PUT", "DELETE"],
         path: str,
         body: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
@@ -821,6 +848,12 @@ class IoXClient:
         Returns the parsed envelope, or ``None`` when the response
         body is empty (``DELETE`` typically returns 200 + no body).
         """
+        try:
+            session_attr = _SEND_JSON_METHODS[method]
+        except KeyError as exc:
+            raise ValueError(
+                f"unsupported _send_json method {method!r}; expected one of {sorted(_SEND_JSON_METHODS)}"
+            ) from exc
         url = f"{self.base_url}{path}"
         kwargs: dict[str, Any] = {}
         if body is not None:
@@ -828,7 +861,7 @@ class IoXClient:
         if not self._authenticated:
             await self._authenticate_once()
         kwargs.update(await self.auth.request_kwargs(self.session, self.base_url))
-        method_fn = getattr(self.session, method.lower())
+        method_fn = getattr(self.session, session_attr)
         async with method_fn(url, **kwargs) as resp:
             if resp.status == 401:
                 if not await self.auth.handle_unauthorized(self.session, self.base_url):

@@ -36,11 +36,9 @@ from pyisyox.client import (
     NodeType,
     VariableField,
     VariableRecord,
-    _unwrap_data,
-    parse_api_variables_type,
 )
 from pyisyox.helpers.session import build_sslcontext
-from pyisyox.paths import PROFILES_PATH, SUBSCRIBE_PATH, VARIABLES_TYPE_PATH
+from pyisyox.paths import PROFILES_PATH, SUBSCRIBE_PATH
 from pyisyox.runtime.events import EventDispatcher
 from pyisyox.runtime.folder import Folder
 from pyisyox.runtime.group import Group
@@ -772,9 +770,7 @@ class Controller:
         if client is None:  # pragma: no cover
             raise ControllerNotConnectedError("controller has no client")
         type_str = str(var_type)
-        path = VARIABLES_TYPE_PATH.format(type_id=type_str)
-        raw = await client._get_json(path)  # pylint: disable=protected-access
-        fresh = parse_api_variables_type(_unwrap_data(raw, source=path), type_str)
+        fresh = await client.get_variables_type(type_str)
         bucket = loaded.variables.setdefault(type_str, {})
         bucket.clear()
         bucket.update(fresh)
