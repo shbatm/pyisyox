@@ -372,6 +372,18 @@ def test_is_dimmable_false_when_st_property_missing_from_nodedef(real_profile: P
     assert node.is_dimmable is False
 
 
+def test_is_dimmable_false_when_nodedef_does_not_accept_don(
+    real_profile: Profile,
+) -> None:
+    """``RemoteLinc2_ADV`` reports a multilevel ``ST`` editor (the LED
+    bookkeeping range) but its accepts list is just ``WDU`` — sending
+    ``DON`` would fail. ``is_dimmable`` must return False so the consumer
+    doesn't route it onto the LIGHT platform where ``turn_on`` would
+    silently break."""
+    node = _make_node(_make_record(nodedef_id="RemoteLinc2_ADV"), real_profile)
+    assert node.is_dimmable is False
+
+
 # --- ergonomic wrappers: end-to-end via real fixture nodedefs ------------
 
 
