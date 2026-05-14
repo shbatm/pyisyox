@@ -178,6 +178,19 @@ log_date_format = "%Y-%m-%d %H:%M:%S"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
+[tool.coverage.report]
+# Lines that aren't executable at runtime — typing-only imports, the
+# CLI bootstrap line that pytest can't reach, and abstract / not-yet-
+# implemented stubs. ``exclude_also`` extends coverage.py's defaults
+# (``pragma: no cover``) rather than replacing them.
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "if typing\\.TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
 [tool.ruff]
 required-version = ">=0.15.12"
 target-version = "py311"
