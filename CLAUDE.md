@@ -28,6 +28,13 @@ affiliation with Universal Devices, Inc.
 > after merging to `dev`. The maintainer rebase-merges
 > (`gh pr merge N --rebase`) to keep per-commit history.
 
+> **Branching policy for Claude tasks:** when the user's task references
+> an existing in-flight branch (e.g. "fix X on `chore/foo`"), commit and
+> push directly to that branch instead of creating a side `claude/<slug>`
+> branch. The harness-assigned `claude/<slug>` default is a safety net for
+> tasks with no existing branch context — an explicit branch in the task
+> takes precedence.
+
 ## Requirements
 
 - **Python 3.10+**
