@@ -311,7 +311,11 @@ def make_controller(
 
     client = _build_fake_client(host, auth_stub, session_stub)
     controller._client = client
-    controller._dispatcher = EventDispatcher(load_result.nodes, programs=load_result.programs)
+    controller._dispatcher = EventDispatcher(
+        load_result.nodes,
+        programs=load_result.programs,
+        variables=load_result.variables,
+    )
     return controller
 
 
@@ -331,6 +335,11 @@ def _build_fake_client(host: str, auth: Any, session: Any) -> IoXClient:
         "post_variable_update",
         "run_program_command",
         "run_network_resource",
+        "set_node_enabled",
+        "get_zwave_parameter",
+        "set_zwave_parameter",
+        "set_zwave_lock_code",
+        "delete_zwave_lock_code",
     ):
         setattr(client, method_name, AsyncMock(return_value=None))
 
@@ -380,6 +389,14 @@ def fire_program_status(controller: Controller, event: Any) -> None:
     """Fan ``event`` (a :class:`pyisyox.runtime.events.ProgramStatusEvent`)
     to every program-status listener on ``controller``'s dispatcher."""
     for listener in tuple(_dispatcher(controller)._program_status_listeners):
+        listener(event)
+
+
+def fire_variable_table_change(controller: Controller, event: Any) -> None:
+    """Fan ``event`` (a :class:`pyisyox.VariableTableChangeEvent`) to
+    every variable-table-change listener on ``controller``'s
+    dispatcher."""
+    for listener in tuple(_dispatcher(controller)._variable_table_change_listeners):
         listener(event)
 
 
@@ -868,22 +885,23 @@ def make_classified_node_record(
     *,
     target: str,
     pnode: str | None = None,
-    family_id: str = "1",
+    family_id: str | None = None,
     properties: dict[str, NodePropertyValue] | None = None,
     **status_kwargs: Any,
 ) -> NodeRecord:
     """Shortcut for :func:`make_node_record` that picks a real nodedef
     id for the requested target platform.
 
-    ``target`` is one of the keys in :data:`NODEDEF_FOR_PLATFORM`. Lock
-    uses ``family_id="4"`` (Z-Wave) by default; everything else is
-    Insteon family ``"1"``. Override via the ``family_id`` kwarg.
+    ``target`` is one of the keys in :data:`NODEDEF_FOR_PLATFORM`. The
+    family default is ``"4"`` (Z-Wave) for ``target="lock"`` and
+    ``"1"`` (Insteon) for everything else. Pass ``family_id=`` to
+    override (e.g. drive an Insteon lock through this shortcut).
 
     Pass ``pnode=<primary_address>`` for sub-buttons of multi-button
     devices (KeypadLinc, RemoteLinc, FanLinc).
     """
-    if target == "lock":
-        family_id = "4"
+    if family_id is None:
+        family_id = "4" if target == "lock" else "1"
     return make_node_record(
         address,
         name,
@@ -976,6 +994,7 @@ __all__ = [
     "fire_event",
     "fire_lifecycle",
     "fire_program_status",
+    "fire_variable_table_change",
     "load_profile",
     "make_button_plugin_load_result",
     "make_classified_node_record",

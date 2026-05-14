@@ -46,6 +46,7 @@ from pyisyox.testing import (
     fire_event,
     fire_lifecycle,
     fire_program_status,
+    fire_variable_table_change,
     load_profile,
     make_button_plugin_load_result,
     make_classified_node_record,
@@ -339,3 +340,71 @@ def test_fire_program_status_invokes_registered_listeners() -> None:
     sentinel = object()
     fire_program_status(controller, sentinel)
     assert received == [sentinel]
+
+
+def test_fire_variable_table_change_invokes_registered_listeners() -> None:
+    """``Controller`` doesn't expose a public registrar for this
+    listener type yet; consumers register directly on the dispatcher.
+    The fire helper still belongs in the testing surface so when the
+    public registrar lands, the firing seam is already there."""
+    controller = make_controller(make_load_result())
+    received: list[object] = []
+    assert controller._dispatcher is not None
+    controller._dispatcher._variable_table_change_listeners.append(received.append)
+
+    sentinel = object()
+    fire_variable_table_change(controller, sentinel)
+    assert received == [sentinel]
+
+
+# ---------------------------------------------------------------------------
+# Regressions for issues caught in PR #134 review.
+# ---------------------------------------------------------------------------
+
+
+def test_make_controller_dispatcher_carries_variable_registry() -> None:
+    """``make_controller`` must wire ``load_result.variables`` into the
+    dispatcher — otherwise variable property events arriving via
+    ``feed_event_frame`` silently miss their record."""
+    var_rec = make_variable_record("1", "5", "Mode", value=3)
+    lr = make_load_result(variables={"1": {"5": var_rec}, "2": {}})
+    controller = make_controller(lr)
+    assert controller._dispatcher is not None
+    # Same dict object as the load result — so a record overlay applied
+    # by EventDispatcher mutates the wrapper consumers read from too.
+    assert controller._dispatcher._variables is lr.variables
+
+
+def test_make_classified_node_record_lock_default_family_is_zwave() -> None:
+    rec = make_classified_node_record("AA BB CC 1", "L", target="lock")
+    assert rec.family_id == "4"
+
+
+def test_make_classified_node_record_lock_family_override_honored() -> None:
+    """Caller passing ``family_id="1"`` for a lock target must keep the
+    Insteon family — the docstring promises override; the impl had been
+    silently clobbering it."""
+    rec = make_classified_node_record(
+        "AA BB CC 1", "L", target="lock", family_id="1"
+    )
+    assert rec.family_id == "1"
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "set_node_enabled",
+        "get_zwave_parameter",
+        "set_zwave_parameter",
+        "set_zwave_lock_code",
+        "delete_zwave_lock_code",
+    ],
+)
+def test_fake_client_stubs_zwave_and_enable_methods(method_name: str) -> None:
+    """Beyond the five primary dispatch verbs, the fake client must
+    also stub the Z-Wave + enable/disable methods so a consumer test
+    that drives a Z-Wave lock or toggles ``Node.set_enabled`` doesn't
+    fall through to a real ``aiohttp`` call on the MagicMock session."""
+    controller = make_controller(make_load_result())
+    method = getattr(controller._client, method_name)
+    assert isinstance(method, AsyncMock)
