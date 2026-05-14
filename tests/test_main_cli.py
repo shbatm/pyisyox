@@ -93,6 +93,7 @@ def _ns(**overrides) -> argparse.Namespace:
         "username": "user@example.invalid",
         "password": "pw",
         "verbose": False,
+        "debug": False,  # _resolve_log_level reads this
         "events": False,  # don't loop forever
         "tls_version": None,
         "verify_ssl": False,

@@ -58,9 +58,14 @@ from pyisyox.runtime.events import (
     ],
 )
 def test_enum_label_known_returns_friendly_name(enum_cls: type, known_value: str) -> None:
+    """A known wire-code resolves to its lower-cased canonical enum-
+    member name (``"variable_table_changed"`` etc.). The exact label
+    text is the responsibility of ``_enum_label`` — here we just
+    require a non-empty string that isn't the raw wire code itself."""
     label = enum_cls.label(known_value)
     assert isinstance(label, str)
-    assert label != known_value or label.islower()
+    assert label
+    assert label != known_value
 
 
 @pytest.mark.parametrize(
@@ -360,12 +365,15 @@ def test_variable_table_change_empty_event_info_drops() -> None:
 
 
 def test_variable_table_change_malformed_xml_drops() -> None:
+    """Malformed eventInfo (unquoted attribute) is rejected by expat at
+    the *outer* ``feed()`` parse — there's no ``&`` for the
+    ampersand-repair pass to fix, so the dispatcher drops the frame
+    before ``_apply_variable_table_change`` ever runs. End result is
+    the same (no listener fires) regardless of which parse rejected
+    it; this asserts the observable outcome."""
     received: list[VariableTableChangeEvent] = []
     dispatcher = EventDispatcher({})
     dispatcher.add_variable_table_change_listener(received.append)
-    # Malformed inner XML (missing quotes) — the outer dispatcher
-    # successfully wraps + parses, but the secondary parse inside
-    # ``_apply_variable_table_change`` fails.
     dispatcher.feed(_trigger_frame("<var type=1></var>"))
     assert received == []
 
