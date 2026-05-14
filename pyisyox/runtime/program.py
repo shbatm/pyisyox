@@ -39,12 +39,6 @@ _REST_RUN_LABEL_TO_STATE: dict[str, ProgramRunState] = {
     "running then": ProgramRunState.THEN,
     "running else": ProgramRunState.ELSE,
 }
-_REST_EVAL_LABEL_TO_STATE: dict[str, ProgramEvalState] = {
-    "true": ProgramEvalState.TRUE,
-    "false": ProgramEvalState.FALSE,
-    "unknown": ProgramEvalState.UNKNOWN,
-    "not loaded": ProgramEvalState.NOT_LOADED,
-}
 
 
 def _split_running_field(
