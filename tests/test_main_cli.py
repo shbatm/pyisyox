@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import argparse
 import json as _json
+import logging
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from pyisyox import LocalAuth, PortalAuth
-from pyisyox.__main__ import _build_auth, main, parse_args
+from pyisyox.__main__ import _build_auth, _resolve_log_level, main, parse_args, run
+from pyisyox.logging import LOG_VERBOSE
 
 # --- _build_auth: auth-mode picker ----------------------------------------
 
@@ -201,3 +203,56 @@ async def test_main_dump_handles_unexpected_objects_via_default_str(
     rc = await main(_ns(dump=str(target)))
     assert rc == 0
     assert "2026-05-13" in target.read_text(encoding="utf-8")
+
+
+# --- events loop: holds open until KeyboardInterrupt -----------------------
+
+
+async def test_main_events_loop_exits_on_keyboard_interrupt(fake_controller) -> None:
+    """``--events`` (the default) parks the coroutine in an
+    ``asyncio.sleep(60)`` loop until Ctrl-C. The CLI must catch the
+    interrupt, log a shutdown line, and return 0 — not let the
+    ``KeyboardInterrupt`` propagate past ``main()``."""
+    with patch("pyisyox.__main__.asyncio.sleep", AsyncMock(side_effect=KeyboardInterrupt)):
+        rc = await main(_ns(events=True))
+    assert rc == 0
+    fake_controller.return_value.connect.assert_awaited_once_with(start_websocket=True)
+    fake_controller.return_value.stop.assert_awaited_once()
+
+
+# --- _resolve_log_level + run(): bootstrap branch coverage ----------------
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (_ns(events=False, verbose=True, debug=False), LOG_VERBOSE),
+        (_ns(events=False, verbose=False, debug=True), logging.DEBUG),
+        (_ns(events=False, verbose=False, debug=False), logging.INFO),
+        # verbose wins over debug.
+        (_ns(events=False, verbose=True, debug=True), LOG_VERBOSE),
+    ],
+)
+def test_resolve_log_level_precedence(args: argparse.Namespace, expected: int) -> None:
+    assert _resolve_log_level(args) == expected
+
+
+def test_run_calls_main_and_returns_its_exit_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run()`` is the bootstrap that ``__main__`` invokes — it must
+    parse args, set the log level, dispatch to ``main()`` via
+    ``asyncio.run``, and surface the int exit code."""
+    parsed = _ns(events=False, debug=True, verbose=False)
+
+    def fake_run(coro: object) -> int:
+        # Close the coroutine so the test doesn't trigger a "never
+        # awaited" RuntimeWarning under -W error.
+        coro.close()  # type: ignore[union-attr]
+        return 0
+
+    monkeypatch.setattr("pyisyox.__main__.parse_args", lambda: parsed)
+    monkeypatch.setattr("pyisyox.__main__.asyncio.run", fake_run)
+    enable_logging_mock = MagicMock()
+    monkeypatch.setattr("pyisyox.__main__.enable_logging", enable_logging_mock)
+
+    assert run() == 0
+    enable_logging_mock.assert_called_once_with(logging.DEBUG)
