@@ -10,9 +10,10 @@ cd /workspaces/pyisyox
 pip3 install -e .
 
 # Pre-commit hooks call script/run-in-env.sh, which prefers a project
-# .venv. Symlink the system Python in so worktrees don't have to
-# bootstrap one before commit (matches the "Worktree gotcha" note in
-# CLAUDE.md).
+# .venv. Create one that inherits the system site-packages (the
+# Dockerfile already installed the runtime + dev deps there) so
+# worktrees don't have to bootstrap a fresh venv before commit
+# (matches the "Worktree gotcha" note in CLAUDE.md).
 if [ ! -e .venv ]; then
   python3 -m venv --system-site-packages .venv
 fi
