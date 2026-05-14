@@ -982,11 +982,11 @@ def test_program_status_event_carries_decoded_run_and_eval_state() -> None:
     received: list[ProgramStatusEvent] = []
     dispatcher.add_program_status_listener(received.append)
 
-    # ELSE | FALSE → 0x33 = 51 decimal
-    dispatcher.feed(_program_frame("<id>8D</id><off /><s>51</s>"))
+    # ELSE | FALSE → 0x33 (cookbook §8.5.3: wire byte is two hex digits)
+    dispatcher.feed(_program_frame("<id>8D</id><off /><s>33</s>"))
     assert len(received) == 1
     event = received[0]
-    assert event.running == 51
+    assert event.running == 0x33
     assert event.run_state is ProgramRunState.ELSE
     assert event.eval_state is ProgramEvalState.FALSE
 
@@ -999,8 +999,8 @@ def test_program_status_event_run_state_is_none_when_not_loaded() -> None:
     received: list[ProgramStatusEvent] = []
     dispatcher.add_program_status_listener(received.append)
 
-    # NOT_LOADED = 0xF0 = 240 decimal
-    dispatcher.feed(_program_frame("<id>8D</id><on /><s>240</s>"))
+    # NOT_LOADED = 0xF0 (cookbook §8.5.3: wire byte is two hex digits)
+    dispatcher.feed(_program_frame("<id>8D</id><on /><s>F0</s>"))
     assert len(received) == 1
     event = received[0]
     assert event.run_state is None
