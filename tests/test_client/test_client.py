@@ -325,3 +325,89 @@ async def test_load_skips_dynamic_zwave_fetch_when_no_zwave_nodes(session: FakeS
     await client.load(config=ControllerConfig(uuid="u", version="6.0.0"))
 
     assert not any("/zwave/" in p for _, p, _ in session.calls)
+
+
+# --- Variable CRUD -------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_variable_puts_with_name_and_returns_envelope(session: FakeSession) -> None:
+    """``PUT /api/variables/{type}`` carries ``{name}`` (no prec when
+    default 0); response envelope is returned verbatim."""
+    session.set_route(
+        "PUT",
+        "/api/variables/1",
+        200,
+        {"successful": True, "data": {"id": "3", "name": "New Int Var", "prec": 0}},
+    )
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    response = await client.create_variable("1", "New Int Var")
+
+    method, path, kwargs = session.calls[-1]
+    assert (method, path) == ("PUT", "/api/variables/1")
+    assert kwargs["json"] == {"name": "New Int Var"}
+    assert response["data"]["id"] == "3"
+
+
+@pytest.mark.asyncio
+async def test_create_variable_includes_prec_when_nonzero(session: FakeSession) -> None:
+    session.set_route(
+        "PUT",
+        "/api/variables/2",
+        200,
+        {"successful": True, "data": {"id": "5", "name": "X", "prec": 2}},
+    )
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    await client.create_variable("2", "X", prec=2)
+
+    _, _, kwargs = session.calls[-1]
+    assert kwargs["json"] == {"name": "X", "prec": 2}
+
+
+@pytest.mark.asyncio
+async def test_create_variable_raises_on_empty_response_body(session: FakeSession) -> None:
+    """Defensive: a PUT with no body would otherwise return ``None``
+    and downstream consumers would crash on ``response['data']``."""
+    session.set_route("PUT", "/api/variables/1", 200, None)
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    with pytest.raises(Exception, match="empty response body"):
+        await client.create_variable("1", "X")
+
+
+@pytest.mark.asyncio
+async def test_delete_variable_hits_delete_endpoint_and_tolerates_empty_body(
+    session: FakeSession,
+) -> None:
+    """DELETE responses commonly carry no body; ``_send_json`` returns
+    ``None`` and ``delete_variable`` drops it."""
+    session.set_route("DELETE", "/api/variables/2/8", 200, None)
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    await client.delete_variable("2", "8")
+
+    method, path, _ = session.calls[-1]
+    assert (method, path) == ("DELETE", "/api/variables/2/8")
+
+
+@pytest.mark.asyncio
+async def test_delete_variable_accepts_envelope_body(session: FakeSession) -> None:
+    """When the controller does include the ``{successful, data: null}``
+    envelope, ``_send_json`` parses it and ``delete_variable`` still
+    resolves cleanly."""
+    session.set_route(
+        "DELETE",
+        "/api/variables/2/8",
+        200,
+        {"successful": True, "data": None},
+    )
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    await client.delete_variable("2", "8")

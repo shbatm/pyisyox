@@ -106,6 +106,7 @@ class VariableField(StrEnum):
     VALUE = "value"
     INIT = "init"
     NAME = "name"
+    PREC = "prec"
 
 
 @dataclass(slots=True, frozen=True)
@@ -686,12 +687,17 @@ class IoXClient:
     ) -> dict[str, Any]:
         """Issue ``POST /api/variables/{type}/{id}`` with the supplied body.
 
-        Three documented body shapes (one key per call; eisy-ui doesn't
+        Four documented body shapes (one key per call; eisy-ui doesn't
         mix them):
 
         * ``{"value": <int>}`` — set the current value
         * ``{"init": <int>}`` — set the initial/restore value
         * ``{"name": "<str>"}`` — rename
+        * ``{"prec": <int>}`` — set decimal precision (fires
+          ``_1``/``9`` ``VARIABLE_TABLE_CHANGED`` instead of the
+          per-value ``6``/``7`` frames; without an auto-refresh
+          listener wired to that event, downstream consumers won't
+          notice the precision change until the next ``refresh()``).
         """
         path = VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id)
         _LOGGER.debug(
@@ -705,6 +711,46 @@ class IoXClient:
         if _LOGGER.isEnabledFor(LOG_VERBOSE):
             _LOGGER.log(LOG_VERBOSE, "POST %s response: %s", path, response)
         return response
+
+    async def create_variable(self, var_type: str | int, name: str, *, prec: int = 0) -> dict[str, Any]:
+        """Create a new variable on the controller.
+
+        Wire shape: ``PUT /api/variables/{type}`` with body
+        ``{"name": "<str>", "prec": <int>}``. The controller assigns
+        the ``id`` and echoes the new record back as ``data``.
+
+        Note: the eisy controller accepts ``init`` / ``value`` keys in
+        the PUT body and even echoes them in the response, but
+        silently drops them at storage time (issue #125 captures
+        confirm a freshly created variable is always ``val=0`` /
+        ``init=0`` regardless of what was sent). Pass ``prec`` here
+        and follow up with :meth:`post_variable_update` for value /
+        init.
+        """
+        body: dict[str, Any] = {"name": name}
+        if prec:
+            body["prec"] = prec
+        path = VARIABLES_TYPE_PATH.format(type_id=var_type)
+        _LOGGER.debug("Variable create type=%s body=%s -> PUT %s", var_type, body, path)
+        response = await self._send_json("PUT", path, body)
+        if response is None:
+            raise ClientError(f"empty response body from PUT {path}")
+        if _LOGGER.isEnabledFor(LOG_VERBOSE):
+            _LOGGER.log(LOG_VERBOSE, "PUT %s response: %s", path, response)
+        return response
+
+    async def delete_variable(self, var_type: str | int, var_id: str | int) -> None:
+        """Delete a variable.
+
+        Wire shape: ``DELETE /api/variables/{type}/{id}``. Response is
+        ``{"successful": true, "data": null}`` (no record echo); a
+        ``_1``/``9`` ``VARIABLE_TABLE_CHANGED`` frame fires alongside
+        so an auto-refresh listener can drop the entry from the
+        registry.
+        """
+        path = VARIABLE_ITEM_PATH.format(type_id=var_type, var_id=var_id)
+        _LOGGER.debug("Variable delete type=%s id=%s -> DELETE %s", var_type, var_id, path)
+        await self._send_json("DELETE", path)
 
     async def run_program_command(self, program_id: str, command: str) -> str:
         """Send a program / folder command via the legacy REST endpoint.
@@ -751,23 +797,44 @@ class IoXClient:
         return await self._post_json(NODE_ITEM_PATH.format(address=encoded), body)
 
     async def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        """Shared POST-JSON path with auth-recovery on 401.
+        """``POST`` shortcut over :meth:`_send_json`.
 
         Variable + node update endpoints share the exact same shape:
         JSON body, ``{successful, data}`` envelope, single-shot 401
         retry through :meth:`Auth.handle_unauthorized`.
         """
+        response = await self._send_json("POST", path, body)
+        if response is None:
+            raise ClientError(f"empty response body from POST {path}")
+        return response
+
+    async def _send_json(
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Shared mutation path: ``PUT`` / ``POST`` / ``DELETE`` with
+        ``{successful, data}``-envelope handling and single-shot 401
+        recovery.
+
+        Returns the parsed envelope, or ``None`` when the response
+        body is empty (``DELETE`` typically returns 200 + no body).
+        """
         url = f"{self.base_url}{path}"
-        kwargs: dict[str, Any] = {"json": body}
+        kwargs: dict[str, Any] = {}
+        if body is not None:
+            kwargs["json"] = body
         if not self._authenticated:
             await self._authenticate_once()
         kwargs.update(await self.auth.request_kwargs(self.session, self.base_url))
-        async with self.session.post(url, **kwargs) as resp:
+        method_fn = getattr(self.session, method.lower())
+        async with method_fn(url, **kwargs) as resp:
             if resp.status == 401:
                 if not await self.auth.handle_unauthorized(self.session, self.base_url):
                     raise AuthError(f"auth could not recover from 401 on {url}")
                 kwargs.update(await self.auth.request_kwargs(self.session, self.base_url))
-                async with self.session.post(url, **kwargs) as resp_retry:
+                async with method_fn(url, **kwargs) as resp_retry:
                     if resp_retry.status >= 400:
                         raise HTTPError(resp_retry.status, url)
                     text = await resp_retry.text()
@@ -775,6 +842,8 @@ class IoXClient:
                 raise HTTPError(resp.status, url)
             else:
                 text = await resp.text()
+        if not text.strip():
+            return None
         try:
             payload = _loads_json(text)
         except ValueError as exc:
