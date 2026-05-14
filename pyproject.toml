@@ -45,6 +45,10 @@ where = ["."]
 include = ["pyisyox*"]
 exclude = ["script*"]
 
+[tool.setuptools.package-data]
+"pyisyox" = ["py.typed"]
+"pyisyox.testing" = ["_eisy6_profile.json"]
+
 [tool.pylint.MAIN]
 py-version = "3.11"
 ignore = [
