@@ -17,7 +17,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
@@ -913,29 +913,51 @@ class ProgramEvalState(IntEnum):
     NOT_LOADED = 0xF0
 
 
-def _parse_ws_program_timestamp(raw: str | None) -> str | None:
+def _extract_event_tz(timestamp: str) -> tzinfo | None:
+    """Pull the controller's tz from a frame's ``<Event timestamp="...">``.
+
+    The eisy stamps every WS frame with its own local time + offset
+    (e.g. ``"2026-05-14T20:47:26.828098-05:00"``). That offset is the
+    most reliable signal pyisyox has for the controller's tz; the
+    naive ``YYMMDD HH:MM:SS`` body timestamps share it.
+
+    Returns ``None`` if the attribute is empty, unparsable, or carries
+    no offset — the caller falls back to system-local in that case.
+    """
+    if not timestamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return None
+    return parsed.tzinfo
+
+
+def _parse_ws_program_timestamp(raw: str | None, *, tz: tzinfo | None = None) -> str | None:
     """Convert a ``<r>`` / ``<f>`` / ``<nsr>`` WS timestamp to ISO 8601 UTC.
 
     The eisy emits these as ``"YYMMDD HH:MM:SS "`` (note the trailing
     space) in the **controller's local time**, with no timezone
-    indicator on the wire. Returns an ISO 8601 string with an explicit
-    UTC offset (e.g. ``"2026-05-14T21:44:11+00:00"``) so the stored
-    representation matches the REST ``Z``-suffix shape — the typed
-    :class:`pyisyox.runtime.Program` accessors then parse it back to
-    a tz-aware :class:`datetime` that consumers can hand straight to
-    HA's TIMESTAMP sensor class without a second tz coercion.
+    indicator on the body element. Returns an ISO 8601 string with an
+    explicit UTC offset (e.g. ``"2026-05-14T21:44:11+00:00"``) so the
+    stored representation matches the REST ``Z``-suffix shape — the
+    typed :class:`pyisyox.runtime.Program` accessors then parse it
+    back to a tz-aware :class:`datetime` that consumers can hand
+    straight to HA's TIMESTAMP sensor class without a second tz
+    coercion.
 
-    The naive wire string is interpreted as **system-local time** —
-    the deployment assumption is that the eisy and the host running
-    pyisyox share a timezone (the common LAN setup). If the eisy and
-    host are in different zones, last-run / last-finish timestamps
-    will be off by the delta until ``pyisyox`` learns to fetch the
-    controller's tz from ``/rest/time``.
-
-    Returns ``None`` for missing / blank input (``<nsr/>`` self-closes
-    when no next run is scheduled) or unparsable junk so the
-    dispatcher can treat "absent" and "unparsable" the same way; the
-    unparsable case is logged at DEBUG to aid firmware-quirk triage.
+    Args:
+        raw: The wire string. ``None`` / blank / unparsable returns
+            ``None`` so the dispatcher can treat "absent" and
+            "unparsable" the same way; the unparsable case is logged
+            at DEBUG to aid firmware-quirk triage.
+        tz: The controller's tz, normally extracted from the parent
+            frame's ``<Event timestamp="...">`` offset (see
+            :func:`_extract_event_tz`). When ``None`` the caller
+            doesn't know — fall back to system-local. The fall-back
+            is only correct when host tz == eisy tz; the fallback
+            path matters in test contexts where there's no ambient
+            event frame.
 
     Note on the ``%y`` window: Python maps two-digit years 00-68 to
     2000-2068 and 69-99 to 1969-1999. The eisy is a home controller
@@ -949,14 +971,18 @@ def _parse_ws_program_timestamp(raw: str | None) -> str | None:
     if not text:
         return None
     try:
-        # ``astimezone()`` on a naive datetime treats it as system-local
-        # and returns a tz-aware datetime in the system local zone.
-        # Then convert to UTC so the stored ISO 8601 string carries an
-        # explicit ``+00:00`` offset and matches the REST shape.
-        parsed = datetime.strptime(text, "%y%m%d %H:%M:%S").astimezone()
+        parsed = datetime.strptime(text, "%y%m%d %H:%M:%S")
     except ValueError:
         _LOGGER.debug("unparsable program WS timestamp %r — skipping", raw)
         return None
+    # ``astimezone()`` on a naive datetime assumes system-local — the
+    # fall-back when no event frame supplies the eisy's tz (e.g. direct
+    # helper calls). The explicit-tz branch keeps the wall-clock when
+    # the frame did supply one.
+    if tz is not None:  # noqa: SIM108
+        parsed = parsed.replace(tzinfo=tz)
+    else:
+        parsed = parsed.astimezone()
     return parsed.astimezone(UTC).isoformat()
 
 
@@ -1651,13 +1677,19 @@ class EventDispatcher:
             # decoded int form.
             record.running = running_text
 
-        last_run = _parse_ws_program_timestamp(info.findtext("r"))
-        last_finish = _parse_ws_program_timestamp(info.findtext("f"))
+        # The controller stamps every WS frame with its own local
+        # time + offset (e.g. ``-05:00``). Use that as the tz for the
+        # naive ``YYMMDD HH:MM:SS`` body timestamps — more reliable
+        # than guessing the host's tz, which is wrong inside a
+        # ``TZ=UTC`` container with the eisy in a different zone.
+        event_tz = _extract_event_tz(event.timestamp)
+        last_run = _parse_ws_program_timestamp(info.findtext("r"), tz=event_tz)
+        last_finish = _parse_ws_program_timestamp(info.findtext("f"), tz=event_tz)
         # ``<nsr>`` is the next-scheduled-run timestamp — fires as a
         # standalone partial frame when the controller's scheduler
         # plans the next run (e.g. immediately after ``runAtNextTime``
         # is set or after each fire). Same wire shape as ``<r>``/``<f>``.
-        next_scheduled = _parse_ws_program_timestamp(info.findtext("nsr"))
+        next_scheduled = _parse_ws_program_timestamp(info.findtext("nsr"), tz=event_tz)
         if last_run is not None:
             record.last_run_time = last_run
         if last_finish is not None:
