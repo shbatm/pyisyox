@@ -52,6 +52,7 @@ from pyisyox.client import (
     ProgramRecord,
     VariableField,
     VariableRecord,
+    ZWaveProperties,
 )
 from pyisyox.controller import Controller, ControllerNotConnectedError
 from pyisyox.exceptions import (
@@ -175,6 +176,7 @@ __all__ = [
     "VariableTableChangeEvent",
     "VariableTableChangeListener",
     "WebSocketEventStream",
+    "ZWaveProperties",
     "build_sslcontext",
     "classify",
     "describe_system_event",

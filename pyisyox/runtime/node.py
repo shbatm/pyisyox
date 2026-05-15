@@ -40,7 +40,7 @@ from pyisyox.runtime._normalize import normalize_property_value
 _LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
+    from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord, ZWaveProperties
     from pyisyox.schema.editor import Editor
     from pyisyox.schema.nodedef import NodeDef
     from pyisyox.schema.profile import Profile
@@ -324,6 +324,12 @@ class Node:
         """
         props = self._record.properties
         return PROP_BATTERY_LEVEL in props and PROP_STATUS not in props
+
+    @property
+    def zwave_props(self) -> ZWaveProperties | None:
+        """Parsed :class:`~pyisyox.client.ZWaveProperties` for Z-Wave /
+        Z-Matter nodes; ``None`` for Insteon and other families."""
+        return self._record.zwave_props
 
     def _has_command(self, cmd_id: str) -> bool:
         """True if ``cmd_id`` appears in this node's ``cmds.accepts``."""
