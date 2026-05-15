@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from pyisyox.client import NodePropertyValue, NodeRecord, ProgramRecord, VariableRecord
+from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord, ProgramRecord, VariableRecord
 from pyisyox.runtime.events import (
     Event,
     EventDispatcher,
@@ -27,6 +28,7 @@ from pyisyox.runtime.events import (
     _extract_lifecycle_node_xml,
     parse_event_frame,
 )
+from pyisyox.runtime.program import Program
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "eisy6"
 
@@ -1016,9 +1018,12 @@ def test_program_status_event_run_state_is_none_when_not_loaded() -> None:
 
 def test_program_status_writes_timestamps_to_record() -> None:
     """``<r>`` / ``<f>`` are parsed from ``YYMMDD HH:MM:SS`` controller-
-    local into ISO 8601 naive strings on the record so the typed
-    :class:`Program` accessors can decode them. ``<nr/>`` self-closed
-    means the schedule was cleared — surface as ``None``."""
+    local into UTC-suffixed ISO 8601 strings on the record (the test
+    suite forces ``TZ=UTC`` so the local→UTC conversion is a no-op
+    and the wall-clock survives). The typed :class:`Program` accessors
+    decode either shape. ``next_scheduled_run_time`` is REST-only;
+    PROGRAM_STATUS frames don't carry it, so the prior value is
+    preserved."""
     program = _make_program()
     program.last_run_time = "2026-05-01T00:00:00"
     program.last_finish_time = "2026-05-01T00:00:00"
@@ -1032,9 +1037,30 @@ def test_program_status_writes_timestamps_to_record() -> None:
         )
     )
 
-    assert program.last_run_time == "2026-05-14T16:44:11"
-    assert program.last_finish_time == "2026-05-14T16:44:21"
-    assert program.next_scheduled_run_time is None
+    assert program.last_run_time == "2026-05-14T16:44:11+00:00"
+    assert program.last_finish_time == "2026-05-14T16:44:21+00:00"
+    assert program.next_scheduled_run_time == "2026-05-15T18:00:00"
+
+
+def test_program_status_timestamp_round_trips_to_aware_datetime() -> None:
+    """End-to-end check: the WS local-time wire shape parses through
+    the dispatcher into a stored UTC ISO 8601 string, and the typed
+    :class:`Program.last_run_time` accessor decodes back to a tz-aware
+    :class:`datetime` whose UTC wall-clock matches the wire (under the
+    test suite's forced UTC tz)."""
+    program_record = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program_record})
+
+    dispatcher.feed(
+        _program_frame(
+            "<id>8D</id><on /><r>260514 16:44:11 </r>"
+            "<f>260514 16:44:21 </f><s>21</s>"
+        )
+    )
+
+    program = Program(program_record, IoXClient.__new__(IoXClient))
+    assert program.last_run_time == datetime(2026, 5, 14, 16, 44, 11, tzinfo=UTC)
+    assert program.last_finish_time == datetime(2026, 5, 14, 16, 44, 21, tzinfo=UTC)
 
 
 def test_program_status_garbage_timestamp_leaves_record_unchanged() -> None:
@@ -1048,16 +1074,34 @@ def test_program_status_garbage_timestamp_leaves_record_unchanged() -> None:
     assert program.last_run_time == "2026-05-01T00:00:00"
 
 
-def test_program_status_omitted_nr_preserves_schedule() -> None:
-    """A frame *without* an ``<nr>`` element (vs ``<nr/>`` self-closed)
-    means "no info" — the prior schedule is preserved."""
+def test_program_status_run_at_startup_flag() -> None:
+    """``<rr/>`` = run-at-reboot enabled, ``<nr/>`` = disabled. Mutually
+    exclusive on the wire (every captured PROGRAM_STATUS frame carries
+    exactly one). Confirmed against live captures from real eisy
+    hardware."""
     program = _make_program()
-    program.next_scheduled_run_time = "2026-05-15T18:00:00"
+    program.run_at_startup = False
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    # <rr/> → run_at_startup = True
+    dispatcher.feed(_program_frame("<id>8D</id><on /><rr /><s>21</s>"))
+    assert program.run_at_startup is True
+
+    # <nr/> → run_at_startup = False
+    dispatcher.feed(_program_frame("<id>8D</id><on /><nr /><s>21</s>"))
+    assert program.run_at_startup is False
+
+
+def test_program_status_omitted_run_at_startup_preserves_value() -> None:
+    """A frame without either ``<rr/>`` or ``<nr/>`` leaves the flag
+    unchanged — same "absent → preserve" pattern as the enabled flag."""
+    program = _make_program()
+    program.run_at_startup = True
     dispatcher = EventDispatcher({}, programs={"008D": program})
 
     dispatcher.feed(_program_frame("<id>8D</id><on /><s>21</s>"))
 
-    assert program.next_scheduled_run_time == "2026-05-15T18:00:00"
+    assert program.run_at_startup is True
 
 
 def test_program_status_event_run_state_is_none_when_running_absent() -> None:

@@ -17,7 +17,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
@@ -914,13 +914,23 @@ class ProgramEvalState(IntEnum):
 
 
 def _parse_ws_program_timestamp(raw: str | None) -> str | None:
-    """Convert a ``<r>`` / ``<f>`` / ``<nr>`` WS timestamp to ISO 8601.
+    """Convert a ``<r>`` / ``<f>`` / ``<nr>`` WS timestamp to ISO 8601 UTC.
 
     The eisy emits these as ``"YYMMDD HH:MM:SS "`` (note the trailing
-    space) in the controller's local time. Returns the ISO 8601 naive
-    string (e.g. ``"2026-05-14T16:44:11"``) — the typed
-    :class:`pyisyox.runtime.Program` accessors normalise naive parses
-    to UTC, matching the existing REST-side ``Z``-suffix path.
+    space) in the **controller's local time**, with no timezone
+    indicator on the wire. Returns an ISO 8601 string with an explicit
+    UTC offset (e.g. ``"2026-05-14T21:44:11+00:00"``) so the stored
+    representation matches the REST ``Z``-suffix shape — the typed
+    :class:`pyisyox.runtime.Program` accessors then parse it back to
+    a tz-aware :class:`datetime` that consumers can hand straight to
+    HA's TIMESTAMP sensor class without a second tz coercion.
+
+    The naive wire string is interpreted as **system-local time** —
+    the deployment assumption is that the eisy and the host running
+    pyisyox share a timezone (the common LAN setup). If the eisy and
+    host are in different zones, last-run / last-finish timestamps
+    will be off by the delta until ``pyisyox`` learns to fetch the
+    controller's tz from ``/rest/time``.
 
     Returns ``None`` for missing / blank input (``<nr/>`` self-closes
     when the schedule has been cleared) or unparsable junk so the
@@ -939,11 +949,15 @@ def _parse_ws_program_timestamp(raw: str | None) -> str | None:
     if not text:
         return None
     try:
-        parsed = datetime.strptime(text, "%y%m%d %H:%M:%S")
+        # ``astimezone()`` on a naive datetime treats it as system-local
+        # and returns a tz-aware datetime in the system local zone.
+        # Then convert to UTC so the stored ISO 8601 string carries an
+        # explicit ``+00:00`` offset and matches the REST shape.
+        parsed = datetime.strptime(text, "%y%m%d %H:%M:%S").astimezone()
     except ValueError:
         _LOGGER.debug("unparsable program WS timestamp %r — skipping", raw)
         return None
-    return parsed.isoformat()
+    return parsed.astimezone(UTC).isoformat()
 
 
 def _decode_program_status_byte(
@@ -1017,6 +1031,12 @@ class ProgramStatusEvent:
             / ``<s>`` — see cookbook §8.5.3). The matching record's
             :attr:`pyisyox.client.ProgramRecord.enabled` is updated
             in-place before listeners fire when this is non-``None``.
+        run_at_startup: New ``run_at_startup`` state when the frame
+            carried an ``<rr/>`` (True) or ``<nr/>`` (False) element.
+            ``None`` when the frame omitted both. Mirror of the
+            enabled-flag pattern; the record's
+            :attr:`pyisyox.client.ProgramRecord.run_at_startup` is
+            updated in-place before listeners fire.
         seqnum: Sequence number of the underlying :class:`Event`.
     """
 
@@ -1027,6 +1047,7 @@ class ProgramStatusEvent:
     run_state: ProgramRunState | None = None
     eval_state: ProgramEvalState | None = None
     enabled: bool | None = None
+    run_at_startup: bool | None = None
 
 
 ProgramStatusListener = Callable[[ProgramStatusEvent], None]
@@ -1525,14 +1546,19 @@ class EventDispatcher:
         ``UNKNOWN`` / ``NOT_LOADED`` carry forward the prior
         ``record.status`` rather than flipping based on a transient.
 
-        ``<r>`` / ``<f>`` / ``<nr>`` are timestamps in the controller's
-        local time as ``YYMMDD HH:MM:SS`` (with trailing space). Empty
-        elements (``<nr/>``) mean "cleared" — surface as ``None``. The
-        record stores them as ISO 8601 naive strings — e.g.
-        ``"2026-05-14T16:44:11"`` — so the typed
-        :class:`pyisyox.runtime.Program.last_run_time` accessor can
-        decode either wire shape (REST ``Z``-suffix UTC and WS naive
-        local) symmetrically.
+        ``<r>`` / ``<f>`` are timestamps in the controller's local
+        time as ``YYMMDD HH:MM:SS`` (with trailing space).
+        :func:`_parse_ws_program_timestamp` converts them to UTC ISO
+        8601 strings on the record so the typed
+        :class:`pyisyox.runtime.Program.last_run_time` accessor decodes
+        either wire shape (REST ``Z``-suffix UTC and WS-converted UTC)
+        symmetrically.
+
+        ``<rr/>`` / ``<nr/>`` are the **run-at-reboot** flag (cookbook
+        §8.5.3 second flag, alongside enabled): ``<rr/>`` = on,
+        ``<nr/>`` = off. (Confirmed against live captures from real
+        eisy hardware, 2026-05-14.) ``<nr>`` does NOT carry the
+        next-scheduled-run timestamp — that field is REST-only.
         """
         if not event.event_info:
             return
@@ -1572,6 +1598,18 @@ class EventDispatcher:
         else:
             new_enabled = None
 
+        # ``<rr/>`` = run-at-reboot enabled, ``<nr/>`` = no run-at-
+        # reboot. Mutually exclusive on the wire (every captured frame
+        # carries exactly one). Same "absent → leave unchanged" pattern
+        # as the enabled flag.
+        new_run_at_startup: bool | None
+        if info.find("rr") is not None:
+            new_run_at_startup = True
+        elif info.find("nr") is not None:
+            new_run_at_startup = False
+        else:
+            new_run_at_startup = None
+
         running_text = (info.findtext("s") or "").strip()
         running_int: int | None
         try:
@@ -1594,6 +1632,8 @@ class EventDispatcher:
         record.status = new_status
         if new_enabled is not None:
             record.enabled = new_enabled
+        if new_run_at_startup is not None:
+            record.run_at_startup = new_run_at_startup
         if running_int is not None:
             # Stored as the wire string verbatim so the typed Program
             # accessors and consumers reading the raw byte agree on the
@@ -1603,21 +1643,17 @@ class EventDispatcher:
 
         last_run = _parse_ws_program_timestamp(info.findtext("r"))
         last_finish = _parse_ws_program_timestamp(info.findtext("f"))
-        # `<nr/>` (empty) clears the schedule; only mutate when the
-        # frame actually carried the element (some frames omit it).
-        nr_el = info.find("nr")
         if last_run is not None:
             record.last_run_time = last_run
         if last_finish is not None:
             record.last_finish_time = last_finish
-        if nr_el is not None:
-            record.next_scheduled_run_time = _parse_ws_program_timestamp(nr_el.text)
 
         _LOGGER.debug(
-            "Program %s status -> %s%s%s",
+            "Program %s status -> %s%s%s%s",
             record.address,
             new_status,
             f" enabled={new_enabled}" if new_enabled is not None else "",
+            f" run_at_startup={new_run_at_startup}" if new_run_at_startup is not None else "",
             f" (running={running_int})" if running_int is not None else "",
         )
 
@@ -1631,6 +1667,7 @@ class EventDispatcher:
             run_state=run_state,
             eval_state=eval_state,
             enabled=new_enabled,
+            run_at_startup=new_run_at_startup,
         )
         for listener in tuple(self._program_status_listeners):
             try:

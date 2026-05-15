@@ -1313,8 +1313,9 @@ async def test_program_status_event_updates_record_in_place() -> None:
     """Feeding a ``<control>_1</control>`` action ``"0"`` frame with a
     known program id mutates the matching record (status from the
     ``<s>`` eval-state nibble; enabled from ``<on/>`` / ``<off/>``;
-    timestamps from ``<r>`` / ``<f>`` / ``<nr>``) and fires any
-    registered ``add_program_status_listener`` callbacks."""
+    run-at-reboot from ``<rr/>`` / ``<nr/>``; last-run timestamps
+    from ``<r>`` / ``<f>``) and fires any registered
+    ``add_program_status_listener`` callbacks."""
     session = FakeSession(BASE)
     _stub_responses(session)
     session.set_route(
@@ -1328,6 +1329,7 @@ async def test_program_status_event_updates_record_in_place() -> None:
                 "folder": False,
                 "status": "true",
                 "enabled": False,
+                "runAtStartup": False,
                 "running": "idle",
             },
         ),
@@ -1339,13 +1341,14 @@ async def test_program_status_event_updates_record_in_place() -> None:
     controller.add_program_status_listener(received.append)
 
     # Wire frame: <id>8D</id> (unpadded), <on/> = enabled True,
-    # <s>31</s> = eval FALSE (status flips False), <r>/<f> = last run
-    # timestamps in YYMMDD HH:MM:SS controller-local, <nr/> empty
-    # clears the schedule.
+    # <rr/> = run-at-reboot True, <s>31</s> = eval FALSE (status flips
+    # False), <r>/<f> = last-run timestamps in controller-local time
+    # (the test suite forces TZ=UTC so the conversion round-trips
+    # cleanly).
     frame = (
         '<?xml version="1.0"?><Event seqnum="9" sid="x" timestamp="t">'
         "<control>_1</control><action>0</action><node></node>"
-        "<eventInfo><id>8D</id><on /><nr /><r>260506 14:30:36 </r>"
+        "<eventInfo><id>8D</id><on /><rr /><r>260506 14:30:36 </r>"
         "<f>260506 14:31:42 </f><s>31</s></eventInfo></Event>"
     )
     controller.feed_event_frame(frame)
@@ -1355,13 +1358,14 @@ async def test_program_status_event_updates_record_in_place() -> None:
     assert received[0].status is False
     assert received[0].running == 0x31
     assert received[0].enabled is True
+    assert received[0].run_at_startup is True
     # Record mutated in place — Program wrapper sees the new state.
     program = controller.programs["008D"]
     assert program.status is False
     assert program.enabled is True
+    assert program.run_at_startup is True
     assert program.last_run_time == datetime(2026, 5, 6, 14, 30, 36, tzinfo=UTC)
     assert program.last_finish_time == datetime(2026, 5, 6, 14, 31, 42, tzinfo=UTC)
-    assert program.next_scheduled_run_time is None  # <nr/> cleared the schedule.
 
     await controller.stop()
 
