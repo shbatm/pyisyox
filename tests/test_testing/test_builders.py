@@ -84,6 +84,7 @@ from pyisyox.testing import (
     make_profile_with_hub_plugin,
     make_profile_with_trigger_plugin,
     make_program,
+    make_program_folder_record,
     make_program_record,
     make_thermostat_binary_records,
     make_trigger_plugin_load_result,
@@ -178,6 +179,23 @@ def test_make_load_result_defaults() -> None:
     assert lr.nodes == {}
     # Variables default seeds both type tables.
     assert set(lr.variables) == {"1", "2"}
+
+
+def test_make_load_result_program_folders_merge_into_programs() -> None:
+    """``program_folders`` is a convenience overlay onto ``programs`` —
+    folders share the runtime ``programs`` dict, distinguished by
+    ``is_folder``. Lets consumer tests keep folders mentally separate
+    at the test seam without reaching into ``controller._loaded``.
+    """
+    program = make_program_record("0010", "Sunset Lights", parent_address="F1")
+    folder = make_program_folder_record("F1", "Lighting")
+    lr = make_load_result(
+        programs={program.address: program},
+        program_folders={folder.address: folder},
+    )
+    assert set(lr.programs) == {"0010", "F1"}
+    assert lr.programs["F1"].is_folder is True
+    assert lr.programs["0010"].is_folder is False
 
 
 def test_make_controller_no_network() -> None:
@@ -468,9 +486,7 @@ def test_make_classified_node_record_lock_family_override_honored() -> None:
     """Caller passing ``family_id="1"`` for a lock target must keep the
     Insteon family — the docstring promises override; the impl had been
     silently clobbering it."""
-    rec = make_classified_node_record(
-        "AA BB CC 1", "L", target="lock", family_id="1"
-    )
+    rec = make_classified_node_record("AA BB CC 1", "L", target="lock", family_id="1")
     assert rec.family_id == "1"
 
 
@@ -560,11 +576,7 @@ def test_make_motion_sensor_records_covers_every_documented_subnode() -> None:
     records = make_motion_sensor_records()
     primary = next(r for r in records.values() if r.pnode == r.address)
     assert primary.type.startswith("16.1.")
-    sub_ids = {
-        int(r.address.split(" ")[-1], 16)
-        for r in records.values()
-        if r.pnode != r.address
-    }
+    sub_ids = {int(r.address.split(" ")[-1], 16) for r in records.values() if r.pnode != r.address}
     assert sub_ids == {
         INSTEON_BSENSOR_SUBNODE_DUSK_DAWN,
         INSTEON_BSENSOR_SUBNODE_LOW_BATTERY,
@@ -579,11 +591,7 @@ def test_make_thermostat_binary_records_has_cool_and_heat_subnodes() -> None:
     records = make_thermostat_binary_records()
     primary = next(r for r in records.values() if r.pnode == r.address)
     assert primary.type.startswith("5.16.")
-    sub_ids = {
-        int(r.address.split(" ")[-1], 16)
-        for r in records.values()
-        if r.pnode != r.address
-    }
+    sub_ids = {int(r.address.split(" ")[-1], 16) for r in records.values() if r.pnode != r.address}
     assert sub_ids == {
         INSTEON_THERMOSTAT_SUBNODE_COOL,
         INSTEON_THERMOSTAT_SUBNODE_HEAT,
@@ -601,9 +609,5 @@ def test_make_insteon_binary_sensor_records_combines_all_families() -> None:
     )
     assert len(combined) == expected_size
     # Address space distinct across families — no key collisions.
-    primary_types = {
-        r.type
-        for r in combined.values()
-        if r.pnode == r.address
-    }
+    primary_types = {r.type for r in combined.values() if r.pnode == r.address}
     assert {"16.8.1.0", "16.9.1.0", "16.1.1.0", "5.16.0.0"} <= primary_types
