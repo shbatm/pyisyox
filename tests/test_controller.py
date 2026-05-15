@@ -1310,10 +1310,11 @@ async def test_send_program_command_before_connect_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_program_status_event_updates_record_in_place() -> None:
-    """Feeding a ``<control>_1</control>`` action ``"0"`` frame with
-    a known program id flips ``program.status`` and fires any
-    registered ``add_program_status_listener`` callbacks. The
-    matching record updates before the listener fires."""
+    """Feeding a ``<control>_1</control>`` action ``"0"`` frame with a
+    known program id mutates the matching record (status from the
+    ``<s>`` eval-state nibble; enabled from ``<on/>`` / ``<off/>``;
+    timestamps from ``<r>`` / ``<f>`` / ``<nr>``) and fires any
+    registered ``add_program_status_listener`` callbacks."""
     session = FakeSession(BASE)
     _stub_responses(session)
     session.set_route(
@@ -1325,8 +1326,8 @@ async def test_program_status_event_updates_record_in_place() -> None:
                 "id": "008D",
                 "name": "Foo",
                 "folder": False,
-                "status": "false",
-                "enabled": True,
+                "status": "true",
+                "enabled": False,
                 "running": "idle",
             },
         ),
@@ -1337,28 +1338,38 @@ async def test_program_status_event_updates_record_in_place() -> None:
     received: list = []
     controller.add_program_status_listener(received.append)
 
-    # Wire frame: <id>8D</id> (unpadded), <on/>, running state 31.
+    # Wire frame: <id>8D</id> (unpadded), <on/> = enabled True,
+    # <s>31</s> = eval FALSE (status flips False), <r>/<f> = last run
+    # timestamps in YYMMDD HH:MM:SS controller-local, <nr/> empty
+    # clears the schedule.
     frame = (
         '<?xml version="1.0"?><Event seqnum="9" sid="x" timestamp="t">'
         "<control>_1</control><action>0</action><node></node>"
         "<eventInfo><id>8D</id><on /><nr /><r>260506 14:30:36 </r>"
-        "<f>260506 14:30:36 </f><s>31</s></eventInfo></Event>"
+        "<f>260506 14:31:42 </f><s>31</s></eventInfo></Event>"
     )
     controller.feed_event_frame(frame)
 
     assert received and received[0].address == "008D"
-    assert received[0].status is True
-    # `<s>31</s>` is two ASCII hex digits per cookbook §8.5.3 → 0x31.
+    # `<s>31</s>` → eval FALSE → status flips False (was True).
+    assert received[0].status is False
     assert received[0].running == 0x31
-    # Record mutated in place — Program wrapper sees the new status.
-    assert controller.programs["008D"].status is True
+    assert received[0].enabled is True
+    # Record mutated in place — Program wrapper sees the new state.
+    program = controller.programs["008D"]
+    assert program.status is False
+    assert program.enabled is True
+    assert program.last_run_time == datetime(2026, 5, 6, 14, 30, 36, tzinfo=UTC)
+    assert program.last_finish_time == datetime(2026, 5, 6, 14, 31, 42, tzinfo=UTC)
+    assert program.next_scheduled_run_time is None  # <nr/> cleared the schedule.
 
     await controller.stop()
 
 
 @pytest.mark.asyncio
-async def test_program_status_event_off_marker_flips_false() -> None:
-    """An ``<off/>`` marker in the eventInfo flips status False."""
+async def test_program_status_event_off_marker_flips_enabled_false() -> None:
+    """``<off/>`` is the enabled-flag, not status. ``<s>21</s>`` carries
+    eval-state TRUE so status flips True regardless of the on/off marker."""
     session = FakeSession(BASE)
     _stub_responses(session)
     session.set_route(
@@ -1370,7 +1381,7 @@ async def test_program_status_event_off_marker_flips_false() -> None:
                 "id": "0011",
                 "name": "Bar",
                 "folder": False,
-                "status": "true",
+                "status": "false",
                 "enabled": True,
             },
         ),
@@ -1385,7 +1396,9 @@ async def test_program_status_event_off_marker_flips_false() -> None:
     )
     controller.feed_event_frame(frame)
 
-    assert controller.programs["0011"].status is False
+    program = controller.programs["0011"]
+    assert program.enabled is False, "<off/> sets enabled = False"
+    assert program.status is True, "<s>21 → eval TRUE → status flips True"
     await controller.stop()
 
 
