@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -25,6 +25,7 @@ from pyisyox.runtime.events import (
     SystemEventControl,
     VariableTableChangeEvent,
     _decode_program_status_byte,
+    _extract_event_tz,
     _extract_lifecycle_node_xml,
     parse_event_frame,
 )
@@ -847,6 +848,28 @@ def test_extract_lifecycle_node_xml_without_inner_node_returns_none() -> None:
     actions carry only the address)."""
     xml = '<Event><control>_3</control><eventInfo><addr>A</addr></eventInfo></Event>'
     assert _extract_lifecycle_node_xml(xml) is None
+
+
+# --- _extract_event_tz direct unit tests ---------------------------------
+
+
+def test_extract_event_tz_empty_returns_none() -> None:
+    assert _extract_event_tz("") is None
+
+
+def test_extract_event_tz_naive_iso_returns_none() -> None:
+    """No offset → ``parsed.tzinfo`` is ``None``; caller falls back to local."""
+    assert _extract_event_tz("2026-05-14T20:47:26.828098") is None
+
+
+def test_extract_event_tz_malformed_returns_none() -> None:
+    assert _extract_event_tz("not-a-timestamp") is None
+
+
+def test_extract_event_tz_offset_bearing_returns_tzinfo() -> None:
+    tz = _extract_event_tz("2026-05-14T20:47:26.828098-05:00")
+    assert tz is not None
+    assert tz.utcoffset(None) == timedelta(hours=-5)
 
 
 # --- dispatcher: listener unsubscribe-twice + lifecycle / program errors --
