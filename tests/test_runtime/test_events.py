@@ -1042,6 +1042,28 @@ def test_program_status_writes_timestamps_to_record() -> None:
     assert program.next_scheduled_run_time == "2026-05-15T18:00:00"
 
 
+def test_program_status_writes_next_scheduled_from_nsr_partial_frame() -> None:
+    """``<nsr>`` is the next-scheduled-run timestamp. Often arrives
+    standalone — ``<id>`` + ``<nsr>`` with no other fields — when the
+    controller plans the next run after a schedule fires. The dispatcher
+    updates ``record.next_scheduled_run_time`` and leaves every other
+    field untouched (absent-field-preserves-prior-value). Confirmed
+    against live capture from real eisy hardware (2026-05-14)."""
+    program = _make_program()
+    program.last_run_time = "2026-05-13T10:00:00+00:00"
+    program.enabled = True
+    program.run_at_startup = True
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    dispatcher.feed(_program_frame("<id>8D</id><nsr>260515 21:02:00 </nsr>"))
+
+    assert program.next_scheduled_run_time == "2026-05-15T21:02:00+00:00"
+    # Untouched siblings:
+    assert program.last_run_time == "2026-05-13T10:00:00+00:00"
+    assert program.enabled is True
+    assert program.run_at_startup is True
+
+
 def test_program_status_timestamp_round_trips_to_aware_datetime() -> None:
     """End-to-end check: the WS local-time wire shape parses through
     the dispatcher into a stored UTC ISO 8601 string, and the typed

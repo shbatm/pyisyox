@@ -1546,19 +1546,24 @@ class EventDispatcher:
         ``UNKNOWN`` / ``NOT_LOADED`` carry forward the prior
         ``record.status`` rather than flipping based on a transient.
 
-        ``<r>`` / ``<f>`` are timestamps in the controller's local
-        time as ``YYMMDD HH:MM:SS`` (with trailing space).
-        :func:`_parse_ws_program_timestamp` converts them to UTC ISO
-        8601 strings on the record so the typed
-        :class:`pyisyox.runtime.Program.last_run_time` accessor decodes
-        either wire shape (REST ``Z``-suffix UTC and WS-converted UTC)
-        symmetrically.
+        ``<r>`` / ``<f>`` / ``<nsr>`` are timestamps in the
+        controller's local time as ``YYMMDD HH:MM:SS`` (with trailing
+        space): last-run start, last-finish, and next-scheduled-run
+        respectively. :func:`_parse_ws_program_timestamp` converts
+        them to UTC ISO 8601 strings on the record so the typed
+        :class:`pyisyox.runtime.Program` accessors decode either wire
+        shape (REST ``Z``-suffix UTC and WS-converted UTC) symmetrically.
+        ``<nsr>`` often arrives in a *partial* frame on its own (just
+        ``<id>`` + ``<nsr>``), e.g. immediately after the controller
+        plans the next run; the absent-field-preserves-prior-value
+        pattern keeps the rest of the record stable.
 
         ``<rr/>`` / ``<nr/>`` are the **run-at-reboot** flag (cookbook
         §8.5.3 second flag, alongside enabled): ``<rr/>`` = on,
         ``<nr/>`` = off. (Confirmed against live captures from real
-        eisy hardware, 2026-05-14.) ``<nr>`` does NOT carry the
-        next-scheduled-run timestamp — that field is REST-only.
+        eisy hardware, 2026-05-14.) Note the naming overlap with
+        ``<nsr>`` — the cookbook reuses ``nr`` for the boolean flag
+        rather than a "next run" timestamp.
         """
         if not event.event_info:
             return
@@ -1643,10 +1648,17 @@ class EventDispatcher:
 
         last_run = _parse_ws_program_timestamp(info.findtext("r"))
         last_finish = _parse_ws_program_timestamp(info.findtext("f"))
+        # ``<nsr>`` is the next-scheduled-run timestamp — fires as a
+        # standalone partial frame when the controller's scheduler
+        # plans the next run (e.g. immediately after ``runAtNextTime``
+        # is set or after each fire). Same wire shape as ``<r>``/``<f>``.
+        next_scheduled = _parse_ws_program_timestamp(info.findtext("nsr"))
         if last_run is not None:
             record.last_run_time = last_run
         if last_finish is not None:
             record.last_finish_time = last_finish
+        if next_scheduled is not None:
+            record.next_scheduled_run_time = next_scheduled
 
         _LOGGER.debug(
             "Program %s status -> %s%s%s%s",
