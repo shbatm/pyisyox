@@ -894,9 +894,10 @@ def _make_program(address: str = "008D") -> ProgramRecord:
     )
 
 
-def _program_frame(event_info: str, *, seqnum: int = 1) -> str:
+def _program_frame(event_info: str, *, seqnum: int = 1, timestamp: str = "") -> str:
+    ts_attr = f' timestamp="{timestamp}"' if timestamp else ""
     return (
-        f'<Event seqnum="{seqnum}"><control>_1</control><action>0</action><node></node>'
+        f'<Event seqnum="{seqnum}"{ts_attr}><control>_1</control><action>0</action><node></node>'
         f"<eventInfo>{event_info}</eventInfo></Event>"
     )
 
@@ -1040,6 +1041,43 @@ def test_program_status_writes_timestamps_to_record() -> None:
     assert program.last_run_time == "2026-05-14T16:44:11+00:00"
     assert program.last_finish_time == "2026-05-14T16:44:21+00:00"
     assert program.next_scheduled_run_time == "2026-05-15T18:00:00"
+
+
+def test_program_status_uses_event_frame_tz_for_body_timestamps() -> None:
+    """The eisy stamps every WS frame with its own local time + offset
+    (e.g. ``-05:00``). The dispatcher uses that offset — not the host's
+    system tz — when interpreting the naive ``YYMMDD HH:MM:SS`` body
+    timestamps. This is the only correct path inside a ``TZ=UTC``
+    container talking to an eisy in a different zone (the common
+    devcontainer setup)."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    # Eisy in CDT: frame timestamp carries -05:00 offset; <r>/<f>
+    # body strings are 20:42:42 *local CDT* → 01:42:42 *UTC* of the
+    # next day.
+    frame = _program_frame(
+        "<id>8D</id><on /><r>260514 20:42:42 </r>"
+        "<f>260514 20:42:42 </f><s>21</s>",
+        timestamp="2026-05-14T20:47:26.828098-05:00",
+    )
+    dispatcher.feed(frame)
+
+    assert program.last_run_time == "2026-05-15T01:42:42+00:00"
+    assert program.last_finish_time == "2026-05-15T01:42:42+00:00"
+
+
+def test_program_status_falls_back_to_system_tz_when_event_timestamp_missing() -> None:
+    """When the event frame has no timestamp attribute, the parser
+    falls back to system-local tz (``TZ=UTC`` in the test suite, so the
+    fall-back path is a no-op and the wall-clock survives)."""
+    program = _make_program()
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    # No ``timestamp=`` arg → no offset on the frame → fall-back path.
+    dispatcher.feed(_program_frame("<id>8D</id><on /><r>260514 16:44:11 </r><s>21</s>"))
+
+    assert program.last_run_time == "2026-05-14T16:44:11+00:00"
 
 
 def test_program_status_writes_next_scheduled_from_nsr_partial_frame() -> None:
