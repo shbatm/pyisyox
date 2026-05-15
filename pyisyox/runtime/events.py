@@ -914,7 +914,7 @@ class ProgramEvalState(IntEnum):
 
 
 def _parse_ws_program_timestamp(raw: str | None) -> str | None:
-    """Convert a ``<r>`` / ``<f>`` / ``<nr>`` WS timestamp to ISO 8601 UTC.
+    """Convert a ``<r>`` / ``<f>`` / ``<nsr>`` WS timestamp to ISO 8601 UTC.
 
     The eisy emits these as ``"YYMMDD HH:MM:SS "`` (note the trailing
     space) in the **controller's local time**, with no timezone
@@ -932,8 +932,8 @@ def _parse_ws_program_timestamp(raw: str | None) -> str | None:
     will be off by the delta until ``pyisyox`` learns to fetch the
     controller's tz from ``/rest/time``.
 
-    Returns ``None`` for missing / blank input (``<nr/>`` self-closes
-    when the schedule has been cleared) or unparsable junk so the
+    Returns ``None`` for missing / blank input (``<nsr/>`` self-closes
+    when no next run is scheduled) or unparsable junk so the
     dispatcher can treat "absent" and "unparsable" the same way; the
     unparsable case is logged at DEBUG to aid firmware-quirk triage.
 
