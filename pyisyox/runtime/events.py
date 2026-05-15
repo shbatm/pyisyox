@@ -917,14 +917,21 @@ def _parse_ws_program_timestamp(raw: str | None) -> str | None:
     """Convert a ``<r>`` / ``<f>`` / ``<nr>`` WS timestamp to ISO 8601.
 
     The eisy emits these as ``"YYMMDD HH:MM:SS "`` (note the trailing
-    space) in the controller's local time. Returns an ISO 8601 naive
-    string (``"YYYY-MM-DDTHH:MM:SS"``) — the typed
+    space) in the controller's local time. Returns the ISO 8601 naive
+    string (e.g. ``"2026-05-14T16:44:11"``) — the typed
     :class:`pyisyox.runtime.Program` accessors normalise naive parses
     to UTC, matching the existing REST-side ``Z``-suffix path.
 
     Returns ``None`` for missing / blank input (``<nr/>`` self-closes
     when the schedule has been cleared) or unparsable junk so the
-    dispatcher can treat "absent" and "unparsable" the same way.
+    dispatcher can treat "absent" and "unparsable" the same way; the
+    unparsable case is logged at DEBUG to aid firmware-quirk triage.
+
+    Note on the ``%y`` window: Python maps two-digit years 00-68 to
+    2000-2068 and 69-99 to 1969-1999. The eisy is a home controller
+    so timestamps past 2068 are not a realistic concern in this
+    decade, but worth flagging if the cookbook ever upgrades to
+    four-digit years.
     """
     if raw is None:
         return None
@@ -934,6 +941,7 @@ def _parse_ws_program_timestamp(raw: str | None) -> str | None:
     try:
         parsed = datetime.strptime(text, "%y%m%d %H:%M:%S")
     except ValueError:
+        _LOGGER.debug("unparsable program WS timestamp %r — skipping", raw)
         return None
     return parsed.isoformat()
 
@@ -1520,11 +1528,11 @@ class EventDispatcher:
         ``<r>`` / ``<f>`` / ``<nr>`` are timestamps in the controller's
         local time as ``YYMMDD HH:MM:SS`` (with trailing space). Empty
         elements (``<nr/>``) mean "cleared" — surface as ``None``. The
-        record stores them as ISO 8601 naive strings (``"YYYY-MM-DDT
-        HH:MM:SS"``) so the typed
+        record stores them as ISO 8601 naive strings — e.g.
+        ``"2026-05-14T16:44:11"`` — so the typed
         :class:`pyisyox.runtime.Program.last_run_time` accessor can
-        decode either wire shape — REST `Z`-suffix UTC and WS naive
-        local — symmetrically.
+        decode either wire shape (REST ``Z``-suffix UTC and WS naive
+        local) symmetrically.
         """
         if not event.event_info:
             return
@@ -1549,6 +1557,13 @@ class EventDispatcher:
         # <on/> / <off/> are the enabled flag (cookbook §8.5.3 +
         # pyisy v3 ref). Absent on some frames; the dispatcher only
         # touches record.enabled when the frame actually carries one.
+        # ``<onAdj/>`` / ``<offAdj/>`` are status-adjust markers that
+        # appear on *node* frames — pyisy v3 doesn't look for them on
+        # program-status frames, and no captured program-status frame
+        # carries one either. Intentionally not handled here; if a
+        # firmware ever emits them, the unknown-marker fall-through
+        # (``new_enabled = None``) keeps record.enabled unchanged
+        # rather than guessing.
         new_enabled: bool | None
         if info.find("on") is not None:
             new_enabled = True
