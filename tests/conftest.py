@@ -18,4 +18,8 @@ import pytest
 @pytest.fixture(autouse=True, scope="session")
 def _force_utc_tz() -> None:
     os.environ["TZ"] = "UTC"
-    time.tzset()
+    # ``time.tzset`` is POSIX-only; absent on Windows. The library
+    # targets Linux/Mac eisy deployments so this is a no-op fall-back
+    # rather than a failure path.
+    if hasattr(time, "tzset"):
+        time.tzset()

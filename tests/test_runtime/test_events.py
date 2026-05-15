@@ -1021,9 +1021,9 @@ def test_program_status_writes_timestamps_to_record() -> None:
     local into UTC-suffixed ISO 8601 strings on the record (the test
     suite forces ``TZ=UTC`` so the local→UTC conversion is a no-op
     and the wall-clock survives). The typed :class:`Program` accessors
-    decode either shape. ``next_scheduled_run_time`` is REST-only;
-    PROGRAM_STATUS frames don't carry it, so the prior value is
-    preserved."""
+    decode either shape. This frame omits ``<nsr>``, so
+    ``next_scheduled_run_time`` falls under the absent-field-preserves-
+    prior-value path."""
     program = _make_program()
     program.last_run_time = "2026-05-01T00:00:00"
     program.last_finish_time = "2026-05-01T00:00:00"
@@ -1080,6 +1080,11 @@ def test_program_status_timestamp_round_trips_to_aware_datetime() -> None:
         )
     )
 
+    # ``IoXClient.__new__`` skips ``__init__`` to build a stub client
+    # without an aiohttp session — safe here because the timestamp
+    # accessors only read ``Program._record`` and never touch the
+    # client. If a future ``Program`` accessor calls into the client,
+    # this test will surface the missing init via AttributeError.
     program = Program(program_record, IoXClient.__new__(IoXClient))
     assert program.last_run_time == datetime(2026, 5, 14, 16, 44, 11, tzinfo=UTC)
     assert program.last_finish_time == datetime(2026, 5, 14, 16, 44, 21, tzinfo=UTC)
