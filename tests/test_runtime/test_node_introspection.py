@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from pyisyox.auth import LocalAuth
-from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord
+from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord, ZWaveProperties
 from pyisyox.constants import NodeFlag, Protocol
 from pyisyox.runtime import Node
 from pyisyox.schema import Profile
@@ -167,6 +167,26 @@ def test_is_battery_node_false_when_st_present(real_profile: Profile) -> None:
     )
     node = _make_node(record, real_profile)
     assert node.is_battery_node is False
+
+
+def test_zwave_props_passes_through_when_devtype_present(real_profile: Profile) -> None:
+    """Z-Wave nodes carry the parsed ``devtype`` block on their record;
+    the runtime ``Node`` re-exposes it so consumers can sort by Z-Wave
+    generic-class category without re-parsing JSON."""
+    record = _make_record(family_id="4", address="ZW019_1")
+    record.zwave_props = ZWaveProperties.from_devtype({"cat": "121", "mfg": "634.257.13", "gen": "4.16.1"})
+    node = _make_node(record, real_profile)
+
+    assert node.zwave_props is not None
+    assert node.zwave_props.category == "121"
+    assert node.zwave_props.basic_type == "4"
+
+
+def test_zwave_props_none_for_insteon_nodes(real_profile: Profile) -> None:
+    """Insteon (and any non-Z-Wave) nodes have no ``devtype`` block —
+    ``zwave_props`` is the gate consumers check before reading category."""
+    node = _make_node(_make_record(family_id="1"), real_profile)
+    assert node.zwave_props is None
 
 
 def test_introspection_safe_when_nodedef_unresolved(real_profile: Profile) -> None:
@@ -383,9 +403,7 @@ def test_is_dimmable_false_when_st_property_missing_from_nodedef(real_profile: P
         "IMETER_SOLO",
     ],
 )
-def test_is_dimmable_false_when_nodedef_does_not_accept_don(
-    real_profile: Profile, nodedef_id: str
-) -> None:
+def test_is_dimmable_false_when_nodedef_does_not_accept_don(real_profile: Profile, nodedef_id: str) -> None:
     """Nodes with a multilevel ``ST`` editor but no ``DON`` in
     ``cmds.accepts`` aren't actually dimmable — sending ``DON`` would
     fail. ``is_dimmable`` must return False so the consumer doesn't

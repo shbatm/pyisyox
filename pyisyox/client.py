@@ -145,6 +145,68 @@ class NodePropertyValue:
     precision: int = 0
 
 
+@dataclass(slots=True, frozen=True)
+class ZWaveProperties:
+    """Z-Wave product details from the controller's ``devtype`` block.
+
+    Surfaces only on Z-Wave / Z-Matter nodes (family ids ``"4"`` /
+    ``"12"``). Sourced from the ``devtype`` JSON object on
+    ``/api/nodes``: ``cat`` is the Z-Wave generic-class id (e.g.
+    ``"121"`` for a multi-channel composite, ``"155"`` for a notification
+    sensor); ``mfg`` is ``"<mfr_id>.<prod_type_id>.<product_id>"``;
+    ``gen`` is ``"<basic>.<generic>.<specific>"``. The split-out
+    ``basic_type`` / ``generic_type`` / ``specific_type`` and
+    ``mfr_id`` / ``prod_type_id`` / ``product_id`` are convenience
+    accessors over the same values.
+
+    Adapted from the legacy ``PyISY.helpers.ZWaveProperties`` so
+    consumers (notably the hacs-udi-iox device-class lookup) can keep
+    using ``node.zwave_props.category`` instead of re-parsing the
+    triple.
+    """
+
+    category: str = "0"
+    devtype_mfg: str = "0.0.0"
+    devtype_gen: str = "0.0.0"
+    basic_type: str = "0"
+    generic_type: str = "0"
+    specific_type: str = "0"
+    mfr_id: str = "0"
+    prod_type_id: str = "0"
+    product_id: str = "0"
+
+    @classmethod
+    def from_devtype(cls, devtype: Any) -> ZWaveProperties | None:
+        """Parse a ``devtype`` JSON object — or return ``None`` for any
+        non-mapping input (Insteon nodes don't carry one)."""
+        if not isinstance(devtype, dict):
+            return None
+        category = str(devtype.get("cat", "0"))
+        devtype_mfg = str(devtype.get("mfg", "0.0.0"))
+        devtype_gen = str(devtype.get("gen", "0.0.0"))
+        basic_type, generic_type, specific_type = "0", "0", "0"
+        mfr_id, prod_type_id, product_id = "0", "0", "0"
+        if devtype_gen:
+            parts = devtype_gen.split(".")
+            if len(parts) == 3:
+                basic_type, generic_type, specific_type = parts
+        if devtype_mfg:
+            parts = devtype_mfg.split(".")
+            if len(parts) == 3:
+                mfr_id, prod_type_id, product_id = parts
+        return cls(
+            category=category,
+            devtype_mfg=devtype_mfg,
+            devtype_gen=devtype_gen,
+            basic_type=basic_type,
+            generic_type=generic_type,
+            specific_type=specific_type,
+            mfr_id=mfr_id,
+            prod_type_id=prod_type_id,
+            product_id=product_id,
+        )
+
+
 @dataclass(slots=True)
 class NodeRecord:
     """One node from ``/api/nodes``, with property values merged in from
@@ -169,6 +231,8 @@ class NodeRecord:
     #: this node.
     flag: int = 0
     properties: dict[str, NodePropertyValue] = field(default_factory=dict)
+    #: Parsed Z-Wave ``devtype`` block; ``None`` for non-Z-Wave nodes.
+    zwave_props: ZWaveProperties | None = None
 
 
 @dataclass(slots=True)
@@ -1076,6 +1140,7 @@ def _node_from_api_json(item: dict[str, Any]) -> NodeRecord:
         enabled=str(item.get("enabled", "true")).lower() == "true",
         flag=flag_int,
         properties=properties,
+        zwave_props=ZWaveProperties.from_devtype(item.get("devtype")),
     )
 
 

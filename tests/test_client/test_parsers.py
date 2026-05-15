@@ -96,9 +96,7 @@ def test_parse_api_nodes_bare_scalar_family() -> None:
                         "type": "4.17.1.0",
                         "enabled": "true",
                         "pnode": "ZW002_1",
-                        "property": [
-                            {"id": "ST", "value": "37", "formatted": "37%", "uom": "51"}
-                        ],
+                        "property": [{"id": "ST", "value": "37", "formatted": "37%", "uom": "51"}],
                     },
                     {
                         "address": "n012_1",
@@ -124,6 +122,55 @@ def test_parse_api_nodes_handles_empty_payload() -> None:
     assert parse_api_nodes({}) == {}
     assert parse_api_nodes({"data": {}}) == {}
     assert parse_api_nodes({"data": {"nodes": {}}}) == {}
+
+
+def test_parse_api_nodes_zwave_devtype_block_lands_on_record() -> None:
+    """Z-Wave / Z-Matter nodes carry a ``devtype`` JSON object —
+    ``cat`` (generic class), ``mfg`` (mfr.prod_type.product), ``gen``
+    (basic.generic.specific). Adapted from the legacy PyISY
+    ``ZWaveProperties`` so consumers can sort by Z-Wave generic
+    category without re-parsing the JSON.
+    """
+    raw = {
+        "data": {
+            "nodes": {
+                "node": [
+                    {
+                        "address": "ZW019_1",
+                        "name": "ZW 019 Multi-Channel Sensor",
+                        "nodeDefId": "UZW0099",
+                        "family": "4",
+                        "type": "4.16.1.0",
+                        "enabled": "true",
+                        "devtype": {
+                            "gen": "4.16.1",
+                            "mfg": "634.257.13",
+                            "cat": "121",
+                        },
+                    },
+                    {
+                        # Insteon node — no devtype block.
+                        "address": "1A 2B 3C 1",
+                        "name": "Hallway Switch",
+                        "nodeDefId": "DimmerLampSwitch",
+                        "type": "1.65.69.0",
+                    },
+                ]
+            }
+        }
+    }
+    nodes = parse_api_nodes(raw)
+
+    zw = nodes["ZW019_1"].zwave_props
+    assert zw is not None
+    assert zw.category == "121"
+    assert zw.devtype_mfg == "634.257.13"
+    assert zw.devtype_gen == "4.16.1"
+    assert (zw.basic_type, zw.generic_type, zw.specific_type) == ("4", "16", "1")
+    assert (zw.mfr_id, zw.prod_type_id, zw.product_id) == ("634", "257", "13")
+
+    # Insteon nodes get None — the gate consumers use to skip the lookup.
+    assert nodes["1A 2B 3C 1"].zwave_props is None
 
 
 def test_parse_api_nodes_skips_property_entries_without_id() -> None:
