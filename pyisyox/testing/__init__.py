@@ -204,6 +204,29 @@ def make_folder_record(address: str, name: str, *, parent_address: str | None = 
     return FolderRecord(address=address, name=name, parent_address=parent_address)
 
 
+def make_program_folder_record(
+    address: str,
+    name: str,
+    *,
+    parent_address: str | None = None,
+) -> ProgramRecord:
+    """A folder-shaped :class:`ProgramRecord` (``is_folder=True``).
+
+    Program folders live in the same ``programs`` dict as programs
+    themselves — the runtime distinguishes them via ``is_folder``.
+    Use this with :func:`make_load_result`'s ``program_folders=`` kwarg
+    to keep folders mentally separate from programs at the test seam.
+    """
+    return ProgramRecord(
+        address=address,
+        name=name,
+        path=name,
+        parent_address=parent_address,
+        is_folder=True,
+        status=False,
+    )
+
+
 def make_program_record(
     address: str,
     name: str,
@@ -281,6 +304,7 @@ def make_load_result(
     groups: dict[str, GroupRecord] | None = None,
     folders: dict[str, FolderRecord] | None = None,
     programs: dict[str, ProgramRecord] | None = None,
+    program_folders: dict[str, ProgramRecord] | None = None,
     variables: dict[str, dict[str, VariableRecord]] | None = None,
     network_resources: dict[str, NetworkResourceRecord] | None = None,
 ) -> LoadResult:
@@ -292,14 +316,21 @@ def make_load_result(
     introspection (``is_thermostat`` / ``is_lock`` / ``is_dimmable``)
     and editor-codec command validation work the same way they do at
     runtime.
+
+    ``program_folders`` is a convenience overlay onto ``programs`` —
+    program folders live in the same dict at runtime (distinguished by
+    ``ProgramRecord.is_folder``); passing them here keeps the test seam
+    parallel to ``folders=`` for nodes. Use :func:`make_program_folder_record`
+    to build the entries.
     """
+    merged_programs: dict[str, ProgramRecord] = {**(programs or {}), **(program_folders or {})}
     return LoadResult(
         config=ControllerConfig(uuid=uuid, version=version),
         profile=load_profile(),
         nodes=nodes or {},
         groups=groups or {},
         folders=folders or {},
-        programs=programs or {},
+        programs=merged_programs,
         triggers=[],
         variables=variables or {"1": {}, "2": {}},
         network_resources=network_resources or {},
@@ -1322,6 +1353,7 @@ __all__ = [
     "make_profile_with_hub_plugin",
     "make_profile_with_trigger_plugin",
     "make_program",
+    "make_program_folder_record",
     "make_program_record",
     "make_thermostat_binary_records",
     "make_trigger_plugin_load_result",
