@@ -1524,12 +1524,17 @@ class EventDispatcher:
             <control>_1</control><action>0</action>
             <eventInfo>
               <id>HEX</id>
-              <on/>                              <!-- enabled flag -->
-              <nr>YYMMDD HH:MM:SS </nr>          <!-- next scheduled run -->
+              <on/>   or  <off/>                 <!-- enabled flag -->
+              <rr/>   or  <nr/>                  <!-- run-at-reboot flag -->
               <r>YYMMDD HH:MM:SS </r>            <!-- last run start -->
               <f>YYMMDD HH:MM:SS </f>            <!-- last run finish -->
+              <nsr>YYMMDD HH:MM:SS </nsr>        <!-- next scheduled run -->
               <s>NN</s>                          <!-- status byte -->
             </eventInfo>
+
+        Partial frames are common — e.g. just ``<id>`` + ``<nsr>``
+        when the scheduler plans the next run. The dispatcher mutates
+        only the fields the frame actually carries.
 
         ``<id>`` is hex without zero-padding (``8D``); the
         ``ProgramRecord`` registry is keyed on the zero-padded
