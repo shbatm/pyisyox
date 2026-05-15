@@ -45,7 +45,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import DEFAULT, AsyncMock, MagicMock
 
 from pyisyox.auth import Auth
 from pyisyox.client import (
@@ -396,9 +396,15 @@ def _build_fake_client(host: str, auth: Any, session: Any) -> IoXClient:
     calls: list[RecordedCall] = []
     client.calls = calls  # type: ignore[attr-defined]
 
-    def _make_recorder(method_name: str) -> Callable[..., Awaitable[None]]:
-        async def _record(*args: Any, **kwargs: Any) -> None:
+    def _make_recorder(method_name: str) -> Callable[..., Awaitable[Any]]:
+        async def _record(*args: Any, **kwargs: Any) -> Any:
             calls.append(RecordedCall(method_name, args, kwargs))
+            # ``unittest.mock.DEFAULT`` tells the wrapping ``AsyncMock``
+            # to fall through to its ``return_value`` — without this, an
+            # async ``side_effect`` returning ``None`` would mask any
+            # ``client.<method>.return_value = ...`` override the test
+            # set up (e.g. ``create_variable`` echoing the new record).
+            return DEFAULT
 
         return _record
 

@@ -243,6 +243,25 @@ async def test_recorded_calls_coexists_with_assert_awaited_once_with() -> None:
     ]
 
 
+@pytest.mark.asyncio
+async def test_fake_client_return_value_override_takes_effect() -> None:
+    """The recording side-effect propagates ``unittest.mock.DEFAULT`` so a
+    test can still set ``client.<method>.return_value = ...`` to programme
+    a real return shape (e.g. ``create_variable`` echoing the new
+    record). Without that, the side-effect's implicit ``None`` would
+    mask the override."""
+    controller = make_controller(make_load_result())
+    expected = {"successful": True, "data": {"id": "5", "name": "x"}}
+    controller._client.create_variable.return_value = expected
+
+    result = await controller._client.create_variable("1", "x")
+
+    assert result == expected
+    assert recorded_calls_for(controller, "create_variable") == [
+        RecordedCall("create_variable", ("1", "x"), {}),
+    ]
+
+
 def test_recorded_calls_is_live_and_clearable() -> None:
     """The list returned by :func:`recorded_calls` is the live storage —
     clearing it between phases is the documented way to scope assertions."""
