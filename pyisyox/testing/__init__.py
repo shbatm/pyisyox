@@ -208,6 +208,7 @@ def make_program_folder_record(
     address: str,
     name: str,
     *,
+    path: str = "",
     parent_address: str | None = None,
 ) -> ProgramRecord:
     """A folder-shaped :class:`ProgramRecord` (``is_folder=True``).
@@ -216,11 +217,15 @@ def make_program_folder_record(
     themselves — the runtime distinguishes them via ``is_folder``.
     Use this with :func:`make_load_result`'s ``program_folders=`` kwarg
     to keep folders mentally separate from programs at the test seam.
+
+    ``path`` defaults to ``""`` (root-level folder); pass it
+    explicitly with the slash-joined ancestry (excluding the synthetic
+    ``"My Programs"`` root) for nested-folder tests.
     """
     return ProgramRecord(
         address=address,
         name=name,
-        path=name,
+        path=path,
         parent_address=parent_address,
         is_folder=True,
         status=False,
