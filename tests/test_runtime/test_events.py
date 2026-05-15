@@ -918,27 +918,34 @@ def test_program_status_with_missing_id_is_dropped() -> None:
     assert program.status is False, "no <id> means we can't match a record"
 
 
-def test_program_status_without_on_off_marker_preserves_status() -> None:
-    """Unrecognised marker tags fall through to ``record.status`` —
-    defensive against future firmware adding new flavours."""
+def test_program_status_without_on_off_marker_preserves_enabled() -> None:
+    """A frame without ``<on/>`` / ``<off/>`` (the enabled-flag elements)
+    leaves ``record.enabled`` unchanged — the dispatcher only mutates
+    when the wire actually carries a new value. ``<s>21</s>`` still
+    drives status from its eval-state nibble (TRUE → True)."""
     program = _make_program()
-    program.status = True
+    program.enabled = True
+    program.status = False
     dispatcher = EventDispatcher({}, programs={"008D": program})
 
     dispatcher.feed(_program_frame("<id>8D</id><weird /><s>21</s>"))
-    assert program.status is True, "unrecognised marker preserves prior status"
+    assert program.enabled is True, "no on/off marker preserves prior enabled"
+    assert program.status is True, "<s>21 has eval-state TRUE → status flips True"
 
 
 def test_program_status_with_non_integer_running_is_dropped() -> None:
     """The ``<s>`` running-state value is best-effort-int; garbage there
-    must not crash the apply step (the record's ``running`` simply
-    stays unchanged)."""
+    must not crash the apply step. With no decoded eval state, status
+    carries forward; ``<on/>`` still updates the enabled flag."""
     program = _make_program()
+    program.status = False
+    program.enabled = False
     program.running = None
     dispatcher = EventDispatcher({}, programs={"008D": program})
 
     dispatcher.feed(_program_frame("<id>8D</id><on /><s>not-a-number</s>"))
-    assert program.status is True
+    assert program.status is False, "garbage <s> leaves status unchanged"
+    assert program.enabled is True, "<on/> still flips enabled True"
     assert program.running is None, "non-int <s> leaves running unchanged"
 
 
@@ -1005,6 +1012,52 @@ def test_program_status_event_run_state_is_none_when_not_loaded() -> None:
     event = received[0]
     assert event.run_state is None
     assert event.eval_state is ProgramEvalState.NOT_LOADED
+
+
+def test_program_status_writes_timestamps_to_record() -> None:
+    """``<r>`` / ``<f>`` are parsed from ``YYMMDD HH:MM:SS`` controller-
+    local into ISO 8601 naive strings on the record so the typed
+    :class:`Program` accessors can decode them. ``<nr/>`` self-closed
+    means the schedule was cleared — surface as ``None``."""
+    program = _make_program()
+    program.last_run_time = "2026-05-01T00:00:00"
+    program.last_finish_time = "2026-05-01T00:00:00"
+    program.next_scheduled_run_time = "2026-05-15T18:00:00"
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    dispatcher.feed(
+        _program_frame(
+            "<id>8D</id><on /><nr /><r>260514 16:44:11 </r>"
+            "<f>260514 16:44:21 </f><s>21</s>"
+        )
+    )
+
+    assert program.last_run_time == "2026-05-14T16:44:11"
+    assert program.last_finish_time == "2026-05-14T16:44:21"
+    assert program.next_scheduled_run_time is None
+
+
+def test_program_status_garbage_timestamp_leaves_record_unchanged() -> None:
+    """Unparsable ``<r>`` text doesn't crash and leaves the prior value."""
+    program = _make_program()
+    program.last_run_time = "2026-05-01T00:00:00"
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    dispatcher.feed(_program_frame("<id>8D</id><on /><r>not-a-timestamp</r>"))
+
+    assert program.last_run_time == "2026-05-01T00:00:00"
+
+
+def test_program_status_omitted_nr_preserves_schedule() -> None:
+    """A frame *without* an ``<nr>`` element (vs ``<nr/>`` self-closed)
+    means "no info" — the prior schedule is preserved."""
+    program = _make_program()
+    program.next_scheduled_run_time = "2026-05-15T18:00:00"
+    dispatcher = EventDispatcher({}, programs={"008D": program})
+
+    dispatcher.feed(_program_frame("<id>8D</id><on /><s>21</s>"))
+
+    assert program.next_scheduled_run_time == "2026-05-15T18:00:00"
 
 
 def test_program_status_event_run_state_is_none_when_running_absent() -> None:

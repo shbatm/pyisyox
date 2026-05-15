@@ -17,6 +17,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
@@ -912,6 +913,31 @@ class ProgramEvalState(IntEnum):
     NOT_LOADED = 0xF0
 
 
+def _parse_ws_program_timestamp(raw: str | None) -> str | None:
+    """Convert a ``<r>`` / ``<f>`` / ``<nr>`` WS timestamp to ISO 8601.
+
+    The eisy emits these as ``"YYMMDD HH:MM:SS "`` (note the trailing
+    space) in the controller's local time. Returns an ISO 8601 naive
+    string (``"YYYY-MM-DDTHH:MM:SS"``) — the typed
+    :class:`pyisyox.runtime.Program` accessors normalise naive parses
+    to UTC, matching the existing REST-side ``Z``-suffix path.
+
+    Returns ``None`` for missing / blank input (``<nr/>`` self-closes
+    when the schedule has been cleared) or unparsable junk so the
+    dispatcher can treat "absent" and "unparsable" the same way.
+    """
+    if raw is None:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.strptime(text, "%y%m%d %H:%M:%S")
+    except ValueError:
+        return None
+    return parsed.isoformat()
+
+
 def _decode_program_status_byte(
     raw: int | None,
 ) -> tuple[ProgramRunState | None, ProgramEvalState | None]:
@@ -949,10 +975,17 @@ class ProgramStatusEvent:
     Attributes:
         address: Program id (4-character hex, zero-padded to match
             ``/api/programs``).
-        status: ``True`` if the frame contained ``<on/>``; ``False``
-            for ``<off/>``. Other markers (``<onAdj/>`` etc.) are
-            normalised to ``True`` since they all imply
-            "the if-clause matched".
+        status: ``True`` when the cookbook ``<s>`` byte's eval state
+            is :attr:`ProgramEvalState.TRUE` (the if-clause matched on
+            the most recent evaluation); ``False`` for
+            :attr:`ProgramEvalState.FALSE`. For
+            :attr:`ProgramEvalState.UNKNOWN` /
+            :attr:`ProgramEvalState.NOT_LOADED` (and frames with no
+            ``<s>`` byte) the dispatcher carries forward the prior
+            ``record.status`` so a transient unknown doesn't flip the
+            entity. Wire-shape note: the ``<on/>`` / ``<off/>``
+            elements that ride along on the same frame are the
+            **enabled flag**, not the status — see :attr:`enabled`.
         running: Raw ``<s>`` byte the eisy sent, or ``None`` if
             absent. Cookbook §8.5.3: the byte is a bitwise OR of a
             :class:`ProgramRunState` (low nibble) and a
@@ -969,6 +1002,13 @@ class ProgramStatusEvent:
             collapses. ``NOT_LOADED`` is the cookbook label for what
             is in practice the **program-errored** sentinel — see
             :class:`ProgramEvalState`.
+        enabled: New ``enabled`` state when the frame carried an
+            ``<on/>`` / ``<off/>`` element — ``True`` for ``<on/>``,
+            ``False`` for ``<off/>``. ``None`` when the frame omitted
+            both (some "ran"-only frames carry only ``<r>`` / ``<f>``
+            / ``<s>`` — see cookbook §8.5.3). The matching record's
+            :attr:`pyisyox.client.ProgramRecord.enabled` is updated
+            in-place before listeners fire when this is non-``None``.
         seqnum: Sequence number of the underlying :class:`Event`.
     """
 
@@ -978,6 +1018,7 @@ class ProgramStatusEvent:
     seqnum: int
     run_state: ProgramRunState | None = None
     eval_state: ProgramEvalState | None = None
+    enabled: bool | None = None
 
 
 ProgramStatusListener = Callable[[ProgramStatusEvent], None]
@@ -1446,27 +1487,44 @@ class EventDispatcher:
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Variable table change listener raised")
 
-    def _apply_program_status(self, event: Event) -> None:
+    def _apply_program_status(self, event: Event) -> None:  # pylint: disable=too-many-locals
         """Decode a program-status frame and update the matching record.
 
-        Wire shape::
+        Wire shape (cookbook §8.5.3)::
 
             <control>_1</control><action>0</action>
-            <eventInfo><id>HEX</id><on/><r>YYMMDD HH:MM:SS </r>
-            <f>YYMMDD HH:MM:SS </f><s>NN</s></eventInfo>
+            <eventInfo>
+              <id>HEX</id>
+              <on/>                              <!-- enabled flag -->
+              <nr>YYMMDD HH:MM:SS </nr>          <!-- next scheduled run -->
+              <r>YYMMDD HH:MM:SS </r>            <!-- last run start -->
+              <f>YYMMDD HH:MM:SS </f>            <!-- last run finish -->
+              <s>NN</s>                          <!-- status byte -->
+            </eventInfo>
 
         ``<id>`` is hex without zero-padding (``8D``); the
         ``ProgramRecord`` registry is keyed on the zero-padded
         4-character form (``008D``) from ``/api/programs``, so we
-        normalise. ``<on/>`` flips status True; ``<off/>`` flips it
-        False; other markers (``<onAdj/>`` etc.) imply
-        "if-clause matched" and also flip True.
+        normalise.
 
-        ``<s>`` is decoded as int into ``record.running`` so
-        consumers can compare against firmware-version-specific
-        running-state codes; the typed :class:`ProgramRunState` /
-        :class:`ProgramEvalState` decode of the same byte rides on
-        the emitted :class:`ProgramStatusEvent`.
+        Per the cookbook (and the pyisy 3.x reference): ``<on/>`` /
+        ``<off/>`` are the **enabled** flag, *not* the status — they
+        mean "this program is enabled / disabled on the controller"
+        and ride on every program-status frame as the current state.
+        Status ("did the if-clause match") comes from the high nibble
+        of the ``<s>`` byte (:class:`ProgramEvalState`):
+        ``TRUE`` → ``True``, ``FALSE`` → ``False``;
+        ``UNKNOWN`` / ``NOT_LOADED`` carry forward the prior
+        ``record.status`` rather than flipping based on a transient.
+
+        ``<r>`` / ``<f>`` / ``<nr>`` are timestamps in the controller's
+        local time as ``YYMMDD HH:MM:SS`` (with trailing space). Empty
+        elements (``<nr/>``) mean "cleared" — surface as ``None``. The
+        record stores them as ISO 8601 naive strings (``"YYYY-MM-DDT
+        HH:MM:SS"``) so the typed
+        :class:`pyisyox.runtime.Program.last_run_time` accessor can
+        decode either wire shape — REST `Z`-suffix UTC and WS naive
+        local — symmetrically.
         """
         if not event.event_info:
             return
@@ -1488,25 +1546,39 @@ class EventDispatcher:
             _LOGGER.debug("WS program-status event for unknown id %r — dropping", raw_id)
             return
 
-        # <on/> / <onAdj/> / etc. all mean "if-clause matched" → True.
-        # <off/> / <offAdj/> mean "else-clause matched" → False.
-        if info.find("off") is not None or info.find("offAdj") is not None:
-            new_status = False
-        elif info.find("on") is not None or info.find("onAdj") is not None:
-            new_status = True
+        # <on/> / <off/> are the enabled flag (cookbook §8.5.3 +
+        # pyisy v3 ref). Absent on some frames; the dispatcher only
+        # touches record.enabled when the frame actually carries one.
+        new_enabled: bool | None
+        if info.find("on") is not None:
+            new_enabled = True
+        elif info.find("off") is not None:
+            new_enabled = False
         else:
-            new_status = record.status  # Defensive — unrecognised tag
+            new_enabled = None
 
         running_text = (info.findtext("s") or "").strip()
         running_int: int | None
         try:
-            # Cookbook §8.5.3: the byte is two ASCII hex digits
-            # (high nibble = eval state, low nibble = run state).
+            # Cookbook §8.5.3: two ASCII hex digits.
             running_int = int(running_text, 16) if running_text else None
         except ValueError:
             running_int = None
 
+        run_state, eval_state = _decode_program_status_byte(running_int)
+        # Status is the eval-state high nibble. UNKNOWN / NOT_LOADED /
+        # absent → carry forward the prior record.status (don't flip
+        # the entity on a transient mid-evaluation or a load error).
+        if eval_state is ProgramEvalState.TRUE:
+            new_status = True
+        elif eval_state is ProgramEvalState.FALSE:
+            new_status = False
+        else:
+            new_status = record.status
+
         record.status = new_status
+        if new_enabled is not None:
+            record.enabled = new_enabled
         if running_int is not None:
             # Stored as the wire string verbatim so the typed Program
             # accessors and consumers reading the raw byte agree on the
@@ -1514,14 +1586,26 @@ class EventDispatcher:
             # decoded int form.
             record.running = running_text
 
+        last_run = _parse_ws_program_timestamp(info.findtext("r"))
+        last_finish = _parse_ws_program_timestamp(info.findtext("f"))
+        # `<nr/>` (empty) clears the schedule; only mutate when the
+        # frame actually carried the element (some frames omit it).
+        nr_el = info.find("nr")
+        if last_run is not None:
+            record.last_run_time = last_run
+        if last_finish is not None:
+            record.last_finish_time = last_finish
+        if nr_el is not None:
+            record.next_scheduled_run_time = _parse_ws_program_timestamp(nr_el.text)
+
         _LOGGER.debug(
-            "Program %s status -> %s%s",
+            "Program %s status -> %s%s%s",
             record.address,
             new_status,
+            f" enabled={new_enabled}" if new_enabled is not None else "",
             f" (running={running_int})" if running_int is not None else "",
         )
 
-        run_state, eval_state = _decode_program_status_byte(running_int)
         if not self._program_status_listeners:
             return
         status_event = ProgramStatusEvent(
@@ -1531,6 +1615,7 @@ class EventDispatcher:
             seqnum=event.seqnum,
             run_state=run_state,
             eval_state=eval_state,
+            enabled=new_enabled,
         )
         for listener in tuple(self._program_status_listeners):
             try:
