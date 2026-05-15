@@ -18,6 +18,7 @@ shape the dispatcher mutates.
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -44,6 +45,32 @@ _REST_RUN_LABEL_TO_STATE: dict[str, ProgramRunState] = {
     "running then": ProgramRunState.THEN,
     "running else": ProgramRunState.ELSE,
 }
+
+
+def _parse_iso8601_timestamp(raw: str | None) -> datetime | None:
+    """Parse an ISO 8601 timestamp into a tz-aware :class:`datetime`.
+
+    REST ``/api/programs`` emits timestamps as ``"2026-05-10T14:49:53.000Z"``
+    — UTC with the ``Z`` shorthand. Returns ``None`` when ``raw`` is
+    missing, blank, or unparsable; the wire payload omits these fields
+    when the program has never run / has no schedule.
+
+    A naive parse (no timezone in the string) is coerced to UTC so the
+    return type is uniformly tz-aware — every wire shape observed so
+    far has been UTC, and a tz-aware return saves consumers from
+    reapplying the same default downstream.
+
+    ``datetime.fromisoformat`` accepts a ``Z`` suffix natively from
+    Python 3.11; the ``Z`` → ``+00:00`` swap keeps the path Py3.10-safe.
+    """
+    if not raw:
+        return None
+    text = f"{raw[:-1]}+00:00" if raw.endswith("Z") else raw
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _split_running_field(
@@ -227,21 +254,29 @@ class Program(_ProgramBase):
         return eval_state
 
     @property
-    def last_run_time(self) -> str | None:
-        """ISO 8601 timestamp string (``"2026-05-10T14:49:53.000Z"``)
-        or ``None`` if the program has never run."""
-        return self._record.last_run_time
+    def last_run_time(self) -> datetime | None:
+        """Tz-aware :class:`datetime` of the program's last run start,
+        or ``None`` if it has never run.
+
+        REST ``/api/programs`` emits the timestamp as ISO 8601 UTC
+        (``"2026-05-10T14:49:53.000Z"``); we parse on read so the
+        wrapper hands consumers a real ``datetime`` rather than the
+        wire string. The raw form remains accessible via
+        ``self._record.last_run_time`` for diagnostics / round-trip.
+        """
+        return _parse_iso8601_timestamp(self._record.last_run_time)
 
     @property
-    def last_finish_time(self) -> str | None:
-        """ISO 8601 timestamp string or ``None``."""
-        return self._record.last_finish_time
+    def last_finish_time(self) -> datetime | None:
+        """Tz-aware :class:`datetime` of the program's last run
+        completion, or ``None``."""
+        return _parse_iso8601_timestamp(self._record.last_finish_time)
 
     @property
-    def next_scheduled_run_time(self) -> str | None:
-        """ISO 8601 timestamp string or ``None`` if there's no
-        scheduled run (manual-only programs)."""
-        return self._record.next_scheduled_run_time
+    def next_scheduled_run_time(self) -> datetime | None:
+        """Tz-aware :class:`datetime` of the next scheduled run, or
+        ``None`` for manual-only programs."""
+        return _parse_iso8601_timestamp(self._record.next_scheduled_run_time)
 
     async def run_then(self) -> None:
         """Run the program's ``then`` clause.

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -1285,9 +1286,9 @@ async def test_program_record_fields_surface_via_properties() -> None:
     assert program.parent_address == "0010"
     assert program.run_at_startup is False
     assert program.running == "running then"
-    assert program.last_run_time == "2026-05-10T14:49:53.000Z"
-    assert program.last_finish_time == "2026-05-10T14:49:54.000Z"
-    assert program.next_scheduled_run_time == "2026-05-10T15:00:00.000Z"
+    assert program.last_run_time == datetime(2026, 5, 10, 14, 49, 53, tzinfo=UTC)
+    assert program.last_finish_time == datetime(2026, 5, 10, 14, 49, 54, tzinfo=UTC)
+    assert program.next_scheduled_run_time == datetime(2026, 5, 10, 15, 0, 0, tzinfo=UTC)
     assert repr(program) == (
         "Program(address='0030', name='Foo Status', path='HA.switch/Foo Status', status=True)"
     )
