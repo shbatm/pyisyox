@@ -212,9 +212,12 @@ class ProgramRecord:
     Status strings ``"true"``/``"false"`` are decoded to bool; empty time
     strings become ``None``. ``path`` is the slash-joined ancestry (excluding
     the ``"My Programs"`` root) to match the pyisy 3.x convention.
-    Timestamps stay as ISO 8601 strings so this layer doesn't pull in a
-    datetime parser; ``running`` is free-form (``"idle"``,
-    ``"running then"``, …).
+    Timestamps stay as ISO 8601 strings on the record (wire shape
+    preserved); :class:`pyisyox.runtime.Program` exposes them as parsed
+    tz-aware :class:`datetime` instances. ``running`` is free-form
+    (``"idle"`` / ``"running then"`` / the cookbook ``<s>`` byte) — the
+    typed :attr:`Program.run_state` / :attr:`Program.eval_state`
+    accessors decode it.
     """
 
     address: str

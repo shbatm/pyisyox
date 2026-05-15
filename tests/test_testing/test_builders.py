@@ -51,6 +51,7 @@ from pyisyox.testing import (
     PLUGIN_DIMMER_FAMILY_ID,
     PLUGIN_HUB_FAMILY_ID,
     PLUGIN_TRIGGER_FAMILY_ID,
+    RecordedCall,
     fire_event,
     fire_lifecycle,
     fire_program_status,
@@ -88,6 +89,8 @@ from pyisyox.testing import (
     make_trigger_plugin_load_result,
     make_variable,
     make_variable_record,
+    recorded_calls,
+    recorded_calls_for,
 )
 
 # ---------------------------------------------------------------------------
@@ -201,6 +204,55 @@ async def test_controller_send_command_does_not_hit_network() -> None:
     node = make_node(rec, controller)
     await node.send_command("DON", 75)
     controller._client.send_node_command.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_recorded_calls_captures_wire_shape() -> None:
+    """``recorded_calls`` exposes the actual ``(method, args)`` issued by
+    the wrapper layer — without monkey-patching the wrapper itself."""
+    rec = make_node_record("1A 2B 3C 1", "Lamp")
+    controller = make_controller(make_load_result(nodes={rec.address: rec}))
+    node = make_node(rec, controller)
+
+    await node.send_command("DON", 75)
+    await node.send_command("DOF")
+
+    calls = recorded_calls(controller)
+    assert calls == [
+        RecordedCall("send_node_command", ("1A 2B 3C 1", "DON", 75, "51"), {}),
+        RecordedCall("send_node_command", ("1A 2B 3C 1", "DOF"), {}),
+    ]
+    assert recorded_calls_for(controller, "send_node_command") == calls
+    assert recorded_calls_for(controller, "post_variable_update") == []
+
+
+@pytest.mark.asyncio
+async def test_recorded_calls_coexists_with_assert_awaited_once_with() -> None:
+    """The recording side-effect doesn't break the existing AsyncMock
+    ``.assert_awaited_*`` interface — both styles work on the same
+    fake."""
+    rec = make_node_record("1A 2B 3C 1", "Lamp")
+    controller = make_controller(make_load_result(nodes={rec.address: rec}))
+    node = make_node(rec, controller)
+
+    await node.send_command("DOF")
+
+    controller._client.send_node_command.assert_awaited_once_with("1A 2B 3C 1", "DOF")
+    assert recorded_calls_for(controller, "send_node_command") == [
+        RecordedCall("send_node_command", ("1A 2B 3C 1", "DOF"), {}),
+    ]
+
+
+def test_recorded_calls_is_live_and_clearable() -> None:
+    """The list returned by :func:`recorded_calls` is the live storage —
+    clearing it between phases is the documented way to scope assertions."""
+    controller = make_controller(make_load_result())
+    calls = recorded_calls(controller)
+    assert calls == []
+    calls.append(RecordedCall("synthetic", (), {}))
+    assert recorded_calls(controller) == [RecordedCall("synthetic", (), {})]
+    calls.clear()
+    assert recorded_calls(controller) == []
 
 
 # ---------------------------------------------------------------------------

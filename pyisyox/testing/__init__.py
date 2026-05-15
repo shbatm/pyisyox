@@ -40,6 +40,8 @@ Usage::
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
 from typing import Any
@@ -337,31 +339,94 @@ def make_controller(
     return controller
 
 
+#: Mutation methods on :class:`IoXClient` whose calls are captured by the
+#: recording fake. Reads stay un-stubbed (the load already happened, and
+#: there's no production code path that re-issues them at runtime against
+#: the same client) so a test that accidentally trips one fails loudly
+#: rather than silently returning ``None``.
+_RECORDED_CLIENT_METHODS: tuple[str, ...] = (
+    "send_node_command",
+    "post_node_update",
+    "post_variable_update",
+    "create_variable",
+    "delete_variable",
+    "run_program_command",
+    "run_network_resource",
+    "set_node_enabled",
+    "get_zwave_parameter",
+    "set_zwave_parameter",
+    "set_zwave_lock_code",
+    "delete_zwave_lock_code",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedCall:
+    """One captured wire call on the testing fake :class:`IoXClient`.
+
+    ``method`` is the :class:`IoXClient` method name (e.g.
+    ``"run_program_command"``); ``args`` / ``kwargs`` are the argument
+    tuple as the consumer code passed them. Wrapper layers above
+    (:class:`Program.enable` etc.) collapse to a known ``method`` +
+    ``args`` shape — asserting on this is the cleanest way for a
+    consumer test to pin "the entity issued the right wire command"
+    without monkey-patching the wrapper itself.
+    """
+
+    method: str
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+
+
 def _build_fake_client(host: str, auth: Any, session: Any) -> IoXClient:
     """A real :class:`IoXClient` with HTTP methods stubbed.
 
-    Keeps the real class so ``isinstance(client, IoXClient)`` holds
-    and method signatures stay typed; only the HTTP-dispatching
-    coroutines are replaced with ``AsyncMock``s that succeed silently.
+    Keeps the real class so ``isinstance(client, IoXClient)`` holds and
+    method signatures stay typed. Each mutation method is replaced with
+    an ``AsyncMock`` whose ``side_effect`` appends a :class:`RecordedCall`
+    to ``client.calls`` — preserves the existing
+    ``client.<method>.assert_awaited_once_with(...)`` style **and**
+    enables wire-shape assertions via :func:`recorded_calls` /
+    :func:`recorded_calls_for`. To programme a return value, set it on
+    the mock the usual way: ``client.create_variable.return_value = ...``.
     """
     client = IoXClient(host, auth, session)
     client._authenticated = True
 
-    for method_name in (
-        "send_node_command",
-        "post_node_update",
-        "post_variable_update",
-        "run_program_command",
-        "run_network_resource",
-        "set_node_enabled",
-        "get_zwave_parameter",
-        "set_zwave_parameter",
-        "set_zwave_lock_code",
-        "delete_zwave_lock_code",
-    ):
-        setattr(client, method_name, AsyncMock(return_value=None))
+    calls: list[RecordedCall] = []
+    client.calls = calls  # type: ignore[attr-defined]
+
+    def _make_recorder(method_name: str) -> Callable[..., Awaitable[None]]:
+        async def _record(*args: Any, **kwargs: Any) -> None:
+            calls.append(RecordedCall(method_name, args, kwargs))
+
+        return _record
+
+    for method_name in _RECORDED_CLIENT_METHODS:
+        setattr(
+            client,
+            method_name,
+            AsyncMock(return_value=None, side_effect=_make_recorder(method_name)),
+        )
 
     return client
+
+
+def recorded_calls(controller: Controller) -> list[RecordedCall]:
+    """Return every wire call captured on ``controller``'s fake client,
+    in invocation order. The list is the live storage — consumers may
+    ``.clear()`` between assertions when a test exercises multiple
+    phases."""
+    _, client = _loaded_and_client(controller)
+    calls: list[RecordedCall] | None = getattr(client, "calls", None)
+    assert calls is not None, "controller's client wasn't built via make_controller — no recording fake"
+    return calls
+
+
+def recorded_calls_for(controller: Controller, method: str) -> list[RecordedCall]:
+    """Subset of :func:`recorded_calls` filtered to one client method
+    name (e.g. ``"run_program_command"``)."""
+    return [c for c in recorded_calls(controller) if c.method == method]
 
 
 # ---------------------------------------------------------------------------
@@ -1218,6 +1283,7 @@ __all__ = [
     "PLUGIN_TRIGGER_FAMILY_ID",
     "PLUGIN_TRIGGER_INSTANCE_ID",
     "PLUGIN_TRIGGER_NODEDEF_ID",
+    "RecordedCall",
     "fire_event",
     "fire_lifecycle",
     "fire_program_status",
@@ -1255,4 +1321,6 @@ __all__ = [
     "make_trigger_plugin_load_result",
     "make_variable",
     "make_variable_record",
+    "recorded_calls",
+    "recorded_calls_for",
 ]
