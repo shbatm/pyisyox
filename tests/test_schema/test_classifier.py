@@ -200,6 +200,23 @@ def test_classify_works_without_editor_resolver(profile: Profile) -> None:
     res = classify(nd)  # no resolver
     assert all(r.platform is ReadingPlatform.SENSOR for r in res.readings)
     assert all(r.is_enum is False for r in res.readings)
+    # aux_controls degrade the same way: read-only → SENSOR, is_enum False.
+    assert res.aux_controls
+    assert all(a.candidate_platform is AuxPlatform.SENSOR and not a.is_enum for a in res.aux_controls)
+
+    # A writable control with no resolvable editor → candidate None (the
+    # documented fallback path); still flagged writable for the consumer.
+    nd_w = NodeDef(
+        id="w",
+        family_id="99",
+        instance_id="1",
+        properties={"GV0": NodeProperty(id="GV0", editor_id="X")},
+        cmds=NodeCommands(
+            accepts=[Command(id="GV0", parameters=[CommandParameter(editor_id="X", init="GV0")])]
+        ),
+    )
+    (ctrl,) = classify(nd_w).aux_controls  # no resolver
+    assert ctrl.id == "GV0" and ctrl.writable and ctrl.candidate_platform is None
 
 
 def test_query_is_never_a_button() -> None:
