@@ -31,6 +31,8 @@ from importlib.metadata import PackageNotFoundError, version
 
 from pyisyox.auth import Auth, AuthError, LocalAuth, PortalAuth
 from pyisyox.classifier import (
+    AuxControl,
+    AuxPlatform,
     ClassificationResult,
     ControllablePlatform,
     Reading,
@@ -114,6 +116,8 @@ __all__ = [
     "NODE_LIFECYCLE_EVENT_INFO_TAGS",
     "Auth",
     "AuthError",
+    "AuxControl",
+    "AuxPlatform",
     "ClassificationResult",
     "ClientError",
     "ControllablePlatform",

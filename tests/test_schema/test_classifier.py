@@ -7,6 +7,8 @@ from functools import partial
 import pytest
 
 from pyisyox.classifier import (
+    AuxControl,
+    AuxPlatform,
     ClassificationResult,
     ControllablePlatform,
     ReadingPlatform,
@@ -324,3 +326,138 @@ def test_controllable_assignment_matrix(
 ) -> None:
     res = _result_for(profile, nodedef_id, family, instance)
     assert res.controllable is expected
+
+
+# --- aux_controls (coalesced read/write controls, issue #160) -------------
+
+
+def _aux_by_id(res: ClassificationResult) -> dict[str, AuxControl]:
+    by_id: dict[str, AuxControl] = {}
+    for a in res.aux_controls:
+        assert a.id not in by_id, f"duplicate aux control id {a.id!r}"
+        by_id[a.id] = a
+    return by_id
+
+
+def test_aux_controls_i3_flags_coalesce_via_init(profile: Profile) -> None:
+    """The Insteon i3 ``I3PaddleFlags`` config sub-node: each ``GVx``
+    write command coalesces with the status it is ``init``-synchronized
+    with into ONE read/write control — no duplicate read-only sensor +
+    writable switch pair (issue #160 / #67).
+
+    Crucially ``GV0``'s param ``init="ST"`` (cmd-id != status-id): it
+    must pair with the ``ST`` "Mode" status, proving the key is
+    ``param.init``, not naive id matching.
+    """
+    res = _result_for(profile, "I3PaddleFlags", "1", "1")
+    assert res.controllable is None  # no DON/DOF on the flags sub-node
+    aux = _aux_by_id(res)
+
+    mode = aux["ST"]  # keyed by the status id, not the command id
+    assert mode.command is not None and mode.command.id == "GV0"
+    assert mode.property is not None and mode.property.id == "ST"
+    assert mode.readable and mode.writable
+    assert mode.candidate_platform is AuxPlatform.SWITCH
+    assert "GV0" not in aux  # not a separate write-only control
+
+    for gv in ("GV1", "GV2", "GV3", "GV4", "GV5", "GV7"):
+        c = aux[gv]
+        assert c.readable and c.writable
+        assert c.command is not None and c.command.id == gv
+        assert c.property is not None and c.property.id == gv
+        assert c.candidate_platform is AuxPlatform.SWITCH
+
+    assert aux["WDU"].writable and not aux["WDU"].readable
+    assert aux["WDU"].candidate_platform is AuxPlatform.BUTTON
+    assert aux["ERR"].readable and not aux["ERR"].writable
+    assert aux["ERR"].candidate_platform is AuxPlatform.SENSOR
+
+
+def test_aux_controls_exclude_controllable_owned(profile: Profile) -> None:
+    """A climate nodedef's setpoint/mode commands+status are owned by
+    the controllable platform — they must not surface as aux controls."""
+    res = _result_for(profile, "Thermostat", "1", "1")
+    assert res.controllable is ControllablePlatform.CLIMATE
+    ids = {a.id for a in res.aux_controls}
+    assert ids.isdisjoint({"ST", "CLISPH", "CLISPC", "CLIMD", "CLIFS"})
+
+
+def test_aux_controls_light_pairs_setters_with_props(profile: Profile) -> None:
+    """On a light, ``ST`` is controllable-owned (no aux), but the
+    ``OL``/``RR`` setters still pair with their properties → readable +
+    writable aux controls (a paired writer reads its status back even
+    when the property is controllable-filtered from standalone
+    readings)."""
+    res = _result_for(profile, "KeypadDimmer", "1", "1")
+    assert res.controllable is ControllablePlatform.LIGHT
+    aux = _aux_by_id(res)
+    assert "ST" not in aux
+    assert aux["OL"].readable and aux["OL"].writable
+    assert aux["OL"].candidate_platform is AuxPlatform.NUMBER
+    assert aux["RR"].readable and aux["RR"].writable
+    assert aux["RR"].candidate_platform is AuxPlatform.SELECT
+    # Backlight has no backing property → write-only.
+    assert aux["BL"].writable and not aux["BL"].readable
+
+
+def _ed(raw: dict) -> Editor:
+    return Editor.from_json(raw)
+
+
+def test_aux_control_candidate_platform_matrix() -> None:
+    """Editor shape → candidate platform, for writable controls, plus
+    a write-only (no ``init``) and a read-only (no writer) control."""
+    editors = {
+        "BOOLED": _ed(
+            {"id": "BOOLED", "ranges": [{"uom": "2", "subset": "0,1", "names": {"0": "Off", "1": "On"}}]}
+        ),
+        "NUMED": _ed({"id": "NUMED", "ranges": [{"uom": "56", "min": 0, "max": 100}]}),
+        "ENUMED": _ed({"id": "ENUMED", "ranges": [{"uom": "25", "names": {"0": "A", "1": "B"}}]}),
+        "PCTED": _ed({"id": "PCTED", "ranges": [{"uom": "51", "min": 0, "max": 100}]}),
+    }
+    nd = NodeDef(
+        id="synthetic",
+        family_id="99",
+        instance_id="1",
+        properties={
+            "GV0": NodeProperty(id="GV0", editor_id="BOOLED"),
+            "GV1": NodeProperty(id="GV1", editor_id="NUMED"),
+            "RO": NodeProperty(id="RO", editor_id="BOOLED"),
+        },
+        cmds=NodeCommands(
+            accepts=[
+                Command(
+                    id="GV0", name="Toggle", parameters=[CommandParameter(editor_id="BOOLED", init="GV0")]
+                ),
+                Command(id="GV1", name="Level", parameters=[CommandParameter(editor_id="NUMED", init="GV1")]),
+                Command(id="PICK", name="Pick", parameters=[CommandParameter(editor_id="ENUMED")]),
+                Command(id="PCT", name="Pct", parameters=[CommandParameter(editor_id="PCTED")]),
+                Command(id="GO", name="Go", parameters=[CommandParameter(editor_id="NUMED", optional=True)]),
+            ]
+        ),
+    )
+    res = classify(nd, find_editor=editors.get)
+    aux = _aux_by_id(res)
+
+    assert aux["GV0"].readable and aux["GV0"].writable
+    assert aux["GV0"].candidate_platform is AuxPlatform.SWITCH
+    assert aux["GV1"].candidate_platform is AuxPlatform.NUMBER
+    # No init → write-only, keyed by command id.
+    assert aux["PICK"].writable and not aux["PICK"].readable
+    assert aux["PICK"].candidate_platform is AuxPlatform.SELECT
+    assert aux["PCT"].candidate_platform is AuxPlatform.NUMBER
+    # All-optional param → button-shaped.
+    assert aux["GO"].candidate_platform is AuxPlatform.BUTTON
+    assert aux["GO"].writable and not aux["GO"].readable
+    # Property with no writer → read-only.
+    assert aux["RO"].readable and not aux["RO"].writable
+    assert aux["RO"].candidate_platform is AuxPlatform.BINARY_SENSOR
+
+
+def test_aux_controls_is_additive_legacy_unchanged(profile: Profile) -> None:
+    """``aux_controls`` is purely additive — the legacy
+    readings/parameterized_commands/buttons split is still populated."""
+    res = _result_for(profile, "KeypadDimmer", "1", "1")
+    assert res.aux_controls  # new field populated
+    assert res.readings  # legacy still present
+    assert res.parameterized_commands or res.buttons

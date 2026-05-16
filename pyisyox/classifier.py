@@ -36,8 +36,14 @@ contributions, not a single platform pick:
 * ``readings`` — one entity per property, after filtering out properties
   already represented by the controllable platform (e.g., ``ST``/``OL``/
   ``RR`` on a light are the light's state, not separate sensors).
+* ``aux_controls`` — the unified successor to the
+  ``readings`` / ``parameterized_commands`` / ``buttons`` split: one
+  :class:`AuxControl` per logical control, with a status and its
+  ``init``-linked write command folded together (read/write coalesced).
+  New consumers should prefer this; the three legacy buckets stay
+  populated unchanged for now.
 
-One HA *device* per node aggregates entities from all five buckets.
+One HA *device* per node aggregates entities from these buckets.
 """
 
 from __future__ import annotations
@@ -71,8 +77,10 @@ from pyisyox.constants import (
     PROP_STATUS,
     PROP_TEMPERATURE,
     UOM_BOOLEAN,
+    UOM_INDEX,
     UOM_ON_OFF,
     UOM_OPEN_CLOSED,
+    UOM_PERCENTAGE,
 )
 from pyisyox.schema.cmd import Command
 from pyisyox.schema.editor import Editor
@@ -114,6 +122,64 @@ class Reading:
     is_enum: bool = False
 
 
+class AuxPlatform(StrEnum):
+    """Candidate HA platform for one coalesced aux control.
+
+    A *candidate* — the consumer keeps final say (type-tier-1,
+    bespoke/service routing, HA-device grouping sit on top).
+    """
+
+    SENSOR = "sensor"
+    BINARY_SENSOR = "binary_sensor"
+    NUMBER = "number"
+    SELECT = "select"
+    SWITCH = "switch"
+    BUTTON = "button"
+
+
+@dataclass(slots=True)
+class AuxControl:
+    """One logical aux control = a read status and/or a write command,
+    coalesced.
+
+    The IoX nodedef expresses the read/write pairing via a command
+    parameter's ``init`` (the id of the ``<st>`` status it is
+    "initialized and synchronized with" — e.g. a heat-setpoint
+    command's param ``init="CLISPH"``; an Insteon i3 flags sub-node's
+    ``GV0`` param ``init="ST"`` ⇄ the ``ST`` "Mode" status). This is
+    the authoritative pairing key — **not** naive id matching: the cmd
+    id and the status id can differ (i3 ``GV0`` ⇄ ``ST``).
+
+    Controllable-owned ids and ``QUERY`` are already excluded (the
+    controllable platform represents those). ``ST`` is *not* special
+    here: it is removed only when a controllable platform owns it;
+    otherwise it is an ordinary coalescable status.
+
+    Attributes:
+        id: The control id (the status id when read/write paired, else
+            the command id, else the property id).
+        readable: A backing status property exists (readback source).
+        writable: An accept command drives it.
+        candidate_platform: Editor-shape-derived HA platform candidate,
+            or ``None`` when no editor resolves (consumer falls back).
+        property: The backing :class:`NodeProperty`, if readable.
+        command: The driving :class:`Command`, if writable.
+        editor_id: The editor governing the control — the write
+            command's parameter editor when writable (the write
+            affordance is authoritative), else the property editor.
+        is_enum: The governing editor carries an enum ``names`` map.
+    """
+
+    id: str
+    readable: bool
+    writable: bool
+    candidate_platform: AuxPlatform | None = None
+    property: NodeProperty | None = None
+    command: Command | None = None
+    editor_id: str | None = None
+    is_enum: bool = False
+
+
 @dataclass(slots=True)
 class ClassificationResult:
     """The set of HA platform contributions for one nodedef.
@@ -134,6 +200,13 @@ class ClassificationResult:
             parameter editors to input entities. Same QUERY / controllable
             exclusions as ``buttons``.
         readings: Per-property reading entities.
+        aux_controls: Coalesced read/write controls — the unified view
+            that supersedes the separate ``readings`` /
+            ``parameterized_commands`` / ``buttons`` split: each is one
+            logical control (status + its ``init``-linked writer folded
+            together). ``readings`` / ``parameterized_commands`` /
+            ``buttons`` are retained unchanged for now; new consumers
+            should prefer ``aux_controls``.
     """
 
     controllable: ControllablePlatform | None = None
@@ -142,6 +215,7 @@ class ClassificationResult:
     buttons: list[Command] = field(default_factory=list)
     parameterized_commands: list[Command] = field(default_factory=list)
     readings: list[Reading] = field(default_factory=list)
+    aux_controls: list[AuxControl] = field(default_factory=list)
 
 
 #: ``QUERY`` is implicitly accepted by every node — never a "button".
@@ -196,6 +270,15 @@ _ALARM_STATE_PROPS = frozenset({PROP_STATUS})
 #: where Open=0, Closed=100") are also two-state in practice and
 #: belong here even though their value range is wider than 0/1.
 _BINARY_UOMS = frozenset({UOM_BOOLEAN, UOM_ON_OFF, UOM_OPEN_CLOSED})
+#: Always-numeric UOMs: percent (0-100) and the 8-bit byte range
+#: (0-255). NUMBER even when the profile spells the span as a wide
+#: ``subset`` rather than ``min``/``max``.
+_NUMERIC_UOMS = frozenset({UOM_PERCENTAGE, "100"})
+#: Generic editor ids that name a value *shape* regardless of UOM (PG3
+#: plugin nodedefs lean on these; firmware nodedefs carry ``I_*`` /
+#: ``ZW_*`` ids whose shape is read off the range instead).
+_NUMERIC_EDITOR_IDS = frozenset({"INTEGER", "FLOAT"})
+_BOOL_EDITOR_IDS = frozenset({"BOOL", "bool", "I_BOOL"})
 
 
 EditorResolver = Callable[[str], Editor | None]
@@ -244,24 +327,27 @@ def _detect_controllable(
     return None, frozenset()
 
 
+def _controllable_owned_prop_ids(controllable: ControllablePlatform | None) -> frozenset[str]:
+    """Property ids the controllable platform represents itself (so they
+    don't surface as separate readings / aux controls)."""
+    if controllable in (ControllablePlatform.LIGHT, ControllablePlatform.SWITCH):
+        return _LIGHT_STATE_PROPS
+    if controllable is ControllablePlatform.CLIMATE:
+        return _THERMOSTAT_STATE_PROPS
+    if controllable is ControllablePlatform.LOCK:
+        return _LOCK_STATE_PROPS
+    if controllable is ControllablePlatform.COVER:
+        return _COVER_STATE_PROPS
+    if controllable is ControllablePlatform.ALARM_CONTROL_PANEL:
+        return _ALARM_STATE_PROPS
+    return frozenset()
+
+
 def _filter_state_properties(
     controllable: ControllablePlatform | None, properties: dict[str, NodeProperty]
 ) -> list[NodeProperty]:
     """Drop properties already represented by the controllable platform."""
-    if controllable is None:
-        return list(properties.values())
-    if controllable in (ControllablePlatform.LIGHT, ControllablePlatform.SWITCH):
-        skip = _LIGHT_STATE_PROPS
-    elif controllable is ControllablePlatform.CLIMATE:
-        skip = _THERMOSTAT_STATE_PROPS
-    elif controllable is ControllablePlatform.LOCK:
-        skip = _LOCK_STATE_PROPS
-    elif controllable is ControllablePlatform.COVER:
-        skip = _COVER_STATE_PROPS
-    elif controllable is ControllablePlatform.ALARM_CONTROL_PANEL:
-        skip = _ALARM_STATE_PROPS
-    else:
-        skip = frozenset()
+    skip = _controllable_owned_prop_ids(controllable)
     return [p for p in properties.values() if p.id not in skip]
 
 
@@ -289,6 +375,133 @@ def _classify_property(prop: NodeProperty, find_editor: EditorResolver | None) -
     return Reading(property=prop, platform=platform, is_enum=is_enum)
 
 
+def _aux_write_platform(editor: Editor | None) -> AuxPlatform | None:
+    """Editor shape → candidate platform for a *writable* aux control.
+
+    Layered, cheapest signal first (mirrors the consumer's historical
+    ``platform_for_control``): generic numeric/bool editor id; then
+    binary / always-numeric / index UOM; then range shape (``names`` or
+    a bare ``subset`` with no numeric bounds → a discrete choice;
+    ``min``/``max`` → a scalar). ``None`` when nothing resolves — the
+    consumer falls back.
+    """
+    if editor is None or not editor.ranges:
+        return None
+    if editor.id in _NUMERIC_EDITOR_IDS:
+        return AuxPlatform.NUMBER
+    if editor.id in _BOOL_EDITOR_IDS:
+        return AuxPlatform.SWITCH
+    rng = editor.ranges[0]
+    if rng.uom in _BINARY_UOMS:
+        return AuxPlatform.SWITCH
+    if rng.uom in _NUMERIC_UOMS:
+        return AuxPlatform.NUMBER
+    if rng.uom == UOM_INDEX:
+        return AuxPlatform.SELECT
+    has_bounds = rng.min is not None or rng.max is not None
+    if rng.names and not has_bounds:
+        return AuxPlatform.SELECT
+    if rng.subset and not rng.names and not has_bounds:
+        return AuxPlatform.SELECT
+    if has_bounds:
+        return AuxPlatform.NUMBER
+    return None
+
+
+def _aux_from_command(
+    cmd: Command, props: dict[str, NodeProperty], find_editor: EditorResolver | None
+) -> AuxControl:
+    """Build the aux control for one (non-controllable, non-QUERY)
+    accept command.
+
+    Button-shaped (sendable with no positional args) → a fire BUTTON.
+    Otherwise the parameter's ``init`` names the ``<st>`` it is
+    "initialized and synchronized with" — pair with that status (read +
+    write) when it exists, else a write-only control keyed by command
+    id. Pairing is by ``init``, **not** id matching: the command id and
+    status id can differ (Insteon i3 ``GV0`` ``init="ST"`` ⇄ ``ST``).
+    """
+    params = cmd.parameters
+    if all(p.optional for p in params):
+        return AuxControl(
+            id=cmd.id,
+            readable=False,
+            writable=True,
+            candidate_platform=AuxPlatform.BUTTON,
+            command=cmd,
+            editor_id=(params[0].editor_id or None) if params else None,
+        )
+    init_param = next((p for p in params if p.init), params[0])
+    editor_id = init_param.editor_id or None
+    editor = find_editor(editor_id) if (find_editor and editor_id) else None
+    candidate = _aux_write_platform(editor)
+    is_enum = bool(editor and editor.ranges and editor.ranges[0].names)
+    status_id = init_param.init
+    if status_id and status_id in props:
+        return AuxControl(
+            id=status_id,
+            readable=True,
+            writable=True,
+            candidate_platform=candidate,
+            property=props[status_id],
+            command=cmd,
+            editor_id=editor_id,
+            is_enum=is_enum,
+        )
+    return AuxControl(
+        id=cmd.id,
+        readable=False,
+        writable=True,
+        candidate_platform=candidate,
+        command=cmd,
+        editor_id=editor_id,
+        is_enum=is_enum,
+    )
+
+
+def _build_aux_controls(
+    nodedef: NodeDef,
+    controllable: ControllablePlatform | None,
+    controllable_cmd_ids: frozenset[str],
+    find_editor: EditorResolver | None,
+) -> list[AuxControl]:
+    """Coalesce non-controllable status/command pairs into one control
+    each: writable controls first (in ``accepts`` order), then the
+    remaining read-only properties. Controllable-owned ids and ``QUERY``
+    are already excluded; a paired writer still reads its status back
+    even when the property is controllable-filtered from standalone
+    readings (e.g. a light's ``OL`` setter)."""
+    props = nodedef.properties
+    cmd_controls = [
+        _aux_from_command(cmd, props, find_editor)
+        for cmd in nodedef.cmds.accepts
+        if cmd.id not in _QUERY_CMDS and cmd.id not in controllable_cmd_ids
+    ]
+    consumed = {c.property.id for c in cmd_controls if c.property is not None}
+
+    read_controls: list[AuxControl] = []
+    for prop in _filter_state_properties(controllable, props):
+        if prop.id in consumed:
+            continue
+        reading = _classify_property(prop, find_editor)
+        read_controls.append(
+            AuxControl(
+                id=prop.id,
+                readable=True,
+                writable=False,
+                candidate_platform=(
+                    AuxPlatform.BINARY_SENSOR
+                    if reading.platform is ReadingPlatform.BINARY_SENSOR
+                    else AuxPlatform.SENSOR
+                ),
+                property=prop,
+                editor_id=prop.editor_id or None,
+                is_enum=reading.is_enum,
+            )
+        )
+    return cmd_controls + read_controls
+
+
 def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> ClassificationResult:
     """Classify a nodedef into HA platform contributions.
 
@@ -304,7 +517,10 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
 
     Returns:
         A :class:`ClassificationResult` with controllable / triggers /
-        buttons / parameterized_commands / readings populated.
+        buttons / parameterized_commands / readings / aux_controls
+        populated. ``find_editor`` also drives ``aux_controls``
+        candidate platforms; without it writable controls fall back to
+        ``candidate_platform=None`` for the consumer to resolve.
     """
     accept_ids = frozenset(c.id for c in nodedef.cmds.accepts)
     on_cmd = next((c for c in nodedef.cmds.accepts if c.id == CMD_ON), None)
@@ -328,6 +544,8 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
         for prop in _filter_state_properties(controllable, nodedef.properties)
     ]
 
+    aux_controls = _build_aux_controls(nodedef, controllable, controllable_cmd_ids, find_editor)
+
     return ClassificationResult(
         controllable=controllable,
         controllable_command_ids=controllable_cmd_ids,
@@ -335,4 +553,5 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
         buttons=buttons,
         parameterized_commands=parameterized_commands,
         readings=readings,
+        aux_controls=aux_controls,
     )
