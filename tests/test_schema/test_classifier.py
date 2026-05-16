@@ -478,3 +478,32 @@ def test_aux_controls_is_additive_legacy_unchanged(profile: Profile) -> None:
     assert res.aux_controls  # new field populated
     assert res.readings  # legacy still present
     assert res.parameterized_commands or res.buttons
+
+
+def test_aux_controls_writeonly_cmd_does_not_dup_same_id_property() -> None:
+    """Invariant guard: an id surfaced by a command-side control is
+    never re-emitted as a standalone read-only control. Models a
+    write-only ``BL``-style setter (one param, no ``init`` — the real
+    Insteon backlight shape) alongside an (unrelated) same-id ``BL``
+    property. No real UDI nodedef ships this combination — the bundled
+    profile has 22 no-``init`` ``BL`` commands but zero ``BL``
+    properties — so this is a synthetic consistency check, not a live
+    repro.
+    """
+    editors = {
+        "ENUMED": _ed({"id": "ENUMED", "ranges": [{"uom": "25", "names": {"0": "A", "1": "B"}}]}),
+    }
+    nd = NodeDef(
+        id="synthetic_bl",
+        family_id="99",
+        instance_id="1",
+        properties={"BL": NodeProperty(id="BL", editor_id="ENUMED")},
+        cmds=NodeCommands(
+            accepts=[Command(id="BL", name="Backlight", parameters=[CommandParameter(editor_id="ENUMED")])]
+        ),
+    )
+    controls = [a for a in classify(nd, find_editor=editors.get).aux_controls if a.id == "BL"]
+    assert len(controls) == 1, "BL must not surface as both a write control and a read-only sensor"
+    (bl,) = controls
+    assert bl.writable and not bl.readable
+    assert bl.candidate_platform is AuxPlatform.SELECT

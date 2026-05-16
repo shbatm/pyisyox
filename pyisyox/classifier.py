@@ -483,7 +483,13 @@ def _build_aux_controls(
             continue
         seen.add(control.id)
         cmd_controls.append(control)
-    consumed = {c.property.id for c in cmd_controls if c.property is not None}
+    # Any id already surfaced by a command-side control owns that id:
+    # a same-id property is its readback, not a separate sensor. Keying
+    # on every cmd-control id (not just paired status ids) also blocks a
+    # write-only command (e.g. a no-``init`` ``BL`` setter) from
+    # colliding with an unrelated same-id property. No real UDI nodedef
+    # hits this today — invariant guard, not a live fix.
+    consumed = {c.id for c in cmd_controls}
 
     read_controls: list[AuxControl] = []
     for prop in _filter_state_properties(controllable, props):
