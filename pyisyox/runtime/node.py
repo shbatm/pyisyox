@@ -386,6 +386,9 @@ class Node:
         int, no UOM) so the node stays controllable without validation.
         """
         if self._nodedef is None:
+            # No editor / UOM context here, so a fractional param is
+            # truncated to int intentionally — nothing can tell the
+            # controller how to scale it anyway.
             passthrough: list[int | str] = [int(p) if isinstance(p, (int, float)) else p for p in params]
             await self._client.send_node_command(self.address, command_id, *passthrough)
             return

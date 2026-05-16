@@ -727,6 +727,7 @@ async def test_set_on_level_rejects_out_of_range(real_profile: Profile) -> None:
     node = Node.from_record(record, real_profile, _make_client(session))
     with pytest.raises(NodeCommandError, match="above max"):
         await node.set_on_level(300)
+    assert session.calls == [], "must short-circuit before HTTP"
 
 
 # --- control-id → accept-command resolution (init pairing) ---------------

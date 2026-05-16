@@ -160,8 +160,11 @@ class AuxControl:
             the command id, else the property id).
         readable: A backing status property exists (readback source).
         writable: An accept command drives it.
-        candidate_platform: Editor-shape-derived HA platform candidate,
-            or ``None`` when no editor resolves (consumer falls back).
+        candidate_platform: Editor-shape-derived HA platform candidate.
+            ``None`` only when no editor resolves *and* there is no
+            readable backing status (a readable control falls back to
+            its property's read classification — SENSOR/BINARY_SENSOR);
+            write-only with no editor stays ``None`` for the consumer.
         property: The backing :class:`NodeProperty`, if readable.
         command: The driving :class:`Command`, if writable.
         editor_id: The editor governing the control — the write
@@ -544,8 +547,10 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
         A :class:`ClassificationResult` with controllable / triggers /
         buttons / parameterized_commands / readings / aux_controls
         populated. ``find_editor`` also drives ``aux_controls``
-        candidate platforms; without it writable controls fall back to
-        ``candidate_platform=None`` for the consumer to resolve.
+        candidate platforms; without it a *readable* writable control
+        falls back to its property's read classification, and a
+        *write-only* control falls back to ``candidate_platform=None``
+        for the consumer to resolve.
     """
     accept_ids = frozenset(c.id for c in nodedef.cmds.accepts)
     on_cmd = next((c for c in nodedef.cmds.accepts if c.id == CMD_ON), None)

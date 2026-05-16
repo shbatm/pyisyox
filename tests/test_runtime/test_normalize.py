@@ -111,3 +111,11 @@ def test_precision_decode_then_uom_conversion_compose() -> None:
 def test_non_numeric_with_precision_passes_through() -> None:
     prop = NodePropertyValue(id="ST", value="n/a", uom="17", precision=1)
     assert normalize_property_value(prop, _editor(TEMP)) is prop
+
+
+def test_non_numeric_precision_and_mismatched_uom_passes_through() -> None:
+    """Non-numeric + prec>0 + a UOM that *would* hit the conversion loop:
+    ``_decode_precision`` returns the original (non-numeric), then the
+    UOM step also fails to ``float()`` it and returns it unchanged."""
+    prop = NodePropertyValue(id="OL", value="n/a", uom="100", precision=1)
+    assert normalize_property_value(prop, _editor(PCT)) is prop

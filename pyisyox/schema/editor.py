@@ -136,11 +136,12 @@ class EditorRange:
         """True if ``raw_value`` is acceptable for outbound commands.
 
         Used for **subset** validation only (prec=0, enum-shaped editors).
-        Numeric editors with ``prec>0`` validate against the displayed
-        value before scaling — see :meth:`Editor.encode`. ``min``/``max``
-        in the IoX schema are stored in **displayed form** (e.g.
-        ``min=5.0`` on a UOM-4 °C setpoint editor with ``prec=1`` means
-        5.0 °C, not raw 5).
+        Numeric editors with ``prec>0`` validate the displayed value and
+        send it as-is (no scaling — the controller scales device-side
+        from the UOM; see :meth:`Editor.encode`). ``min``/``max`` in the
+        IoX schema are stored in **displayed form** (e.g. ``min=5.0`` on
+        a UOM-4 °C setpoint editor with ``prec=1`` means 5.0 °C, not raw
+        5).
         """
         if self.subset:
             return raw_value in self.subset
@@ -365,10 +366,17 @@ class Editor:
             raise EditorCodecError(f"Editor {self.id!r}: {numeric} is below min={rng.min}")
         if rng.max is not None and numeric > rng.max:
             raise EditorCodecError(f"Editor {self.id!r}: {numeric} is above max={rng.max}")
-        # Subset masks are integer/index sets (prec-0 index editors);
-        # validate the integral form. They never co-occur with prec>0.
-        if rng.subset and round(numeric) not in rng.subset:
-            raise EditorCodecError(
-                f"Editor {self.id!r}: value {round(numeric)} is not in subset {sorted(rng.subset)}"
-            )
+        # Subset masks are discrete integer/index sets (prec-0 index
+        # editors; never co-occur with prec>0). Reject non-integral
+        # input outright — a fractional index is meaningless and must
+        # not reach the wire.
+        if rng.subset:
+            if not numeric.is_integer():
+                raise EditorCodecError(
+                    f"Editor {self.id!r}: {numeric} is not a valid index (subset {sorted(rng.subset)})"
+                )
+            if int(numeric) not in rng.subset:
+                raise EditorCodecError(
+                    f"Editor {self.id!r}: value {int(numeric)} is not in subset {sorted(rng.subset)}"
+                )
         return int(numeric) if numeric.is_integer() else numeric
