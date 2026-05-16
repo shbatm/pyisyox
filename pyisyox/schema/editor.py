@@ -6,15 +6,19 @@ contract — read-side decode and write-side validation/encode. Write-side
 constraints beyond ``min``/``max``/``prec`` are the ``subset`` mask
 (``"0-3,5-7"`` excludes 4) and the ``names`` enum option list.
 
-UOM-101 quirk
--------------
+Send-side scaling
+-----------------
 
-Insteon thermostats encode 0.5°-precision temps as ``raw = 2 * displayed``
-(not a normal ``prec=1`` decimal); the legacy alias ``"degrees"`` behaves
-the same way. When a range carries one of those UOMs and declares
-``prec=0`` we double on encode / halve on decode for codec symmetry. Skip
-when ``prec=1`` (modern profiles), since the regular prec scaling
-already handles it.
+The controller does **all** device-side scaling itself, keyed off the
+UOM appended to the ``/cmd`` URL — proven on hardware:
+``/cmd/DON/100/100`` → 39 % (100 read as a UOM-100 0-255 byte) vs
+``/cmd/DON/100/51`` → 100 % (100 read as UOM-51 percent). So the codec
+**validates** input (enum-name resolution, ``min``/``max``, ``subset``)
+but sends the *displayed* value verbatim with its range UOM; it does
+**not** rewrite the number (no ``*10**prec`` rescale, no half-degree doubling).
+The eisy web UI does the same (``/cmd/setTemp/10.4/17``). ``decode``
+keeps its precision-aware formatting for display helpers, but the
+property read path normalises by the wire UOM and never calls it.
 """
 
 from __future__ import annotations
@@ -280,19 +284,19 @@ class Editor:
             return f"{raw_value / 2.0:.1f}"
         return str(raw_value)
 
-    def encode(self, value: float | str, uom: str | None = None) -> int:
-        """Encode user input to a raw integer the controller will accept.
+    def encode(self, value: float | str, uom: str | None = None) -> int | float:
+        """Validate user input and return the value to put on the wire.
 
         Two paths within a range:
 
-        * **Enum name (str matching ``names``)** — returns the matching raw
-          int verbatim. ``prec`` and ``min``/``max`` don't apply.
-        * **Numeric (int/float, or string parsed as float)** — interpreted as
-          the *displayed* value. Validated against ``[min, max]`` (which
-          the IoX schema stores in displayed form), then scaled to raw via
-          ``raw = round(displayed * 10**prec)``. Symmetric with
-          :meth:`decode`'s ``raw / 10**prec``. Subset validation (when
-          present) runs on the resulting raw int.
+        * **Enum name (str matching ``names``)** — returns the matching
+          raw int verbatim. ``min``/``max`` don't apply.
+        * **Numeric (int/float, or string parsed as float)** — the
+          *displayed* value. Validated against ``[min, max]`` and the
+          ``subset`` mask (both stored in displayed form), then returned
+          **as-is** (int when integral, else float). The controller does
+          device-side scaling from the appended UOM — the codec does not
+          rewrite the number (no ``*10**prec`` rescale, no half-degree doubling).
 
         When ``uom`` is given, only that range is tried. Otherwise every
         range is tried in order and the first that accepts ``value`` wins
@@ -305,15 +309,16 @@ class Editor:
         """
         return self.encode_param(value, uom)[0]
 
-    def encode_param(self, value: float | str, uom: str | None = None) -> tuple[int, str]:
+    def encode_param(self, value: float | str, uom: str | None = None) -> tuple[int | float, str]:
         """Like :meth:`encode`, but also returns the UOM of the range used.
 
-        Command-send code appends each parameter as ``/{raw}/{uom}`` so
-        the controller can do device-side scaling; the UOM has to be the
-        one belonging to the range that actually accepted the value, not
-        always ``ranges[0]`` — for a multi-range editor like
-        ``ZW_DIM_PERCENT`` a plain ``75`` is encoded by the 0-100 %
-        range (uom ``51``), so ``/cmd/DON/75/51`` is what must go on the
+        Command-send code appends each parameter as ``/{value}/{uom}``
+        and the controller scales device-side from that UOM (proven:
+        ``/cmd/DON/100/100`` → 39 %, ``/cmd/DON/100/51`` → 100 %), so the
+        UOM has to be the one belonging to the range that actually
+        accepted the value, not always ``ranges[0]`` — for a multi-range
+        editor like ``ZW_DIM_PERCENT`` a plain ``75`` is encoded by the
+        0-100 % range (uom ``51``), so ``/cmd/DON/75/51`` goes on the
         wire, not ``/cmd/DON/75/25``.
         """
         if uom is not None:
@@ -328,8 +333,16 @@ class Editor:
                 last_error = exc
         raise last_error or EditorCodecError(f"Editor {self.id!r}: cannot encode {value!r}")
 
-    def _encode_in_range(self, rng: EditorRange, value: float | str) -> int:
-        """Encode ``value`` against a single range — see :meth:`encode`."""
+    def _encode_in_range(self, rng: EditorRange, value: float | str) -> int | float:
+        """Validate ``value`` against a single range; return it as-is.
+
+        Enum names resolve to their raw int. Numeric input is range- and
+        subset-checked in *displayed* units and returned unchanged (int
+        when integral so the URL stays ``/72`` not ``/72.0``, else float
+        so a ``/cmd/setTemp/10.4/17`` survives). The controller does the
+        precision / unit scaling from the appended UOM — see the module
+        docstring.
+        """
         if isinstance(value, str):
             stripped = value.strip()
             if not stripped:
@@ -352,15 +365,10 @@ class Editor:
             raise EditorCodecError(f"Editor {self.id!r}: {numeric} is below min={rng.min}")
         if rng.max is not None and numeric > rng.max:
             raise EditorCodecError(f"Editor {self.id!r}: {numeric} is above max={rng.max}")
-        if rng.precision:
-            raw = round(numeric * (10**rng.precision))
-        elif rng.uom in _HALF_DEGREE_UOMS:
-            # Insteon thermostat half-degree encoding (raw = 2 * displayed).
-            # Only triggers on prec=0 ranges — modern prec=1 ranges already
-            # handle the displayed→raw conversion above.
-            raw = round(numeric * 2)
-        else:
-            raw = round(numeric)
-        if rng.subset and raw not in rng.subset:
-            raise EditorCodecError(f"Editor {self.id!r}: value {raw} is not in subset {sorted(rng.subset)}")
-        return int(raw)
+        # Subset masks are integer/index sets (prec-0 index editors);
+        # validate the integral form. They never co-occur with prec>0.
+        if rng.subset and round(numeric) not in rng.subset:
+            raise EditorCodecError(
+                f"Editor {self.id!r}: value {round(numeric)} is not in subset {sorted(rng.subset)}"
+            )
+        return int(numeric) if numeric.is_integer() else numeric

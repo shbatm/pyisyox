@@ -43,7 +43,7 @@ def encode_command_params(
     command_id: str,
     params: Sequence[float | str],
     target_label: str,
-) -> tuple[tuple[int, str], ...]:
+) -> tuple[tuple[int | float, str], ...]:
     """Look up ``command_id`` on ``nodedef`` and encode each parameter.
 
     Args:
@@ -100,12 +100,12 @@ def _encode(
     profile: Profile,
     family_id: str,
     instance_id: str,
-) -> tuple[tuple[int, str], ...]:
+) -> tuple[tuple[int | float, str], ...]:
     if len(params) > len(command.parameters):
         raise NodeCommandError(
             f"command {command.id!r} accepts {len(command.parameters)} parameter(s); got {len(params)}"
         )
-    encoded: list[tuple[int, str]] = []
+    encoded: list[tuple[int | float, str]] = []
     for idx, param_def in enumerate(command.parameters):
         if idx >= len(params):
             if not param_def.optional:

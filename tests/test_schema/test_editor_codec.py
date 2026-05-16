@@ -96,10 +96,17 @@ def test_subset_parsing_with_gaps() -> None:
     assert rng.is_valid(7)
 
 
-def test_encode_accepts_float_via_rounding() -> None:
+def test_encode_sends_value_as_is_controller_scales() -> None:
+    """The codec validates but does not rewrite the number — the
+    controller scales device-side from the appended UOM. An integral
+    value comes back ``int`` (clean URL ``/72``); a fractional one is
+    preserved (``/cmd/.../72.4/17``)."""
     ed = Editor.from_json({"id": "I_F", "ranges": [{"uom": "17", "min": 0, "max": 120, "prec": 0}]})
-    assert ed.encode(72.4) == 72
-    assert ed.encode(72.6) == 73
+    assert ed.encode(72) == 72
+    assert ed.encode(72.0) == 72
+    assert isinstance(ed.encode(72.0), int)
+    assert ed.encode(72.4) == 72.4
+    assert ed.encode(72.6) == 72.6
 
 
 def test_decode_passes_through_when_no_match() -> None:
@@ -109,54 +116,57 @@ def test_decode_passes_through_when_no_match() -> None:
     assert ed.decode(42) == "42"
 
 
-# --- prec-symmetric encode / decode (bug fix 2026-05-09) -----------------
+# --- prec editors: send displayed value, controller scales by UOM --------
+#
+# The controller scales device-side from the appended UOM (proven:
+# /cmd/DON/100/100 -> 39%, /cmd/DON/100/51 -> 100%; eisy UI sends
+# /cmd/setTemp/10.4/17). encode no longer rewrites the number; decode
+# stays a precision-aware *display* helper (not on the read path), so
+# encode and decode are intentionally no longer symmetric.
 
 
-def test_encode_scales_by_prec_for_setpoint_editor() -> None:
-    """Setpoint editors store displayed °F/°C with ``prec=1`` — the
-    *displayed* value 72.0 °F should encode to raw 720, symmetric with
-    decode (which divides raw by 10**prec)."""
+def test_encode_prec_editor_sends_displayed_value_unscaled() -> None:
+    """A ``prec=1`` setpoint editor: the displayed value goes on the
+    wire verbatim (``72.5`` → ``72.5``, not ``725``); the controller
+    applies the precision from UOM 17."""
     ed = Editor.from_json(
         {"id": "I_CLISPH_F", "ranges": [{"uom": "17", "prec": 1, "min": 0.0, "max": 120.0}]}
     )
-    assert ed.encode(72.0) == 720
-    assert ed.encode(72.5) == 725
+    assert ed.encode(72.0) == 72
+    assert ed.encode(72.5) == 72.5
     assert ed.encode(0.0) == 0
-    assert ed.encode(120.0) == 1200
+    assert ed.encode(120.0) == 120
 
 
-def test_encode_decode_round_trip_with_prec() -> None:
-    """encode(decode(raw)) ≈ raw for all prec>0 editors that aren't enums."""
+def test_decode_is_independent_display_helper() -> None:
+    """``decode`` keeps its precision-aware formatting for display
+    helpers and is no longer the inverse of ``encode`` (the controller,
+    not the codec, does the raw scaling now)."""
     ed = Editor.from_json({"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "min": 5.0, "max": 50.0}]})
-    for raw in (50, 100, 220, 500):
-        displayed = ed.decode(raw)
-        assert ed.encode(float(displayed)) == raw
+    assert ed.decode(220) == "22.0"
+    assert ed.encode(22.0) == 22  # sent as-is, NOT 220
 
 
 def test_encode_validates_min_max_against_displayed_value() -> None:
-    """min/max in the IoX schema are stored in *displayed* form. The validator
-    must compare the user's input against them, not the scaled raw int."""
+    """min/max are stored in *displayed* form; the validator compares the
+    user's input against them, and the value is sent unscaled."""
     ed = Editor.from_json({"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "min": 5.0, "max": 50.0}]})
-    # 22.0 °C is in range; raw becomes 220 — must NOT be rejected as ">50"
-    assert ed.encode(22.0) == 220
-    # 50.0 °C is the inclusive max — accepts, raw 500
-    assert ed.encode(50.0) == 500
-    # 51.0 °C exceeds max
+    assert ed.encode(22.0) == 22  # in range, sent as-is
+    assert ed.encode(50.0) == 50  # inclusive max
     with pytest.raises(EditorCodecError, match="above max"):
         ed.encode(51.0)
-    # 4.9 °C below min
     with pytest.raises(EditorCodecError, match="below min"):
         ed.encode(4.9)
 
 
-def test_encode_string_numeric_input_also_scales() -> None:
-    """A consumer passing the displayed value as a string (e.g. from a UI
-    slider) must encode the same way as the float path."""
+def test_encode_string_numeric_input_sent_as_is() -> None:
+    """A consumer passing the displayed value as a string (UI slider)
+    encodes the same as the float path — validated, sent unscaled."""
     ed = Editor.from_json(
         {"id": "I_CLISPH_F", "ranges": [{"uom": "17", "prec": 1, "min": 0.0, "max": 120.0}]}
     )
-    assert ed.encode("72.0") == 720
-    assert ed.encode("72.5") == 725
+    assert ed.encode("72.0") == 72
+    assert ed.encode("72.5") == 72.5
 
 
 def test_encode_enum_name_skips_prec_scaling() -> None:
@@ -177,64 +187,66 @@ def test_encode_enum_name_skips_prec_scaling() -> None:
     assert ed.encode("Heat") == 1
 
 
-def test_encode_prec_zero_is_unchanged() -> None:
-    """For prec=0 editors (the typical enum/index case) encode passes the
-    integer through unchanged — symmetric with the original behaviour."""
+def test_encode_integer_passes_through() -> None:
+    """An integral value is sent unchanged as ``int`` (clean URL); a
+    fractional value is preserved (the controller scales by UOM)."""
     ed = Editor.from_json({"id": "I_PREC0", "ranges": [{"uom": "25", "min": 0, "max": 31, "prec": 0}]})
     assert ed.encode(15) == 15
-    assert ed.encode(15.4) == 15  # rounds
-    assert ed.encode(15.6) == 16
+    assert isinstance(ed.encode(15.0), int)
+    assert ed.encode(15.4) == 15.4
+    assert ed.encode(15.6) == 15.6
 
 
-# --- UOM-101 / "degrees" half-degree encoding ----------------------------
+# --- UOM-101 / "degrees" half-degree ------------------------------------
 #
-# Insteon thermostats (which the user's current setup doesn't include, so
-# this isn't covered by the live capture fixtures) encode 0.5°-precision
-# temperatures as ``raw = 2 * displayed``. The legacy alias ``"degrees"``
-# behaves the same way. We handle it on both encode and decode so a
-# profile that does carry such an editor works correctly without each
-# consumer having to special-case it.
+# Insteon thermostats encode 0.5°-precision temps as ``raw = 2 *
+# displayed``. The controller does that scaling itself from UOM 101 (no
+# Insteon-thermostat hardware in the live capture; the rule is the same
+# proven one — ``/cmd`` sends the displayed value + UOM). ``decode``
+# still halves for display helpers (independent of encode now).
 
 
-def test_encode_uom_101_doubles_displayed_value_when_prec_zero() -> None:
-    """raw = 2 * displayed for UOM 101 with prec=0."""
+def test_encode_uom_101_sends_displayed_value_no_client_doubling() -> None:
+    """UOM 101: the displayed value goes on the wire as-is; the
+    controller applies the half-degree raw doubling, not the codec."""
     ed = Editor.from_json({"id": "I_TEMP", "ranges": [{"uom": "101", "min": 0, "max": 120, "prec": 0}]})
-    assert ed.encode(68) == 136
-    assert ed.encode(72.5) == 145
+    assert ed.encode(68) == 68
+    assert ed.encode(72.5) == 72.5
     assert ed.encode(0) == 0
 
 
 def test_decode_uom_101_halves_raw_value_when_prec_zero() -> None:
-    """display = raw / 2 for UOM 101 with prec=0. Symmetric with encode."""
+    """``decode`` still halves UOM-101 raw for display helpers (it is no
+    longer the inverse of ``encode``)."""
     ed = Editor.from_json({"id": "I_TEMP", "ranges": [{"uom": "101", "min": 0, "max": 120, "prec": 0}]})
     assert ed.decode(136) == "68.0"
     assert ed.decode(145) == "72.5"
     assert ed.decode(0) == "0.0"
 
 
-def test_uom_degrees_alias_doubles() -> None:
-    """The ISY-v4 ``"degrees"`` UOM alias behaves identically."""
+def test_uom_degrees_alias_sends_displayed_value() -> None:
+    """The ISY-v4 ``"degrees"`` alias also sends the displayed value
+    unscaled; ``decode`` still halves for display."""
     ed = Editor.from_json(
         {"id": "I_TEMP_OLD", "ranges": [{"uom": "degrees", "min": 0, "max": 120, "prec": 0}]}
     )
-    assert ed.encode(68) == 136
+    assert ed.encode(68) == 68
     assert ed.decode(136) == "68.0"
 
 
-def test_uom_101_with_prec_one_uses_normal_scaling() -> None:
-    """Modern profiles using UOM 101 with prec=1 (rare but possible) get
-    normal decimal-prec scaling — *not* additional doubling. The half-
-    degree behaviour only kicks in when prec=0 explicitly."""
+def test_uom_101_prec_one_also_sends_displayed_value() -> None:
+    """UOM 101 with prec=1 — still sent unscaled (controller scales);
+    ``decode`` formats by prec for display."""
     ed = Editor.from_json({"id": "I_TEMP_NEW", "ranges": [{"uom": "101", "prec": 1, "min": 0, "max": 120}]})
-    assert ed.encode(68.0) == 680  # decimal prec, no doubling
+    assert ed.encode(68.0) == 68
     assert ed.decode(680) == "68.0"
 
 
 def test_uom_101_validates_min_max_against_displayed_value() -> None:
-    """min/max remain in displayed form even for UOM 101 — validation
-    runs before the *2 raw conversion."""
+    """min/max stay in displayed form for UOM 101; the value is sent
+    unscaled after validation."""
     ed = Editor.from_json({"id": "I_TEMP", "ranges": [{"uom": "101", "min": 0, "max": 120, "prec": 0}]})
-    assert ed.encode(120) == 240  # inclusive max
+    assert ed.encode(120) == 120  # inclusive max, unscaled
     with pytest.raises(EditorCodecError, match="above max"):
         ed.encode(121)
 
@@ -246,8 +258,8 @@ def test_range_parses_step_hint() -> None:
         {"id": "I_CLISPC_C", "ranges": [{"uom": "4", "prec": 1, "step": 0.5, "min": 5.0, "max": 50.0}]}
     )
     assert ed.ranges[0].step == 0.5
-    # Codec behaviour is unchanged by the presence of step.
-    assert ed.encode(21.5) == 215
+    # Codec behaviour is unaffected by step: value sent as-is.
+    assert ed.encode(21.5) == 21.5
     assert ed.decode(215) == "21.5"
 
 
