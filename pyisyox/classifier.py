@@ -378,12 +378,17 @@ def _classify_property(prop: NodeProperty, find_editor: EditorResolver | None) -
 def _aux_write_platform(editor: Editor | None) -> AuxPlatform | None:
     """Editor shape → candidate platform for a *writable* aux control.
 
-    Layered, cheapest signal first (mirrors the consumer's historical
-    ``platform_for_control``): generic numeric/bool editor id; then
-    binary / always-numeric / index UOM; then range shape (``names`` or
-    a bare ``subset`` with no numeric bounds → a discrete choice;
-    ``min``/``max`` → a scalar). ``None`` when nothing resolves — the
-    consumer falls back.
+    Layered, cheapest signal first (intentionally mirrors the
+    consumer's historical ``platform_for_control`` so the candidate
+    matches what the consumer already does): generic numeric/bool
+    editor id; then binary / always-numeric / index UOM; then range
+    shape — ``names`` or a bare ``subset`` with **no numeric bounds** →
+    a discrete choice (SELECT); ``min``/``max`` present → a scalar
+    (NUMBER). An editor carrying ``names`` *and* numeric bounds (an
+    enum with a declared range — unusual but legal) therefore resolves
+    to NUMBER, not SELECT, matching the consumer; the candidate is
+    advisory and the consumer has final say. ``None`` when nothing
+    resolves — the consumer falls back.
     """
     if editor is None or not editor.ranges:
         return None
@@ -472,11 +477,20 @@ def _build_aux_controls(
     even when the property is controllable-filtered from standalone
     readings (e.g. a light's ``OL`` setter)."""
     props = nodedef.properties
-    cmd_controls = [
-        _aux_from_command(cmd, props, find_editor)
-        for cmd in nodedef.cmds.accepts
-        if cmd.id not in _QUERY_CMDS and cmd.id not in controllable_cmd_ids
-    ]
+    # Two accepts shouldn't legitimately pair to the same control id
+    # (UDI won't ship two writers for one status), but guard it: first
+    # in ``accepts`` order wins, so a stray duplicate can't emit two
+    # controls with the same id.
+    cmd_controls: list[AuxControl] = []
+    seen: set[str] = set()
+    for cmd in nodedef.cmds.accepts:
+        if cmd.id in _QUERY_CMDS or cmd.id in controllable_cmd_ids:
+            continue
+        control = _aux_from_command(cmd, props, find_editor)
+        if control.id in seen:
+            continue
+        seen.add(control.id)
+        cmd_controls.append(control)
     consumed = {c.property.id for c in cmd_controls if c.property is not None}
 
     read_controls: list[AuxControl] = []
