@@ -349,6 +349,29 @@ class Node:
 
     # --- commanding ---------------------------------------------------
 
+    def _resolve_accept_command_id(self, command_id: str) -> str:
+        """Map a control id to the accept command that writes it.
+
+        Direct match wins (the id *is* an accept command — Insteon
+        dual-purposes ``OL``/``RR``/``CLISPH`` as both status and
+        command). Otherwise the IoX read/write pairing: the accept
+        command whose parameter declares ``init == command_id`` (the
+        ``<st>`` it is "initialized and synchronized with" — e.g.
+        ``virtualtemp``'s ``setTemp`` param ``init="ST"`` ⇄ the ``ST``
+        status; i3 ``GV0`` param ``init="ST"``). Lets callers write a
+        coalesced control by its status id. No pairing → unchanged, so
+        the existing not-accepted error still surfaces.
+        """
+        assert self._nodedef is not None
+        accepts = self._nodedef.cmds.accepts
+        if any(c.id == command_id for c in accepts):
+            return command_id
+        # First in accepts order, matching the classifier's coalescing.
+        for cmd in accepts:
+            if any(p.init == command_id for p in cmd.parameters):
+                return cmd.id
+        return command_id
+
     async def send_command(self, command_id: str, *params: float | str) -> None:
         """Send a command, with editor-codec parameter validation.
 
@@ -366,6 +389,7 @@ class Node:
             passthrough: list[int | str] = [int(p) if isinstance(p, (int, float)) else p for p in params]
             await self._client.send_node_command(self.address, command_id, *passthrough)
             return
+        command_id = self._resolve_accept_command_id(command_id)
         encoded = encode_command_params(
             nodedef=self._nodedef,
             profile=self._profile,
