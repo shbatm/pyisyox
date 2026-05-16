@@ -629,7 +629,7 @@ class IoXClient:
             _LOGGER.debug("optional endpoint %s unavailable: %s", path, exc)
             return ""
 
-    async def send_node_command(self, address: str, command_id: str, *params: int | str) -> str:
+    async def send_node_command(self, address: str, command_id: str, *params: float | str) -> str:
         """Issue ``GET /rest/nodes/{addr}/cmd/{cmd}[/{p1}[/{p2}...]]``.
 
         Params are stringified and joined as-is — the editor codec runs

@@ -399,7 +399,7 @@ class Node:
             params=params,
             target_label=f"node {self.address!r}",
         )
-        wire_args: list[int | str] = []
+        wire_args: list[int | float | str] = []
         for raw_value, uom in encoded:
             wire_args.append(raw_value)
             if uom and uom != "0":
