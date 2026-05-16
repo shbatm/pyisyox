@@ -1,21 +1,30 @@
-"""UOM normalization for live node-property values.
+"""Normalization for live node-property values.
 
-Some IoX devices report a property in a different unit-of-measure than
-its nodedef *editor* declares. The classic case: an Insteon dimmer
-reports ``OL`` (and ``ST``) as a **UOM-100 0-255 byte** (``191`` for
-"75%"), while the ``I_OL`` editor — the one the ``/rest/nodes/.../cmd``
-write surface uses — describes the **UOM-51 0-100% slider**. Z-Wave /
-Zigbee / Matter dimmers may report either form depending on firmware.
+Two transforms, applied on every ``node.properties`` / ``node.status``
+read so consumers see one consistent shape regardless of firmware or
+transport (REST load vs. a WebSocket ``<action>`` frame):
 
-This module converts a reported :class:`~pyisyox.client.NodePropertyValue`
-into the editor's canonical UOM so consumers see one consistent shape
-regardless of which firmware or transport produced it (REST load vs. a
-WebSocket ``<action>`` frame). When the reported UOM already matches one
-of the editor's ranges — the common case — the value passes through
-untouched.
+1. **Precision decode.** IoX reports a value as an integer plus a
+   ``prec`` decimal shift — ``value="954" prec="1"`` is ``95.4`` (the
+   controller's own ``formatted`` confirms: ``"95.4°F"``). This is the
+   read-side counterpart of the send contract (the controller scales
+   device-side; see :mod:`pyisyox.schema.editor`): the displayed value
+   is ``raw / 10**prec``, and the returned :class:`NodePropertyValue`
+   carries that with ``precision=0`` so consumers never re-shift it.
+   Independent of the editor — the wire frame is self-describing.
 
-The conversion set is intentionally tiny; only genuinely mismatched
-pairs belong here.
+2. **UOM canonicalization.** Some devices report a property in a
+   different unit than its nodedef *editor* declares — the classic
+   case: an Insteon dimmer reports ``OL``/``ST`` as a **UOM-100 0-255
+   byte** (``191`` for "75%") while the ``I_OL`` editor (and the
+   ``/cmd`` write surface) speak the **UOM-51 0-100% slider**. The
+   conversion set is intentionally tiny; only genuinely mismatched
+   pairs belong here. When the reported UOM already matches one of the
+   editor's ranges — the common case — only step 1 applies.
+
+(UOM-101 / "degrees" half-degree raw is *not* handled here — that legacy
+Insteon-thermostat encoding stays a consumer concern; there's no such
+hardware in any capture to verify against.)
 """
 
 from __future__ import annotations
@@ -43,14 +52,46 @@ _CONVERSIONS: dict[tuple[str, str], tuple[Callable[[float], float], int]] = {
 }
 
 
-def normalize_property_value(prop: NodePropertyValue, editor: Editor | None) -> NodePropertyValue:
-    """Return ``prop`` re-expressed in its editor's canonical UOM.
+def _num_text(value: float) -> str:
+    """Stringify so an integral value stays ``"75"`` not ``"75.0"``."""
+    return str(int(value)) if float(value).is_integer() else f"{value}"
 
-    Passes ``prop`` through unchanged when there's no editor, no UOM on
-    the value, the UOM already matches one of the editor's ranges, no
-    conversion is defined for the ``(reported, editor)`` UOM pair, or the
-    value isn't numeric.
+
+def _decode_precision(prop: NodePropertyValue) -> NodePropertyValue:
+    """Apply the reported ``prec`` decimal shift; ``precision`` → 0.
+
+    Passthrough when ``prec`` is 0 (nothing to shift) or the value isn't
+    numeric (plugin nodes legitimately report non-numeric readings —
+    consumers fall back to ``formatted``).
     """
+    if not prop.precision:
+        return prop
+    try:
+        raw = float(prop.value)
+    except (TypeError, ValueError):
+        return prop
+    displayed = round(raw / (10**prop.precision), prop.precision)
+    return NodePropertyValue(
+        id=prop.id,
+        value=_num_text(displayed),
+        formatted=prop.formatted,
+        uom=prop.uom,
+        name=prop.name,
+        precision=0,
+    )
+
+
+def normalize_property_value(prop: NodePropertyValue, editor: Editor | None) -> NodePropertyValue:
+    """Return ``prop`` precision-decoded and re-expressed in its editor's
+    canonical UOM.
+
+    Step 1 (precision) always runs — it's editor-independent. Step 2
+    (UOM conversion) passes through unchanged when there's no editor, no
+    UOM, the UOM already matches one of the editor's ranges, no
+    conversion is defined for the ``(reported, editor)`` UOM pair, or
+    the value isn't numeric.
+    """
+    prop = _decode_precision(prop)
     if editor is None or not prop.uom:
         return prop
     editor_uoms = {r.uom for r in editor.ranges}
@@ -65,12 +106,11 @@ def normalize_property_value(prop: NodePropertyValue, editor: Editor | None) -> 
             raw = float(prop.value)
         except (TypeError, ValueError):
             return prop
-        displayed = raw / (10**prop.precision) if prop.precision else raw
-        new_value = transform(displayed)
-        text = str(int(new_value)) if float(new_value).is_integer() else f"{new_value}"
+        # ``prop`` is already precision-decoded (precision == 0).
+        new_value = transform(raw)
         return NodePropertyValue(
             id=prop.id,
-            value=text,
+            value=_num_text(new_value),
             formatted=prop.formatted,
             uom=target_uom,
             name=prop.name,
