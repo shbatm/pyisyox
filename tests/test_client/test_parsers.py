@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -503,9 +504,38 @@ def test_parse_rest_networking_resources_skips_rules_without_id() -> None:
     assert list(records) == ["5"]
 
 
-def test_parse_rest_networking_resources_raises_on_malformed_xml() -> None:
-    with pytest.raises(ClientError):
-        parse_rest_networking_resources("<not really xml")
+def test_parse_rest_networking_resources_repairs_unescaped_ampersand(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """eisy firmware emits raw ``&`` in network-resource URLs, making
+    ``/rest/networking`` not well-formed. The parser repairs bare
+    ampersands and recovers the resources rather than aborting the
+    controller load (issue #156)."""
+    xml = (
+        '<?xml version="1.0"?>'
+        "<NetConfig>"
+        "<NetRule><id>1</id><name>Webhook</name>"
+        "<url>http://host/api?a=1&b=2&c=3</url></NetRule>"
+        "<NetRule><id>2</id><name>Plain &amp; Fine</name></NetRule>"
+        "</NetConfig>"
+    )
+    with caplog.at_level(logging.WARNING):
+        records = parse_rest_networking_resources(xml)
+    assert list(records) == ["1", "2"]
+    # Pre-existing valid entities are untouched by the repair.
+    assert records["2"].name == "Plain & Fine"
+    assert "Repaired malformed /rest/networking XML" in caplog.text
+
+
+def test_parse_rest_networking_resources_unrepairable_degrades_to_empty(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A malformation the ampersand repair can't fix (here, an
+    unclosed tag) must not abort the controller load — it degrades to
+    ``{}`` with an error log (issue #156)."""
+    with caplog.at_level(logging.ERROR):
+        assert parse_rest_networking_resources("<not really xml") == {}
+    assert "network resources will be unavailable" in caplog.text
 
 
 # --- /api/programs JSON --------------------------------------------------
