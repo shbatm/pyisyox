@@ -282,9 +282,10 @@ class Node:
 
     @property
     def is_dimmable(self) -> bool:
-        """True if the node has a multilevel ``ST`` state **and** accepts ``DON``.
+        """True if the node has a multilevel ``ST`` state **and** accepts
+        a *parameterized* ``DON``.
 
-        Two conditions must both hold for a real dimmer:
+        Three conditions must all hold for a real dimmer:
 
         1. ``ST`` editor reports a multilevel range (not a binary
            ``{0, 100}`` subset). Relay nodedefs accept ``DON`` with an
@@ -299,10 +300,19 @@ class Node:
            ``is_dimmable`` returns True for them and consumers route
            them onto the LIGHT platform where DON-based turn_on
            silently fails.
+        3. The accepted ``DON`` declares at least one parameter (the
+           on-level). HA's light platform sets brightness with
+           ``DON <level>``; a parameterless ``DON`` cannot take one, so
+           the node is on/off-only even with a multilevel ``ST`` (some
+           node-server nodedefs set level via a separate ``SETST`` /
+           ``SETOL`` command instead — issue #64 / Virtual#11). Real
+           Insteon/Z-Wave dimmers declare ``DON`` with an optional
+           on-level param, so they still qualify.
         """
         if self._nodedef is None:
             return False
-        if not self._has_command(CMD_ON):
+        on_cmd = next((c for c in self._nodedef.cmds.accepts if c.id == CMD_ON), None)
+        if on_cmd is None or not on_cmd.parameters:
             return False
         st_prop = self._nodedef.properties.get(PROP_STATUS)
         if st_prop is None or st_prop.editor_id is None:

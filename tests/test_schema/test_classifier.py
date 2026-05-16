@@ -113,6 +113,71 @@ def test_insteon_dimmer_is_light_with_filtered_state(profile: Profile) -> None:
     assert "RR" not in reading_ids
 
 
+def _virtualgeneric_nodedef(*, don_param: bool) -> NodeDef:
+    """The Virtual node-server ``virtualgeneric`` shape (issue #64 /
+    UniversalDevicesInc-PG3/Virtual#11): multilevel ``ST``/``OL``, the
+    dimmer hint verbs ``BRT``/``DIM``, level set via ``SETST``/``SETOL``
+    — and a ``DON`` that takes no level parameter. ``don_param`` flips
+    only whether ``DON`` declares the on-level (the pivotal signal)."""
+    don = Command(id="DON", name="On")
+    if don_param:
+        don = Command(
+            id="DON",
+            name="On",
+            parameters=[CommandParameter(editor_id="value", init="ST", optional=True)],
+        )
+    return NodeDef(
+        id="virtualgeneric",
+        family_id="10",
+        instance_id="4",
+        properties={
+            "ST": NodeProperty(id="ST", editor_id="value"),
+            "OL": NodeProperty(id="OL", editor_id="value"),
+        },
+        cmds=NodeCommands(
+            accepts=[
+                don,
+                Command(id="DOF", name="Off"),
+                Command(id="BRT", name="Brighten"),
+                Command(id="DIM", name="Dim"),
+                Command(
+                    id="SETST",
+                    name="Set Status",
+                    parameters=[CommandParameter(editor_id="value", init="ST")],
+                ),
+                Command(
+                    id="SETOL",
+                    name="Set On Level",
+                    parameters=[CommandParameter(editor_id="value", init="OL")],
+                ),
+            ]
+        ),
+    )
+
+
+def test_parameterless_don_classifies_as_switch_not_light() -> None:
+    """``virtualgeneric`` has an ``OL`` property and ``BRT``/``DIM`` hints
+    (both would say "dimmer") but a *parameterless* ``DON`` — HA drives
+    brightness with ``DON <level>``, so it can't actually be dimmed via
+    the light platform. It must degrade to SWITCH, with the level-set
+    commands still surfaced for the consumer (issue #64 / Virtual#11)."""
+    res = classify(_virtualgeneric_nodedef(don_param=False))
+    assert res.controllable is ControllablePlatform.SWITCH
+    assert res.controllable_command_ids == frozenset({"DON", "DOF"})
+    param_ids = {c.id for c in res.parameterized_commands}
+    assert {"SETST", "SETOL"} <= param_ids
+    assert {"BRT", "DIM"} <= {c.id for c in res.buttons}
+
+
+def test_parameterized_don_same_shape_stays_light() -> None:
+    """Pivot test: the *only* difference from the SWITCH case above is
+    that ``DON`` declares the on-level param — that alone makes it a
+    real, HA-drivable dimmer → LIGHT."""
+    res = classify(_virtualgeneric_nodedef(don_param=True))
+    assert res.controllable is ControllablePlatform.LIGHT
+    assert res.controllable_command_ids == frozenset({"DON", "DOF"})
+
+
 def test_insteon_oncontrol_is_pure_trigger_source(profile: Profile) -> None:
     """OnOffControl accepts nothing, sends DON/DOF — a paddle/remote, not a controllable."""
     res = _result_for(profile, "OnOffControl", "1", "1")
