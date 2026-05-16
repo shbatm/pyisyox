@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -1368,6 +1369,24 @@ def parse_zwave_nodedefs(xml: str, *, family_id: str, instance_id: str) -> dict[
     return out
 
 
+#: A ``&`` that is *not* already the start of a valid XML entity
+#: reference (``&amp;`` / ``&lt;`` / ``&#123;`` / ``&#xAF;`` …). eisy
+#: firmware does not entity-encode ``&`` in network-resource URLs or
+#: bodies in its ``/rest/networking`` output, so a resource whose URL
+#: carries a query string (``?a=1&b=2``) makes the whole document
+#: not well-formed — see issue #156.
+_BARE_AMPERSAND_RE = re.compile(r"&(?!#?\w+;)")
+
+
+def _repair_networking_xml(xml: str) -> str:
+    """Best-effort repair of the most common ``/rest/networking``
+    malformation: an unescaped ``&`` inside a resource URL or body
+    (issue #156). Other malformations (bare ``<`` / ``>``, control
+    characters) are deliberately left alone — the caller degrades to
+    an empty resource map for anything this can't safely fix."""
+    return _BARE_AMPERSAND_RE.sub("&amp;", xml)
+
+
 def parse_rest_networking_resources(xml: str) -> dict[str, NetworkResourceRecord]:
     """Decode ``/rest/networking/resources`` XML into a record map.
 
@@ -1384,16 +1403,36 @@ def parse_rest_networking_resources(xml: str) -> dict[str, NetworkResourceRecord
         </NetConfig>
 
     Empty / missing input (controller without networking module
-    enabled) returns ``{}``. Malformed XML raises
-    :class:`ClientError` so initial-load callers can decide whether
-    to abort or treat as "no resources".
+    enabled) returns ``{}``.
+
+    Network resources are an optional, non-critical part of the tree,
+    so a malformed document never aborts the controller load (issue
+    #156). The common eisy firmware bug — an unescaped ``&`` in a
+    resource URL/body — is repaired best-effort and the resources are
+    recovered (logged at WARNING). Anything that still cannot be
+    parsed degrades to ``{}`` (logged at ERROR); the rest of the
+    controller is unaffected.
     """
     if not xml:
         return {}
     try:
         root = ET.fromstring(xml)  # noqa: S314 — eisy LAN traffic
-    except ET.ParseError as exc:
-        raise ClientError(f"failed to parse /rest/networking XML: {exc}") from exc
+    except ET.ParseError:
+        try:
+            root = ET.fromstring(_repair_networking_xml(xml))  # noqa: S314
+        except ET.ParseError as exc:
+            _LOGGER.error(  # noqa: TRY400 — expected firmware malformation, not a bug; traceback is noise
+                "Could not parse /rest/networking XML even after "
+                "ampersand repair; network resources will be "
+                "unavailable (the controller is otherwise usable): %s",
+                exc,
+            )
+            return {}
+        _LOGGER.warning(
+            "Repaired malformed /rest/networking XML (unescaped '&' in "
+            "a network resource — likely an eisy firmware encoding "
+            "bug); network resources recovered"
+        )
 
     resources: dict[str, NetworkResourceRecord] = {}
     for rule_el in root.findall("NetRule"):
