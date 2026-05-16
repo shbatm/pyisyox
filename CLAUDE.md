@@ -270,7 +270,12 @@ linkdefs, UOMs.
 `classify(nodedef, ...)` → `ClassificationResult` — a nodedef →
 HA-platform fallback classification (`ControllablePlatform` /
 `ReadingPlatform` / `Reading`). Used when a node's nodedef doesn't map
-to a more specific handler.
+to a more specific handler. `ClassificationResult.aux_controls`
+(`AuxControl` / `AuxPlatform`) is the unified read/write-coalesced view
+that supersedes the `readings` / `parameterized_commands` / `buttons`
+split — paired via a command parameter's `init` (the `<st>` it syncs
+with; not naive id matching). The three legacy buckets stay populated
+unchanged; new consumers prefer `aux_controls` (issue #160 / hacs#67).
 
 ### `constants.py`
 
