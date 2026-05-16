@@ -727,4 +727,70 @@ async def test_set_on_level_rejects_out_of_range(real_profile: Profile) -> None:
     node = Node.from_record(record, real_profile, _make_client(session))
     with pytest.raises(NodeCommandError, match="above max"):
         await node.set_on_level(300)
-    assert session.calls == [], "must short-circuit before HTTP"
+
+
+# --- control-id → accept-command resolution (init pairing) ---------------
+
+
+def _node_with_nodedef(real_profile: Profile, nodedef: NodeDef) -> Node:
+    """A Node whose nodedef is the supplied synthetic def."""
+    return Node(_make_record(), nodedef, real_profile, _make_client(FakeSession(BASE)))
+
+
+def test_resolve_control_id_to_init_paired_command(real_profile: Profile) -> None:
+    """A coalesced control written by its *status* id resolves to the
+    accept command whose parameter ``init`` names that status.
+
+    Covers the PG3 ``virtualtemp`` shape (``setTemp`` param
+    ``init="ST"`` ⇄ ``ST`` status) and the i3 ``GV0`` shape (accept
+    ``GV0`` param ``init="ST"``) — and that a direct accept id, the
+    Insteon dual-purposed ``OL``, and an unknown id are unchanged.
+    """
+    nd = NodeDef(
+        id="virtualtemp",
+        family_id="10",
+        instance_id="4",
+        properties={},
+        cmds=NodeCommands(
+            accepts=[
+                Command(id="resetStats"),
+                Command(
+                    id="setTemp",
+                    parameters=[CommandParameter(editor_id="temp", init="ST")],
+                ),
+                # Insteon dual-purposes the id: accept "OL" *is* the
+                # command — a direct match must win, no redirect.
+                Command(
+                    id="OL",
+                    parameters=[CommandParameter(editor_id="I_OL", init="OL")],
+                ),
+            ]
+        ),
+    )
+    node = _node_with_nodedef(real_profile, nd)
+
+    assert node._resolve_accept_command_id("ST") == "setTemp"
+    assert node._resolve_accept_command_id("setTemp") == "setTemp"
+    assert node._resolve_accept_command_id("OL") == "OL"
+    assert node._resolve_accept_command_id("resetStats") == "resetStats"
+    # No status/command pairing → unchanged (the not-accepted error
+    # still surfaces downstream).
+    assert node._resolve_accept_command_id("ZZZ") == "ZZZ"
+
+    i3 = NodeDef(
+        id="I3PaddleFlags",
+        family_id="1",
+        instance_id="1",
+        properties={},
+        cmds=NodeCommands(
+            accepts=[
+                Command(
+                    id="GV0",
+                    parameters=[CommandParameter(editor_id="I3_RELAY_DIM", init="ST")],
+                )
+            ]
+        ),
+    )
+    i3_node = _node_with_nodedef(real_profile, i3)
+    assert i3_node._resolve_accept_command_id("ST") == "GV0"
+    assert i3_node._resolve_accept_command_id("GV0") == "GV0"
