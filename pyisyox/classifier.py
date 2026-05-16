@@ -139,8 +139,7 @@ class AuxPlatform(StrEnum):
 
 @dataclass(slots=True)
 class AuxControl:
-    """One logical aux control = a read status and/or a write command,
-    coalesced.
+    """One logical aux control: a read status and/or a write command, coalesced.
 
     The IoX nodedef expresses the read/write pairing via a command
     parameter's ``init`` (the id of the ``<st>`` status it is
@@ -200,13 +199,9 @@ class ClassificationResult:
             parameter editors to input entities. Same QUERY / controllable
             exclusions as ``buttons``.
         readings: Per-property reading entities.
-        aux_controls: Coalesced read/write controls — the unified view
-            that supersedes the separate ``readings`` /
-            ``parameterized_commands`` / ``buttons`` split: each is one
-            logical control (status + its ``init``-linked writer folded
-            together). ``readings`` / ``parameterized_commands`` /
-            ``buttons`` are retained unchanged for now; new consumers
-            should prefer ``aux_controls``.
+        aux_controls: Coalesced read/write controls (see the module
+            docstring) — the unified successor to ``readings`` /
+            ``parameterized_commands`` / ``buttons``.
     """
 
     controllable: ControllablePlatform | None = None
@@ -378,17 +373,12 @@ def _classify_property(prop: NodeProperty, find_editor: EditorResolver | None) -
 def _aux_write_platform(editor: Editor | None) -> AuxPlatform | None:
     """Editor shape → candidate platform for a *writable* aux control.
 
-    Layered, cheapest signal first (intentionally mirrors the
-    consumer's historical ``platform_for_control`` so the candidate
-    matches what the consumer already does): generic numeric/bool
-    editor id; then binary / always-numeric / index UOM; then range
-    shape — ``names`` or a bare ``subset`` with **no numeric bounds** →
-    a discrete choice (SELECT); ``min``/``max`` present → a scalar
-    (NUMBER). An editor carrying ``names`` *and* numeric bounds (an
-    enum with a declared range — unusual but legal) therefore resolves
-    to NUMBER, not SELECT, matching the consumer; the candidate is
-    advisory and the consumer has final say. ``None`` when nothing
-    resolves — the consumer falls back.
+    Layered, cheapest signal first — intentionally mirrors the
+    consumer's historical ``platform_for_control`` so the advisory
+    candidate matches what the consumer already does. Note ``names``
+    *and* numeric bounds together resolves to NUMBER, not SELECT (an
+    enum with a declared range — unusual but legal; matches the
+    consumer). ``None`` when nothing resolves — the consumer falls back.
     """
     if editor is None or not editor.ranges:
         return None
@@ -546,10 +536,8 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
     candidate_cmds = [
         c for c in nodedef.cmds.accepts if c.id not in _QUERY_CMDS and c.id not in controllable_cmd_ids
     ]
-    # A command is button-shaped when it can be sent with no positional
-    # args: parameterless, or every parameter ``optional`` (controller
-    # applies defaults — e.g. Insteon BEEP's optional ``level``).
-    # ``all([])`` is True, so parameterless commands fall through here.
+    # Button-shaped = sendable with no positional args: parameterless or
+    # every param optional (controller defaults — e.g. Insteon BEEP).
     buttons = [c for c in candidate_cmds if all(p.optional for p in c.parameters)]
     parameterized_commands = [c for c in candidate_cmds if not all(p.optional for p in c.parameters)]
 
