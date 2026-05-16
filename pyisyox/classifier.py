@@ -77,6 +77,7 @@ from pyisyox.constants import (
     PROP_STATUS,
     PROP_TEMPERATURE,
     UOM_BOOLEAN,
+    UOM_BYTE,
     UOM_INDEX,
     UOM_ON_OFF,
     UOM_OPEN_CLOSED,
@@ -268,7 +269,7 @@ _BINARY_UOMS = frozenset({UOM_BOOLEAN, UOM_ON_OFF, UOM_OPEN_CLOSED})
 #: Always-numeric UOMs: percent (0-100) and the 8-bit byte range
 #: (0-255). NUMBER even when the profile spells the span as a wide
 #: ``subset`` rather than ``min``/``max``.
-_NUMERIC_UOMS = frozenset({UOM_PERCENTAGE, "100"})
+_NUMERIC_UOMS = frozenset({UOM_PERCENTAGE, UOM_BYTE})
 #: Generic editor ids that name a value *shape* regardless of UOM (PG3
 #: plugin nodedefs lean on these; firmware nodedefs carry ``I_*`` /
 #: ``ZW_*`` ids whose shape is read off the range instead).
@@ -461,11 +462,12 @@ def _build_aux_controls(
     find_editor: EditorResolver | None,
 ) -> list[AuxControl]:
     """Coalesce non-controllable status/command pairs into one control
-    each: writable controls first (in ``accepts`` order), then the
-    remaining read-only properties. Controllable-owned ids and ``QUERY``
-    are already excluded; a paired writer still reads its status back
-    even when the property is controllable-filtered from standalone
-    readings (e.g. a light's ``OL`` setter)."""
+    each. Stable, intentional order (consumers may rely on it): writable
+    controls first in ``accepts`` order, then read-only residuals in
+    ``properties`` order. Controllable-owned ids and ``QUERY`` are
+    already excluded; a paired writer still reads its status back even
+    when the property is controllable-filtered from standalone readings
+    (e.g. a light's ``OL`` setter)."""
     props = nodedef.properties
     # Two accepts shouldn't legitimately pair to the same control id
     # (UDI won't ship two writers for one status), but guard it: first

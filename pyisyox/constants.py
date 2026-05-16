@@ -322,6 +322,7 @@ UOM_ISYV4_DEGREES = "degrees"
 UOM_ISYV4_NONE = "n/a"
 
 UOM_BOOLEAN = "2"  # 0 = False / 1 = True
+UOM_BYTE = "100"  # 0-255 8-bit range, no unit
 UOM_CLIMATE_MODES = "98"
 UOM_CLIMATE_MODES_ZWAVE = "67"
 UOM_DOUBLE_TEMP = "101"
