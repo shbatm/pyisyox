@@ -21,6 +21,8 @@ from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord, ZWaveProper
 from pyisyox.constants import NodeFlag, Protocol
 from pyisyox.runtime import Node
 from pyisyox.schema import Profile
+from pyisyox.schema.cmd import Command, CommandParameter
+from pyisyox.schema.nodedef import NodeCommands, NodeDef, NodeProperty
 from tests.test_client.conftest import FakeSession
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "eisy6"
@@ -411,6 +413,53 @@ def test_is_dimmable_false_when_nodedef_does_not_accept_don(real_profile: Profil
     break (this is the user-reported RemoteLinc2 / IMETER bug)."""
     node = _make_node(_make_record(nodedef_id=nodedef_id), real_profile)
     assert node.is_dimmable is False
+
+
+def _multilevel_st_nodedef(*, don_param: bool) -> NodeDef:
+    """Synthetic nodedef with a genuinely multilevel ``ST`` (encoded
+    UOM-51 0-100 editor, resolves scope-free) and a ``DON`` that does or
+    doesn't declare the on-level param. The ``virtualgeneric`` shape
+    (issue #64 / Virtual#11): multilevel ST alone used to be enough to
+    call this dimmable; it must now also require a parameterized DON."""
+    enc = "_51_0_R_0_101_N_IX_DIM_REP"  # multilevel: uom 51, min 0, max 101
+    don = Command(id="DON", name="On")
+    if don_param:
+        don = Command(
+            id="DON",
+            name="On",
+            parameters=[CommandParameter(editor_id=enc, init="ST", optional=True)],
+        )
+    return NodeDef(
+        id="virtualgeneric",
+        family_id="10",
+        instance_id="4",
+        properties={"ST": NodeProperty(id="ST", editor_id=enc)},
+        cmds=NodeCommands(accepts=[don, Command(id="DOF", name="Off")]),
+    )
+
+
+def test_is_dimmable_false_for_multilevel_st_with_parameterless_don(
+    real_profile: Profile,
+) -> None:
+    """The Virtual#11 regression: a multilevel ``ST`` editor used to be
+    sufficient for ``is_dimmable`` even when ``DON`` takes no level
+    param. HA's light platform sets brightness via ``DON <level>``, so
+    such a node is on/off-only — ``is_dimmable`` must return False (the
+    consumer then routes it to SWITCH, level via the SETST/SETOL aux)."""
+    node = _make_node(_make_record(nodedef_id="virtualgeneric"), real_profile)
+    node._nodedef = _multilevel_st_nodedef(don_param=False)  # type: ignore[assignment]
+    assert node.is_dimmable is False
+
+
+def test_is_dimmable_true_for_multilevel_st_with_parameterized_don(
+    real_profile: Profile,
+) -> None:
+    """Pivot: identical multilevel-``ST`` node, but ``DON`` now declares
+    the on-level param → genuinely HA-dimmable → True. Confirms the new
+    guard keys solely on DON parameterization, not the ST editor."""
+    node = _make_node(_make_record(nodedef_id="virtualgeneric"), real_profile)
+    node._nodedef = _multilevel_st_nodedef(don_param=True)  # type: ignore[assignment]
+    assert node.is_dimmable is True
 
 
 # --- ergonomic wrappers: end-to-end via real fixture nodedefs ------------

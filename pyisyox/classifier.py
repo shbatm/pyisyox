@@ -202,13 +202,25 @@ EditorResolver = Callable[[str], Editor | None]
 
 
 def _detect_controllable(
-    accept_ids: frozenset[str], properties: dict[str, NodeProperty]
+    accept_ids: frozenset[str],
+    properties: dict[str, NodeProperty],
+    on_takes_level: bool,
 ) -> tuple[ControllablePlatform | None, frozenset[str]]:
     """Pick the single controllable platform plus the commands that belong to it.
 
     Order matters: thermostat is checked before light/switch because the
     Insteon Thermostat nodedef accepts ``BRT``/``DIM`` (interpreted as
     setpoint up/down on a thermostat, not as a light dimmer).
+
+    ``on_takes_level`` is True when the accepted ``DON`` declares at
+    least one parameter (the on-level). A node is only a *dimmer* —
+    LIGHT rather than SWITCH — if it can actually be commanded to a
+    level via ``DON``. Some node-server nodedefs (and the legacy
+    ``X10`` nodedef) carry on-level properties or ``BRT``/``DIM`` hints
+    but a *parameterless* ``DON``; HA's light platform drives
+    brightness with ``DON <level>``, so without the param the slider
+    just fails. Those degrade to SWITCH (their level-set verbs still
+    surface as ``parameterized_commands`` / ``buttons``).
     """
     has_dim_or_switch = CMD_ON in accept_ids and CMD_OFF in accept_ids
     has_thermostat_setpoint = PROP_SETPOINT_COOL in accept_ids or PROP_SETPOINT_HEAT in accept_ids
@@ -226,7 +238,7 @@ def _detect_controllable(
     if has_cover_only:
         return ControllablePlatform.COVER, _COVER_CMDS & accept_ids
     if has_dim_or_switch:
-        is_dimmer = has_on_level or bool(_LIGHT_DIMMER_HINTS & accept_ids)
+        is_dimmer = (has_on_level or bool(_LIGHT_DIMMER_HINTS & accept_ids)) and on_takes_level
         platform = ControllablePlatform.LIGHT if is_dimmer else ControllablePlatform.SWITCH
         return platform, _LIGHT_SWITCH_CMDS & accept_ids
     return None, frozenset()
@@ -295,7 +307,9 @@ def classify(nodedef: NodeDef, find_editor: EditorResolver | None = None) -> Cla
         buttons / parameterized_commands / readings populated.
     """
     accept_ids = frozenset(c.id for c in nodedef.cmds.accepts)
-    controllable, controllable_cmd_ids = _detect_controllable(accept_ids, nodedef.properties)
+    on_cmd = next((c for c in nodedef.cmds.accepts if c.id == CMD_ON), None)
+    on_takes_level = on_cmd is not None and len(on_cmd.parameters) > 0
+    controllable, controllable_cmd_ids = _detect_controllable(accept_ids, nodedef.properties, on_takes_level)
 
     triggers = list(nodedef.cmds.sends)
 
