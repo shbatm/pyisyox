@@ -45,16 +45,22 @@ def _byte_to_percent(displayed: float) -> float:
 
 
 #: ``(reported_uom, editor_uom) -> (transform, target_precision)``. The
-#: transform receives the *displayed* value (raw already divided by
-#: ``10**precision``) and returns the displayed value in the target UOM.
+#: transform receives the *displayed* value (already precision-decoded)
+#: and returns the displayed value in the target UOM. ``target_precision``
+#: **must be 0** — the post-condition of ``normalize_property_value`` is
+#: ``precision == 0`` (the value is fully decoded; consumers never
+#: re-shift). A non-zero entry would violate that invariant.
 _CONVERSIONS: dict[tuple[str, str], tuple[Callable[[float], float], int]] = {
     ("100", "51"): (_byte_to_percent, 0),
 }
 
 
-def _num_text(value: float) -> str:
-    """Stringify so an integral value stays ``"75"`` not ``"75.0"``."""
-    return str(int(value)) if float(value).is_integer() else f"{value}"
+def _num_text(value: float, prec: int) -> str:
+    """Stringify to ``prec`` decimals; an integral value stays ``"75"``
+    not ``"75.0"``. Fixed-point (``f"{value:.{prec}f}"``) — never
+    ``f"{value}"``, which flips to scientific notation below ~1e-4
+    (a ``prec=5`` reading would otherwise wire ``"1e-05"``)."""
+    return str(int(value)) if value.is_integer() else f"{value:.{prec}f}"
 
 
 def _decode_precision(prop: NodePropertyValue) -> NodePropertyValue:
@@ -73,7 +79,7 @@ def _decode_precision(prop: NodePropertyValue) -> NodePropertyValue:
     displayed = round(raw / (10**prop.precision), prop.precision)
     return NodePropertyValue(
         id=prop.id,
-        value=_num_text(displayed),
+        value=_num_text(displayed, prop.precision),
         formatted=prop.formatted,
         uom=prop.uom,
         name=prop.name,
@@ -106,11 +112,12 @@ def normalize_property_value(prop: NodePropertyValue, editor: Editor | None) -> 
             raw = float(prop.value)
         except (TypeError, ValueError):
             return prop
-        # ``prop`` is already precision-decoded (precision == 0).
+        # ``prop`` is already precision-decoded (precision == 0); the
+        # transform output is in displayed units, ``target_prec`` is 0.
         new_value = transform(raw)
         return NodePropertyValue(
             id=prop.id,
-            value=_num_text(new_value),
+            value=_num_text(new_value, target_prec),
             formatted=prop.formatted,
             uom=target_uom,
             name=prop.name,
