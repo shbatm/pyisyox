@@ -204,10 +204,11 @@ def test_classify_works_without_editor_resolver(profile: Profile) -> None:
     assert res.aux_controls
     assert all(a.candidate_platform is AuxPlatform.SENSOR and not a.is_enum for a in res.aux_controls)
 
-    # A writable control with no resolvable editor → candidate None (the
-    # documented fallback path); still flagged writable for the consumer.
-    nd_w = NodeDef(
-        id="w",
+    # A *readable* control whose write editor doesn't resolve falls back
+    # to the property's read classification (SENSOR), so a coalesced
+    # control is never less surfaceable than the bare reading.
+    nd_rw = NodeDef(
+        id="rw",
         family_id="99",
         instance_id="1",
         properties={"GV0": NodeProperty(id="GV0", editor_id="X")},
@@ -215,8 +216,23 @@ def test_classify_works_without_editor_resolver(profile: Profile) -> None:
             accepts=[Command(id="GV0", parameters=[CommandParameter(editor_id="X", init="GV0")])]
         ),
     )
-    (ctrl,) = classify(nd_w).aux_controls  # no resolver
-    assert ctrl.id == "GV0" and ctrl.writable and ctrl.candidate_platform is None
+    (ctrl,) = classify(nd_rw).aux_controls  # no resolver
+    assert ctrl.id == "GV0" and ctrl.readable and ctrl.writable
+    assert ctrl.candidate_platform is AuxPlatform.SENSOR
+
+    # A *write-only* control with no resolvable editor keeps candidate
+    # None (the documented consumer-fallback path) — no read side.
+    nd_w = NodeDef(
+        id="w",
+        family_id="99",
+        instance_id="1",
+        cmds=NodeCommands(
+            accepts=[Command(id="DOIT", parameters=[CommandParameter(editor_id="X")])]
+        ),
+    )
+    (wo,) = classify(nd_w).aux_controls  # no resolver
+    assert wo.id == "DOIT" and wo.writable and not wo.readable
+    assert wo.candidate_platform is None
 
 
 def test_query_is_never_a_button() -> None:

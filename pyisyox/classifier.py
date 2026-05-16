@@ -434,12 +434,25 @@ def _aux_from_command(
     is_enum = bool(editor and editor.ranges and editor.ranges[0].names)
     status_id = init_param.init
     if status_id and status_id in props:
+        prop = props[status_id]
+        if candidate is None:
+            # Write editor didn't resolve, but the control is readable:
+            # fall back to the status property's read classification so
+            # a coalesced control is never less surfaceable than the
+            # bare reading (write-only commands keep ``None``).
+            reading = _classify_property(prop, find_editor)
+            candidate = (
+                AuxPlatform.BINARY_SENSOR
+                if reading.platform is ReadingPlatform.BINARY_SENSOR
+                else AuxPlatform.SENSOR
+            )
+            is_enum = is_enum or reading.is_enum
         return AuxControl(
             id=status_id,
             readable=True,
             writable=True,
             candidate_platform=candidate,
-            property=props[status_id],
+            property=prop,
             command=cmd,
             editor_id=editor_id,
             is_enum=is_enum,
