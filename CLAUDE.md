@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**PyISYoX** is an async Python client for Universal Devices' **eisy** /
-**Polisy** controllers running **IoX 6.0.0+**. It connects, loads the
-device tree (nodes, scenes, programs, variables, network resources),
-and keeps it live via a WebSocket event stream.
+**PyISYoX** is an async Python library for Universal Devices' **eisy**
+controllers running **IoX 6.0.0+**. It connects, loads the device tree
+(nodes, scenes, programs, variables, network resources), and keeps it
+live via a WebSocket event stream.
 
-- **In scope:** eisy / Polisy on IoX 6+. Insteon, X10, Z-Wave,
-  Zigbee/Matter (whatever the hardware supports).
+- **In scope:** any Universal Devices controller on IoX 6+ (the
+  firmware version is the real gate, not the hardware model). Insteon,
+  X10, Z-Wave, Zigbee/Matter — whatever the hardware supports.
 - **Out of scope:** original ISY-994 hardware and pre-6.0 firmware —
   consumers needing those should use the upstream
   [`pyisy`](https://github.com/automicus/PyISY) (v3.x) library.
@@ -20,13 +21,14 @@ and keeps it live via a WebSocket event stream.
 driven by the needs of the Home Assistant ISY integration. No
 affiliation with Universal Devices, Inc.
 
-> **Branch note:** `main` still carries the legacy v3.x-shaped layout
-> (`isy.py`, `connection.py`, `nodes/`, `helpers/xml.py`, …). **The v6
-> rewrite lives on `dev`** and that is where PRs go. The repo's default
-> branch is `main`, so a `Closes #N` line in a PR body does **not**
-> auto-close the issue on merge — close referenced issues manually
-> after merging to `dev`. The maintainer rebase-merges
-> (`gh pr merge N --rebase`) to keep per-commit history.
+> **Branch note (post-#107):** `dev` was consolidated into `main` —
+> **`main` is now the v6 codebase _and_ the release branch.** All PRs
+> target `main`; releases (`6.0.0bN`/…) are tagged from `main`. `dev`
+> still exists but is just a mirror of `main`; do not PR to it. Because
+> `main` is the default branch, a `Closes #N` line auto-closes on
+> merge. The maintainer rebase-merges (`gh pr merge N --rebase`) so a
+> merged PR's branch tip is **not** an ancestor of `main` — judge
+> staleness by PR state, not `git branch --merged`.
 
 > **Branching policy for Claude tasks:** when the user's task references
 > an existing in-flight branch (e.g. "fix X on `chore/foo`"), commit and
@@ -37,7 +39,7 @@ affiliation with Universal Devices, Inc.
 
 ## Requirements
 
-- **Python 3.10+**
+- **Python 3.11+** (`requires-python = ">=3.11"`)
 - **Dependencies:** `aiohttp`, `python-dateutil`, `requests`,
   `colorlog`, `xmltodict`
 
@@ -177,8 +179,13 @@ dispatcher update is visible through the wrapper immediately.
     `properties["OL"].value` is the percentage. Conversions live in
     `runtime/_normalize.py` (`_CONVERSIONS` is intentionally tiny —
     only genuinely mismatched pairs); a reported UOM that already
-    matches one of the editor's ranges passes through untouched. The
-    underlying `NodeRecord.properties` keeps the raw reported form.
+    matches one of the editor's ranges passes through untouched.
+    `_normalize` is also the **single read chokepoint that decodes
+    reported `precision`** (`value="954" precision="1"` → `"95.4"`,
+    `precision` reset to `0`) so consumers never re-shift — mirrors the
+    write side, where the codec sends the displayed value + UOM and the
+    controller scales device-side. The underlying `NodeRecord.properties`
+    keeps the raw reported form.
   - Introspection (all derived from the nodedef / type triple /
     properties — **no hardcoded type-prefix tables**): `protocol`,
     `is_thermostat`, `is_lock`, `is_fan`, `is_dimmable`,
@@ -205,6 +212,15 @@ dispatcher update is visible through the wrapper immediately.
     min-gap (HA policy — stays in the consumer) and runtime
     "not a thermostat" guards (let `EditorCodecError` raise).
   - `NodeCommandError` on a command the nodedef doesn't accept.
+  - Z-Wave surface (Z-Wave / Z-Matter families only; raises
+    `NodeCommandError` on other families): `zwave_props` (parsed
+    `devtype` cat/mfg/gen — `None` for Insteon etc.),
+    `get_zwave_parameter` / `set_zwave_parameter(number, value, size)`
+    (config params live on `/rest/(zmatter/)?zwave/node/{addr}/...`,
+    not the `CONFIG` accept command which has no byte-size slot),
+    `set_zwave_lock_code` / `delete_zwave_lock_code` (write-only; the
+    wire paths are inherited from PyISY 3.x and **not yet confirmed on
+    IoX-6 hardware** — needs a tester with an enrolled Z-Wave lock).
 - **`Group` (`runtime/group.py`)** — an IoX scene.
   `member_addresses`, `controller_addresses`; `group_all_on` /
   `group_any_on` computed on access from the controller's node
@@ -273,9 +289,24 @@ HA-platform fallback classification (`ControllablePlatform` /
 to a more specific handler. `ClassificationResult.aux_controls`
 (`AuxControl` / `AuxPlatform`) is the unified read/write-coalesced view
 that supersedes the `readings` / `parameterized_commands` / `buttons`
-split — paired via a command parameter's `init` (the `<st>` it syncs
-with; not naive id matching). The three legacy buckets stay populated
-unchanged; new consumers prefer `aux_controls` (issue #160 / hacs#67).
+split. The three legacy buckets stay populated unchanged; new
+consumers prefer `aux_controls`.
+
+**`param.init` is the read/write coalescing key — a wire fact, not a
+heuristic.** The UDI DynamicProfiles spec defines a command
+parameter's `init` as _"id of the `<st>` status this parameter is
+initialized **and synchronized with**"_ — i.e. the authoritative link
+saying "this writable command and that readable status are one logical
+control." `aux_controls` pairs on `param.init` → status id, **not**
+naive cmd-id/prop-id matching. Usually they coincide (i3 `GV1..GV7`
+cmd==init==status; thermostat `CLISPH/CLISPC`), but the payoff case
+differs: `I3PaddleFlags` `GV0` has `param.init="ST"` while its readback
+is the `ST` "Mode" (Dimmer/Relay) status — cmd-id (`GV0`) ≠ status-id
+(`ST`). Id-matching would mismodel the most user-visible i3 flag as
+two controls. Corollary: **`ST` carries no special status at the
+capability layer** beyond controllable-ownership — never reintroduce a
+blanket `ST`/`PROP_STATUS` skip in classification. Spec:
+<https://developer.isy.io/docs/API/pg/DynamicProfiles#parameter-object>.
 
 ### `constants.py`
 
@@ -357,12 +388,30 @@ That keeps it protocol-agnostic and PG3-plugin-friendly. Add fixtures
 
 - assertions in `tests/test_runtime/test_node_introspection.py`.
 
+## Capability vs. policy — the pyisyox / consumer boundary
+
+The governing rule for "does this logic belong in pyisyox or in the
+consumer?" is **capability vs. policy** — _not_ "no HA vocabulary in
+pyisyox" (`classify()` is an HA-platform classifier by its own
+docstring, and `ControllablePlatform` / `ReadingPlatform` are HA
+taxonomy):
+
+- **Capability → pyisyox.** Anything derivable purely from a single
+  nodedef + its editors: control identity, read/write coalescing,
+  controllable ownership, editor-shape → candidate platform, value
+  codec / UOM-precision normalisation. Deterministic from the schema.
+- **Policy → consumer.** Anything needing HA-device / hardware / UX
+  context: entity naming, HA-device grouping & sub-node folding & dedup,
+  `EntityCategory` placement, composite climate setpoint with min-gap,
+  retry / debounce, auth / offline UX. pyisyox classifies one nodedef
+  and has no concept of an "HA device" or "sub-node".
+
+When unsure where new logic goes, ask: _is it derivable from one
+nodedef+editor (capability → here) or does it need HA-device / UX /
+hardware context (policy → consumer)?_
+
 ## Deferred / out of scope
 
-- **Z-Wave parameter & lock-code wire surface** — different endpoints
-  (`/rest/(zmatter/)?zwave/node/<addr>/...`), needs a live capture on
-  Z-Wave hardware. Tracked as an issue; a `Node.zwave` namespace will
-  land once the wire shape is confirmed.
 - **Composite climate setpoint (heat+cool with min-gap), retry /
   debounce policy, HA-platform decision trees** — consumer policy, by
   design. They stay in the consumer (e.g. the Home Assistant

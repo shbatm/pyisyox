@@ -1,14 +1,16 @@
 # pyisyox
 
-Async Python client for [Universal Devices](https://www.universal-devices.com/)' eisy and Polisy controllers running **IoX 6.0.0+**.
+A modern async Python library for [Universal Devices](https://www.universal-devices.com/) **eisy** home controllers running **IoX firmware 6.0.0+**.
 
-> **Public alpha.** Breaking changes are free; pin a specific version when consuming.
+Connect to your controller, read and control everything it manages — Insteon, Z-Wave, Zigbee/Matter, scenes, programs, and variables — and stay in sync over a live WebSocket stream.
+
+> **Public beta.** The API is stabilizing ahead of the 6.0.0 release. Small breaking changes are still possible between betas, so pin an exact version when you depend on it.
 
 ## Status & scope
 
-- **Targets:** eisy / Polisy on IoX 6.0.0 or newer.
-- **Out of scope:** original ISY-994 hardware (use the upstream [`pyisy`](https://pypi.org/project/pyisy/) v3.x instead — it remains the dependency for Home Assistant Core's official `isy994` integration).
-- **Consumer:** a forthcoming Home Assistant integration (`hacs-udi-iox`) will live in its own repo and consume this library. Until that ships, pyisyox is usable directly as an async library or via the bundled CLI.
+- **Works with:** any Universal Devices controller running IoX 6.0.0 or newer — the firmware version is the gate, not the hardware model (current hardware: eisy).
+- **Not for ISY-994:** the original ISY-994 hardware (and pre-6.0 firmware) is out of scope — use the upstream [`pyisy`](https://pypi.org/project/pyisy/) v3.x library, which still backs Home Assistant Core's official `isy994` integration.
+- **Home Assistant:** [`hacs-udi-iox`](https://github.com/shbatm/hacs-udi-iox) is a HACS custom component that wraps this library for eisy on IoX 6+. You can also use pyisyox directly as an async library or through the bundled CLI.
 
 ## Highlights
 
@@ -24,10 +26,10 @@ Async Python client for [Universal Devices](https://www.universal-devices.com/)'
 ## Install
 
 ```bash
-pip install pyisyox  # once published to PyPI; for now, install from source
+pip install pyisyox
 ```
 
-Requires Python 3.11+.
+Requires Python 3.11+. During beta, `pip install pyisyox` resolves to the latest beta; pin an exact version (e.g. `pyisyox==6.0.0b6`) for reproducible builds.
 
 ## Quickstart
 
