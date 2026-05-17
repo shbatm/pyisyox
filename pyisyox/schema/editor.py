@@ -32,19 +32,32 @@ from dataclasses import dataclass, field
 _HALF_DEGREE_UOMS = frozenset({"101", "degrees"})
 
 
-def _parse_subset(spec: str) -> set[int]:
-    """Expand a subset spec like ``"0-3,5-7"`` into ``{0,1,2,3,5,6,7}``."""
+def _parse_subset(spec: str, lo_default: int | None = None, hi_default: int | None = None) -> set[int]:
+    """Expand a subset spec like ``"0-3,5-7"`` into ``{0,1,2,3,5,6,7}``.
+
+    Some IoX 6.x firmware (eisy 6.0.5) emits an open-ended bound —
+    ``"5-"``, ``"-7"``, ``"-"`` — resolved against ``lo_default`` /
+    ``hi_default`` (the editor's min/max or names-index extremes). A
+    piece that still can't resolve (or is garbage) is skipped rather
+    than raising and aborting the whole profile load.
+    """
     out: set[int] = set()
     for raw_piece in spec.split(","):
         piece = raw_piece.strip()
         if not piece:
             continue
-        if "-" in piece:
-            lo_s, hi_s = piece.split("-", 1)
-            lo, hi = int(lo_s), int(hi_s)
-            out.update(range(lo, hi + 1))
-        else:
-            out.add(int(piece))
+        try:
+            if "-" in piece:
+                lo_s, hi_s = (p.strip() for p in piece.split("-", 1))
+                lo = int(lo_s) if lo_s else lo_default
+                hi = int(hi_s) if hi_s else hi_default
+                if lo is None or hi is None:
+                    continue
+                out.update(range(lo, hi + 1))
+            else:
+                out.add(int(piece))
+        except ValueError:
+            continue
     return out
 
 
@@ -121,14 +134,21 @@ class EditorRange:
         """Build a range from a JSON object."""
         subset_raw = raw.get("subset")
         names_raw = raw.get("names", {}) or {}
+        names = {int(k): v for k, v in names_raw.items()}
         step_raw = raw.get("step")
+        # Open-ended-bound floor/ceiling: own min/max, else names extremes.
+        rng_min, rng_max = raw.get("min"), raw.get("max")
+        lo_default = int(rng_min) if isinstance(rng_min, (int, float)) else (min(names) if names else None)
+        hi_default = int(rng_max) if isinstance(rng_max, (int, float)) else (max(names) if names else None)
         return cls(
             uom=str(raw.get("uom", "0")),
-            min=raw.get("min"),
-            max=raw.get("max"),
+            min=rng_min,
+            max=rng_max,
             precision=int(raw.get("prec", 0)),
-            subset=_parse_subset(subset_raw) if isinstance(subset_raw, str) else set(),
-            names={int(k): v for k, v in names_raw.items()},
+            subset=(
+                _parse_subset(subset_raw, lo_default, hi_default) if isinstance(subset_raw, str) else set()
+            ),
+            names=names,
             step=float(step_raw) if isinstance(step_raw, (int, float)) else None,
         )
 
