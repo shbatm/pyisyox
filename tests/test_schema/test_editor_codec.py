@@ -96,6 +96,63 @@ def test_subset_parsing_with_gaps() -> None:
     assert rng.is_valid(7)
 
 
+@pytest.mark.parametrize(
+    ("subset_spec", "expected"),
+    [
+        ("5-", {5, 6, 7}),  # open-ended high → resolves to max
+        ("-2", {0, 1, 2}),  # open-ended low → resolves from min
+        ("-", {0, 1, 2, 3, 4, 5, 6, 7}),  # bare separator → whole universe
+        ("0-3,5-,7", {0, 1, 2, 3, 5, 6, 7}),  # bad piece resolved, others kept
+        ("x", set()),  # non-numeric single value still skipped
+    ],
+)
+def test_subset_open_ended_bound_resolves_to_min_max(
+    subset_spec: str, expected: set[int]
+) -> None:
+    """An open-ended subset bound resolves against the editor's min/max.
+
+    Regression for hacs-udi-iox#71: eisy IoX 6.0.5 emits a subset with an
+    empty bound; ``int('')`` aborted the whole profile load and blocked
+    integration install. Dropping the piece would empty the subset and
+    *widen* the valid set, so we resolve the open side against the range.
+    """
+    ed = Editor.from_json(
+        {
+            "id": "I_OPEN",
+            "ranges": [{"uom": "25", "min": 0, "max": 7, "subset": subset_spec}],
+        }
+    )
+    assert ed.range_for("25").subset == expected
+
+
+def test_subset_open_ended_bound_resolves_via_names_when_no_min_max() -> None:
+    """A pure enum editor (no min/max) resolves the bound via names extremes."""
+    ed = Editor.from_json(
+        {
+            "id": "I_ENUM",
+            "ranges": [
+                {
+                    "uom": "25",
+                    "subset": "1-",
+                    "names": {"0": "Off", "1": "Low", "2": "Med", "3": "High"},
+                }
+            ],
+        }
+    )
+    assert ed.range_for("25").subset == {1, 2, 3}
+
+
+def test_subset_open_ended_bound_skipped_without_context() -> None:
+    """No min/max and no names → the open bound can't be resolved, so skip.
+
+    Crash-safety floor: still no ``ValueError``, the load survives.
+    """
+    ed = Editor.from_json(
+        {"id": "I_NOCTX", "ranges": [{"uom": "25", "subset": "5-,2"}]}
+    )
+    assert ed.range_for("25").subset == {2}
+
+
 def test_encode_sends_value_as_is_controller_scales() -> None:
     """The codec validates but does not rewrite the number — the
     controller scales device-side from the appended UOM. An integral
