@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-**PyISYoX** is an async Python client for Universal Devices' **eisy** /
-**Polisy** controllers running **IoX 6.0.0+**. It connects, loads the
-device tree (nodes, scenes, programs, variables, network resources),
-and keeps it live via a WebSocket event stream.
+**PyISYoX** is an async Python library for Universal Devices' **eisy**
+controllers running **IoX 6.0.0+**. It connects, loads the device tree
+(nodes, scenes, programs, variables, network resources), and keeps it
+live via a WebSocket event stream.
 
-- **In scope:** eisy / Polisy on IoX 6+. Insteon, X10, Z-Wave,
-  Zigbee/Matter (whatever the hardware supports).
+- **In scope:** any Universal Devices controller on IoX 6+ (the
+  firmware version is the real gate, not the hardware model). Insteon,
+  X10, Z-Wave, Zigbee/Matter — whatever the hardware supports.
 - **Out of scope:** original ISY-994 hardware and pre-6.0 firmware —
   consumers needing those should use the upstream
   [`pyisy`](https://github.com/automicus/PyISY) (v3.x) library.

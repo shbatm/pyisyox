@@ -1,6 +1,6 @@
 # pyisyox
 
-A modern async Python library for [Universal Devices](https://www.universal-devices.com/) **eisy** and **Polisy** home controllers (IoX firmware 6.0.0+).
+A modern async Python library for [Universal Devices](https://www.universal-devices.com/) **eisy** home controllers running **IoX firmware 6.0.0+**.
 
 Connect to your controller, read and control everything it manages — Insteon, Z-Wave, Zigbee/Matter, scenes, programs, and variables — and stay in sync over a live WebSocket stream.
 
@@ -8,7 +8,7 @@ Connect to your controller, read and control everything it manages — Insteon, 
 
 ## Status & scope
 
-- **Works with:** eisy or Polisy running IoX 6.0.0 or newer.
+- **Works with:** any Universal Devices controller running IoX 6.0.0 or newer — the firmware version is the gate, not the hardware model (current hardware: eisy).
 - **Not for ISY-994:** the original ISY-994 hardware (and pre-6.0 firmware) is out of scope — use the upstream [`pyisy`](https://pypi.org/project/pyisy/) v3.x library, which still backs Home Assistant Core's official `isy994` integration.
 - **Home Assistant:** [`hacs-udi-iox`](https://github.com/shbatm/hacs-udi-iox) is a HACS custom component that wraps this library for eisy on IoX 6+. You can also use pyisyox directly as an async library or through the bundled CLI.
 
