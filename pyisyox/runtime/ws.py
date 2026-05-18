@@ -48,6 +48,15 @@ _LOGGER = logging.getLogger(__name__)
 #: After the last entry the reader stays at the cap (60 s).
 _BACKOFF_SCHEDULE: tuple[float, ...] = (1.0, 2.0, 5.0, 10.0, 30.0, 60.0)
 
+#: After the socket opens the controller replays every node's current
+#: status. The stream stays ``SYNCING`` until that burst goes quiet for
+#: ``_SYNC_QUIET_SECONDS`` (no frame), then flips to ``CONNECTED``.
+#: ``_SYNC_MAX_SECONDS`` is a hard cap so a chatty controller can never
+#: stall the stream in ``SYNCING`` forever. Module-level so tests can
+#: monkeypatch them small.
+_SYNC_QUIET_SECONDS: float = 1.0
+_SYNC_MAX_SECONDS: float = 10.0
+
 
 StatusListener = Callable[[EventStreamStatus], None]
 
@@ -60,7 +69,10 @@ class WebSocketEventStream:
     1. :meth:`start` schedules the read task and returns immediately.
     2. The task connects, dispatches frames, reconnects on transport
        errors, and pumps :class:`EventStreamStatus` notifications to
-       any registered status listener.
+       any registered status listener. On each connect it holds
+       ``SYNCING`` (not ``CONNECTED``) until the controller's initial
+       status replay drains, so consumers don't treat the replay as
+       live events.
     3. :meth:`stop` cancels the task and closes any active WS.
 
     The class deliberately keeps its surface narrow — the consumer is
@@ -72,11 +84,13 @@ class WebSocketEventStream:
         "_backoff_idx",
         "_client",
         "_dispatcher",
+        "_frame_count",
         "_last_event_at",
         "_path",
         "_status",
         "_status_listeners",
         "_stop_requested",
+        "_sync_task",
         "_task",
         "_ws",
     )
@@ -111,6 +125,10 @@ class WebSocketEventStream:
         self._status_listeners: list[StatusListener] = []
         self._status: EventStreamStatus = EventStreamStatus.NOT_STARTED
         self._last_event_at: datetime | None = None
+        #: Bumped on every text frame; the sync watcher samples it to
+        #: tell whether the post-connect status replay has gone quiet.
+        self._frame_count = 0
+        self._sync_task: asyncio.Task[None] | None = None
 
     # --- public API ----------------------------------------------------
 
@@ -133,7 +151,11 @@ class WebSocketEventStream:
 
         Convenience over comparing :attr:`status` directly. Note
         that ``connected`` flipping ``False`` doesn't mean the
-        reader has given up — it may be reconnecting.
+        reader has given up — it may be reconnecting, or in
+        :attr:`EventStreamStatus.SYNCING` (socket open but the
+        controller's initial status replay hasn't drained yet —
+        intentionally *not* "connected" so event consumers don't
+        treat the replay as live changes).
         """
         return self._status == EventStreamStatus.CONNECTED
 
@@ -241,12 +263,20 @@ class WebSocketEventStream:
 
         try:
             self._backoff_idx = 0  # successful connect resets backoff
-            self._notify(EventStreamStatus.CONNECTED)
+            # Socket is open, but the controller now replays every
+            # node's current status — a burst of ST/DON/DOF frames
+            # that are NOT live changes. Hold SYNCING until that burst
+            # drains so event consumers don't fire on the replay
+            # (spurious automation triggers on every connect/restart).
+            self._frame_count = 0
+            self._notify(EventStreamStatus.SYNCING)
+            self._sync_task = asyncio.create_task(self._promote_when_quiet(), name="pyisyox-ws-sync")
             async for msg in self._ws:
                 if self._stop_requested:
                     break
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     self._last_event_at = datetime.now(UTC)
+                    self._frame_count += 1
                     if _LOGGER.isEnabledFor(LOG_VERBOSE):
                         _LOGGER.log(LOG_VERBOSE, "WS frame: %s", msg.data)
                     self._dispatcher.feed(msg.data)
@@ -257,11 +287,56 @@ class WebSocketEventStream:
                     break
                 # BINARY/PING/PONG — ignore.
         finally:
+            if self._sync_task is not None:
+                self._sync_task.cancel()
+                with _suppress_cancellation():
+                    await self._sync_task
+                self._sync_task = None
             current = self._ws
             self._ws = None
             if current is not None and not current.closed:
                 with _suppress_aiohttp_close():
                     await current.close()
+
+    async def _promote_when_quiet(self) -> None:
+        """Flip ``SYNCING`` → ``CONNECTED`` once the post-connect status
+        replay goes quiet (or the hard cap elapses).
+
+        Sampled rather than event-driven so the hot read loop stays a
+        plain ``async for``: every ``_SYNC_QUIET_SECONDS`` we check
+        whether any frame arrived since the last sample.
+
+        Invariant: a window in which ``_frame_count`` did not change
+        from the previous sample is treated as quiet — including the
+        very first window when no frames have arrived yet (a silent
+        controller promotes after one window), and a fast replay that
+        both starts and finishes within a single window (a completed
+        replay *is* quiet). ``_SYNC_MAX_SECONDS`` caps the wait so a
+        perpetually chatty controller still goes live (note the cap is
+        only evaluated after each ``_SYNC_QUIET_SECONDS`` sample, so
+        effective max ≈ next sample boundary ≥ deadline — fine because
+        the real config has quiet ≪ max). Cancelled by
+        :meth:`_connect_and_read`'s ``finally`` if the socket drops
+        first, so a connection that never settles never reports
+        ``CONNECTED``.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _SYNC_MAX_SECONDS
+        seen = self._frame_count
+        while not self._stop_requested:
+            await asyncio.sleep(_SYNC_QUIET_SECONDS)
+            # Read into a local so mypy doesn't narrow `_stop_requested`
+            # to its loop-entry value across the await above (same idiom
+            # as `_run`); stop() flips it during the sleep.
+            stopping: bool = self._stop_requested
+            if stopping:
+                return
+            quiet = self._frame_count == seen
+            seen = self._frame_count
+            if quiet or loop.time() >= deadline:
+                break
+        if not self._stop_requested and self._status == EventStreamStatus.SYNCING:
+            self._notify(EventStreamStatus.CONNECTED)
 
     async def _auth_kwargs(self) -> dict:
         """Authenticate (if not already) and gather aiohttp kwargs."""
@@ -289,7 +364,17 @@ class WebSocketEventStream:
         await asyncio.sleep(delay)
 
     def _notify(self, status: EventStreamStatus) -> None:
-        """Fan a status update out to listeners; suppress listener errors."""
+        """Fan a status update out to listeners; suppress listener errors.
+
+        Logs every lifecycle transition at DEBUG (``pyisyox.runtime.ws``)
+        so the connect → SYNCING → CONNECTED → reconnect sequence is
+        visible in consumer debug logs without attaching a listener.
+        Only real changes are logged — a status re-notified with the
+        same value (e.g. ``INITIALIZING`` each reconnect attempt) is not
+        repeated.
+        """
+        if status != self._status:
+            _LOGGER.debug("WS stream status: %s -> %s", self._status, status)
         self._status = status
         for listener in tuple(self._status_listeners):
             try:
