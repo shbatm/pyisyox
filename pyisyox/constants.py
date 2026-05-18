@@ -18,6 +18,14 @@ class EventStreamStatus(StrEnum):
 
     LOST_CONNECTION = "lost_connection"
     CONNECTED = "connected"
+    #: Socket is open but the controller is still replaying every
+    #: node's *current* status (a burst of ST/DON/DOF frames that are
+    #: NOT live changes). Distinct from :attr:`INITIALIZING` (no socket
+    #: yet) and :attr:`CONNECTED` (replay drained, live events flowing).
+    #: Consumers that fire on events (e.g. HA ``event`` entities) should
+    #: treat frames received before ``CONNECTED`` as state sync, not
+    #: real events, to avoid spurious triggers on every (re)connect.
+    SYNCING = "stream_syncing"
     DISCONNECTED = "disconnected"
     START_UPDATES = "start_updates"
     STOP_UPDATES = "stop_updates"
