@@ -356,7 +356,17 @@ class WebSocketEventStream:
         await asyncio.sleep(delay)
 
     def _notify(self, status: EventStreamStatus) -> None:
-        """Fan a status update out to listeners; suppress listener errors."""
+        """Fan a status update out to listeners; suppress listener errors.
+
+        Logs every lifecycle transition at DEBUG (``pyisyox.runtime.ws``)
+        so the connect → SYNCING → CONNECTED → reconnect sequence is
+        visible in consumer debug logs without attaching a listener.
+        Only real changes are logged — a status re-notified with the
+        same value (e.g. ``INITIALIZING`` each reconnect attempt) is not
+        repeated.
+        """
+        if status != self._status:
+            _LOGGER.debug("WS stream status: %s -> %s", self._status, status)
         self._status = status
         for listener in tuple(self._status_listeners):
             try:

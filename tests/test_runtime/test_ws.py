@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -625,3 +626,34 @@ async def test_ws_reader_does_not_dispatch_after_stop() -> None:
     # Whether either frame landed depends on scheduling — but the loop
     # must terminate cleanly without errors.
     assert stream._task is None
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_logs_status_transitions(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Lifecycle transitions are logged at DEBUG so the
+    connect → SYNCING → CONNECTED sequence is visible without a
+    listener attached."""
+    monkeypatch.setattr(ws_module, "_SYNC_QUIET_SECONDS", 0.02)
+    monkeypatch.setattr(ws_module, "_SYNC_MAX_SECONDS", 0.5)
+    session = FakeWSSession()
+    session.queue_success([], keep_open=True)
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+
+    with caplog.at_level(logging.DEBUG, logger="pyisyox.runtime.ws"):
+        stream.start()
+        for _ in range(200):
+            if stream.status == EventStreamStatus.CONNECTED:
+                break
+            await asyncio.sleep(0.01)
+        await stream.stop()
+
+    transitions = "\n".join(
+        r.getMessage() for r in caplog.records if r.name == "pyisyox.runtime.ws"
+    )
+    assert "WS stream status:" in transitions
+    assert "stream_syncing" in transitions
+    assert "connected" in transitions
