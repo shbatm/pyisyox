@@ -903,9 +903,12 @@ _PG_BOOL_EDITOR = {
 
 
 def _build_plugin_dimmer_nodedef() -> NodeDef:
-    """PG3-shape dimmer nodedef — ``DON``/``DOF`` (light controllable),
-    a ``SETMODE`` setter on a pure-enum editor (→ SELECT) and a
-    ``THRESHOLD`` setter on the ``INTEGER`` editor (→ NUMBER)."""
+    """PG3-shape dimmer nodedef — ``DON`` (with an on-level param) /
+    ``DOF`` so it classifies LIGHT (post-#158 a *parameterless* ``DON``
+    is SWITCH; the on-level param is what makes HA's brightness slider
+    work, hence LIGHT), a ``SETMODE`` setter on a pure-enum editor
+    (→ SELECT) and a ``THRESHOLD`` setter on the ``INTEGER`` editor
+    (→ NUMBER)."""
     return NodeDef.from_json(
         {
             "id": PLUGIN_DIMMER_NODEDEF_ID,
@@ -914,7 +917,11 @@ def _build_plugin_dimmer_nodedef() -> NodeDef:
             "cmds": {
                 "sends": [],
                 "accepts": [
-                    {"id": "DON", "name": "On"},
+                    {
+                        "id": "DON",
+                        "name": "On",
+                        "parameters": [{"id": "", "editor": "I_OL"}],
+                    },
                     {"id": "DOF", "name": "Off"},
                     {"id": "BRT", "name": "Brighten"},
                     {"id": "DIM", "name": "Dim"},
