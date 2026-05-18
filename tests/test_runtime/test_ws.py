@@ -729,6 +729,8 @@ async def test_ws_reader_max_cap_promotes_under_constant_traffic(
     assert EventStreamStatus.CONNECTED in statuses
     # Traffic really was continuous (never went quiet on its own).
     assert frame_count > 5
-    # Did not promote at the first quiet window (~0.05s) as if idle;
-    # waited ~ the 0.2s cap (generous lower bound for loaded CI).
+    # Bound derivation: > 2x the 0.05s quiet window proves no quiet
+    # sample slipped through and promoted early; the only path left is
+    # the 0.2s cap. 0.12 sits between 2*quiet (0.10) and the 0.2 cap —
+    # generous low bound for loaded CI without reaching the cap value.
     assert elapsed >= 0.12
