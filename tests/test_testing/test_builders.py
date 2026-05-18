@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from pyisyox import ControllablePlatform, classify
 from pyisyox.client import (
     FolderRecord,
     GroupRecord,
@@ -49,6 +50,8 @@ from pyisyox.testing import (
     NODEDEF_FOR_PLATFORM,
     PLUGIN_COVER_FAMILY_ID,
     PLUGIN_DIMMER_FAMILY_ID,
+    PLUGIN_DIMMER_INSTANCE_ID,
+    PLUGIN_DIMMER_NODEDEF_ID,
     PLUGIN_HUB_FAMILY_ID,
     PLUGIN_TRIGGER_FAMILY_ID,
     RecordedCall,
@@ -407,6 +410,21 @@ def test_dimmer_plugin_profile_grafts_family_103_with_editors() -> None:
     rec = make_plugin_dimmer_node_record()
     lr = make_dimmer_plugin_load_result(nodes={rec.address: rec})
     assert PLUGIN_DIMMER_FAMILY_ID in lr.profile.families
+
+
+def test_dimmer_plugin_nodedef_classifies_light() -> None:
+    """Regression guard for #159: the PluginDimmer fixture's ``DON``
+    carries an on-level param, so it must classify LIGHT. A
+    parameterless ``DON`` would degrade to SWITCH post-#158 and
+    silently contradict the fixture's name/docstring."""
+    profile = make_profile_with_dimmer_plugin()
+    nd = profile.find_nodedef(
+        PLUGIN_DIMMER_NODEDEF_ID,
+        PLUGIN_DIMMER_FAMILY_ID,
+        PLUGIN_DIMMER_INSTANCE_ID,
+    )
+    assert nd is not None
+    assert classify(nd).controllable is ControllablePlatform.LIGHT
 
 
 # ---------------------------------------------------------------------------
