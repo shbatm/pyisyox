@@ -304,10 +304,18 @@ class WebSocketEventStream:
 
         Sampled rather than event-driven so the hot read loop stays a
         plain ``async for``: every ``_SYNC_QUIET_SECONDS`` we check
-        whether any frame arrived since the last sample. The first idle
-        window means the replay drained (a silent controller promotes
-        after one window). ``_SYNC_MAX_SECONDS`` caps the wait so a
-        perpetually chatty controller still goes live. Cancelled by
+        whether any frame arrived since the last sample.
+
+        Invariant: a window in which ``_frame_count`` did not change
+        from the previous sample is treated as quiet — including the
+        very first window when no frames have arrived yet (a silent
+        controller promotes after one window), and a fast replay that
+        both starts and finishes within a single window (a completed
+        replay *is* quiet). ``_SYNC_MAX_SECONDS`` caps the wait so a
+        perpetually chatty controller still goes live (note the cap is
+        only evaluated after each ``_SYNC_QUIET_SECONDS`` sample, so
+        effective max ≈ next sample boundary ≥ deadline — fine because
+        the real config has quiet ≪ max). Cancelled by
         :meth:`_connect_and_read`'s ``finally`` if the socket drops
         first, so a connection that never settles never reports
         ``CONNECTED``.
@@ -317,9 +325,9 @@ class WebSocketEventStream:
         seen = self._frame_count
         while not self._stop_requested:
             await asyncio.sleep(_SYNC_QUIET_SECONDS)
-            # Local copy — mypy narrows ``self._stop_requested`` to its
-            # loop-entry value across the await; the read loop / stop()
-            # may flip it during the sleep (same idiom as ``_run``).
+            # Read into a local so mypy doesn't narrow `_stop_requested`
+            # to its loop-entry value across the await above (same idiom
+            # as `_run`); stop() flips it during the sleep.
             stopping: bool = self._stop_requested
             if stopping:
                 return

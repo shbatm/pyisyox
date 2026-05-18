@@ -49,17 +49,25 @@ class FakeWebSocket:
     """Minimal aiohttp.ClientWebSocketResponse stand-in."""
 
     def __init__(
-        self, frames: Iterable[FakeWSMessage], *, keep_open: bool = False
+        self,
+        frames: Iterable[FakeWSMessage],
+        *,
+        keep_open: bool = False,
+        repeat: FakeWSMessage | None = None,
     ) -> None:
         self._frames = list(frames)
         self.closed = False
         self._exception: BaseException | None = None
         self.close_called = False
-        # When True, after the scripted frames are exhausted the socket
+        # keep_open: after the scripted frames are exhausted the socket
         # stays open (blocks in __anext__) until close() — lets a test
         # exercise the SYNCING->CONNECTED quiet timer without the socket
         # tearing down first.
+        # repeat: after the scripted frames, keep emitting this frame
+        # forever (continuous traffic) so the stream never goes quiet —
+        # exercises the _SYNC_MAX_SECONDS hard cap.
         self._keep_open = keep_open
+        self._repeat = repeat
         self._closed_evt = asyncio.Event()
 
     def __aiter__(self) -> FakeWebSocket:
@@ -71,7 +79,14 @@ class FakeWebSocket:
         if self._frames:
             await asyncio.sleep(0)
             return self._frames.pop(0)
+        if self._repeat is not None:
+            await asyncio.sleep(0)
+            return self._repeat
         if self._keep_open:
+            # close() sets self.closed AND fires the event; the await
+            # returns, then the self.closed guard on the next __anext__
+            # ends the loop. The fall-through StopAsyncIteration covers
+            # the (rare) case the iterator is re-entered post-close.
             await self._closed_evt.wait()
         raise StopAsyncIteration
 
@@ -100,9 +115,13 @@ class FakeWSSession:
         self._scripted: list[FakeWebSocket | BaseException] = []
 
     def queue_success(
-        self, frames: Iterable[FakeWSMessage], *, keep_open: bool = False
+        self,
+        frames: Iterable[FakeWSMessage],
+        *,
+        keep_open: bool = False,
+        repeat: FakeWSMessage | None = None,
     ) -> FakeWebSocket:
-        ws = FakeWebSocket(frames, keep_open=keep_open)
+        ws = FakeWebSocket(frames, keep_open=keep_open, repeat=repeat)
         self._scripted.append(ws)
         return ws
 
@@ -257,6 +276,10 @@ async def test_ws_reader_holds_syncing_through_replay_then_connects(
         if nodes["3D 7D 87 1"].properties["ST"].formatted == "On":
             break
         await asyncio.sleep(0.005)
+    # Flush any task scheduled on the same tick as the property flip so
+    # the SYNCING assertion can't race a same-tick quiet-timer promote.
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
 
     # Replay dispatched (state synced) but we're still SYNCING, not live.
     assert nodes["3D 7D 87 1"].properties["ST"].formatted == "On"
@@ -657,3 +680,55 @@ async def test_ws_reader_logs_status_transitions(
     assert "WS stream status:" in transitions
     assert "stream_syncing" in transitions
     assert "connected" in transitions
+
+
+@pytest.mark.asyncio
+async def test_ws_reader_max_cap_promotes_under_constant_traffic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A controller that never goes quiet (continuous traffic) must
+    still promote SYNCING -> CONNECTED at the _SYNC_MAX_SECONDS hard
+    cap, not stall in SYNCING forever, and not promote early as if the
+    flood were quiet."""
+    monkeypatch.setattr(ws_module, "_SYNC_QUIET_SECONDS", 0.05)
+    monkeypatch.setattr(ws_module, "_SYNC_MAX_SECONDS", 0.2)
+    session = FakeWSSession()
+    # Heartbeat-ish frame repeated forever -> _frame_count keeps moving,
+    # so the quiet check is never satisfied; only the cap can promote.
+    session.queue_success(
+        [],
+        repeat=_text_frame(
+            '<Event seqnum="1"><control>_0</control>'
+            "<action>0</action><node></node></Event>"
+        ),
+    )
+    client = _make_client(session)
+    stream = WebSocketEventStream(client, EventDispatcher({}))
+    statuses: list[EventStreamStatus] = []
+    stream.add_status_listener(statuses.append)
+
+    loop = asyncio.get_running_loop()
+    stream.start()
+    # Wait for SYNCING first (socket open) to time the cap from there.
+    for _ in range(200):
+        if stream.status == EventStreamStatus.SYNCING:
+            break
+        await asyncio.sleep(0.005)
+    t_syncing = loop.time()
+    for _ in range(400):
+        if stream.status == EventStreamStatus.CONNECTED:
+            break
+        await asyncio.sleep(0.01)
+    # Capture before stop() — stop() notifies DISCONNECTED.
+    elapsed = loop.time() - t_syncing
+    reached_connected = stream.status == EventStreamStatus.CONNECTED
+    frame_count = stream._frame_count
+    await stream.stop()
+
+    assert reached_connected  # cap honored, didn't stall in SYNCING
+    assert EventStreamStatus.CONNECTED in statuses
+    # Traffic really was continuous (never went quiet on its own).
+    assert frame_count > 5
+    # Did not promote at the first quiet window (~0.05s) as if idle;
+    # waited ~ the 0.2s cap (generous lower bound for loaded CI).
+    assert elapsed >= 0.12
