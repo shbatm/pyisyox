@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from pyisyox.client import NodeType
 from pyisyox.constants import INSTEON_STATELESS_NODEDEFID, PROP_STATUS
+from pyisyox.runtime.node import Node
 
 if TYPE_CHECKING:
     from pyisyox.client import GroupRecord, IoXClient, NodeRecord
@@ -190,6 +191,34 @@ class Group:
         return any(intent in ("on", "off") for intent in self._record.member_intents.values())
 
     @property
+    def has_dimmable_members(self) -> bool:
+        """True iff any member node is a dimmable load.
+
+        Nodedef-derived via :attr:`pyisyox.runtime.Node.is_dimmable`,
+        so it's robust and — unlike :attr:`has_state_target` — does
+        **not** depend on ``/api/groups`` link resolution (works on
+        older firmware too). Consumers pair it with
+        :attr:`has_state_target` to pick the scene's HA platform:
+        no state target → **button**; else dimmable members → on/off
+        **light** (preserving light semantics + the group/more-info
+        framework, no ``switch_as_x``); else → **switch**. Scenes have
+        no settable brightness — fade/brt/dim are separate manual
+        commands — so "light" here is on/off only.
+
+        Returns ``False`` without a node-registry reference. Members
+        missing from the registry are skipped (defensive).
+        """
+        if self._nodes is None:
+            return False
+        for addr in self._record.member_addresses:
+            record = self._nodes.get(addr)
+            if record is None:
+                continue
+            if Node.from_record(record, self._profile, self._client).is_dimmable:
+                return True
+        return False
+
+    @property
     def group_all_on(self) -> bool:
         """True iff every on-target member currently reports an "on" state.
 
@@ -306,6 +335,7 @@ class Group:
         payload["group_all_on"] = self.group_all_on
         payload["group_any_on"] = self.group_any_on
         payload["has_state_target"] = self.has_state_target
+        payload["has_dimmable_members"] = self.has_dimmable_members
         return payload
 
     def __repr__(self) -> str:

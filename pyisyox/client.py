@@ -648,9 +648,10 @@ class IoXClient:
             return ""
 
     async def _get_json_or_empty(self, path: str) -> Any:
-        """``_get_json`` that swallows HTTPError → ``{}``. For optional
-        endpoints (``/api/groups``) absent on older firmware — a 404
-        here must not abort the load."""
+        """``_get_json`` that swallows any ``HTTPError`` → ``{}`` (404,
+        401, 500, …). For optional endpoints (``/api/groups``) absent on
+        older firmware — an error here must not abort the load. Mirrors
+        :meth:`_get_text_or_empty`."""
         try:
             return await self._get_json(path)
         except HTTPError as exc:
@@ -1117,6 +1118,8 @@ def _link_intent(link: dict[str, Any]) -> str | None:
     """
     ltype = str(link.get("type") or "")
     if ltype == "ignore":
+        # "" = skip just this link (not a member); distinct from None,
+        # which aborts resolution for the whole group.
         return ""
     if ltype == "native":
         for param in link.get("params") or []:
@@ -1178,7 +1181,11 @@ def apply_group_link_targets(groups: dict[str, GroupRecord], api_groups_raw: dic
                 if not node or intent == "":
                     continue  # ignore-link / malformed
                 rank = _LINK_PRECEDENCE.get(str(link.get("type") or ""), 0)
-                if rank >= ranks.get(node, -1):
+                # Strict ``>``: a higher-precedence link still wins
+                # (native > cmd > default), but among duplicate
+                # same-type links for a node the first-seen wins —
+                # safer than last-seen on unexpected malformed data.
+                if rank > ranks.get(node, -1):
                     intents[node] = intent
                     ranks[node] = rank
             if not resolved:

@@ -929,3 +929,72 @@ def test_group_unresolved_uses_legacy_all_member_aggregate():
 def test_group_has_state_target_true_when_off_intent_present():
     g = Group.from_record(_resolved_group({"A": "off"}), _profile(), _make_client(FakeSession(BASE)))
     assert g.has_state_target is True
+
+
+# --- review follow-ups (PR #175) --------------------------------------
+
+
+def test_apply_targets_no_ctl_block_resolves_empty():
+    # group entry present but no "ctl" key at all -> resolved, empty
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(groups, _api_groups({"id": "G"}))
+    assert groups["G"].targets_resolved is True
+    assert groups["G"].member_intents == {}
+
+
+def test_apply_targets_native_beats_default_reverse_order():
+    # native BEFORE default for the same node -> native still wins
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {"id": "G", "ctl": [{"id": "G", "links": [_native("X", 0), {"type": "default", "node": "X"}]}]}
+        ),
+    )
+    assert groups["G"].member_intents == {"X": "off"}
+
+
+def _rec_nodedef(addr, nodedef_id):
+    return NodeRecord(
+        address=addr, name=addr, nodedef_id=nodedef_id, family_id="1", instance_id="1", properties={}
+    )
+
+
+def test_group_all_on_resolved_on_set_all_stateless_is_false():
+    # resolved on-set whose only member is stateless -> saw_stateful
+    # never set -> group_all_on False (documents the silent-False edge)
+    stateless_id = next(iter(INSTEON_STATELESS_NODEDEFID))
+    nodes = {"M": _rec_nodedef("M", stateless_id)}
+    rec = _resolved_group({"M": "on"})
+    rec.member_addresses = ("M",)
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_all_on is False
+    assert group.group_any_on is False
+
+
+def test_group_has_dimmable_members_true_for_dimmer_member():
+    nodes = {"D": _rec_nodedef("D", "DimmerLampSwitch")}
+    rec = _grec("G", ("D",))
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.has_dimmable_members is True
+
+
+def test_group_has_dimmable_members_false_for_relay_only_member():
+    nodes = {"R": _rec_nodedef("R", "RelayLampOnly")}
+    rec = _grec("G", ("R",))
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.has_dimmable_members is False
+
+
+def test_group_has_dimmable_members_false_without_nodes_ref():
+    rec = _grec("G", ("D",))
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)))
+    assert group.has_dimmable_members is False
+
+
+def test_group_has_dimmable_members_independent_of_targets_resolved():
+    # works on the legacy/unresolved path too (no /api/groups data)
+    nodes = {"D": _rec_nodedef("D", "DimmerLampSwitch"), "R": _rec_nodedef("R", "RelayLampOnly")}
+    rec = _grec("G", ("R", "D"))  # targets_resolved defaults False
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.has_dimmable_members is True
