@@ -1200,21 +1200,33 @@ class EventDispatcher:
         self._nodes = nodes
         self._programs = programs if programs is not None else {}
         self._variables = variables if variables is not None else {}
-        self._groups = groups if groups is not None else {}
-        # Reverse index: member node address -> tuple of group addresses
-        # it belongs to. Built once; group membership only changes on a
-        # lifecycle event, after which the consumer reloads anyway.
-        members_index: dict[str, list[str]] = {}
-        for group_address, group_record in self._groups.items():
-            for member_address in group_record.member_addresses:
-                members_index.setdefault(member_address, []).append(group_address)
-        self._group_members_index: dict[str, tuple[str, ...]] = {
-            member: tuple(group_addresses) for member, group_addresses in members_index.items()
-        }
+        self._groups: dict[str, GroupRecord] = {}
+        self._group_members_index: dict[str, tuple[str, ...]] = {}
+        self.update_groups(groups if groups is not None else {})
         self._listeners: list[EventListener] = []
         self._lifecycle_listeners: list[NodeLifecycleListener] = []
         self._program_status_listeners: list[ProgramStatusListener] = []
         self._variable_table_change_listeners: list[VariableTableChangeListener] = []
+
+    def update_groups(self, groups: dict[str, GroupRecord]) -> None:
+        """(Re)build the member→groups reverse index from a group registry.
+
+        Called from ``__init__`` and again by
+        :meth:`pyisyox.controller.Controller.refresh` — ``refresh()``
+        replaces ``LoadResult.groups`` with a fresh dict (unlike
+        ``nodes``, which is mutated in place), so the index has to be
+        rebuilt or scene-membership changes from a reload lifecycle
+        event would be missed (new members never re-emit; removed
+        members still would).
+        """
+        self._groups = groups
+        members_index: dict[str, list[str]] = {}
+        for group_address, group_record in groups.items():
+            for member_address in group_record.member_addresses:
+                members_index.setdefault(member_address, []).append(group_address)
+        self._group_members_index = {
+            member: tuple(group_addresses) for member, group_addresses in members_index.items()
+        }
 
     def add_listener(self, callback: EventListener) -> Callable[[], None]:
         """Register ``callback`` to fire on every parsed event.
@@ -1364,14 +1376,21 @@ class EventDispatcher:
 
         Mirrors ``pyisy.nodes.Group`` re-emitting its own
         ``status_events`` when a member changed. The synthetic event is
-        a *notification*, not a true status frame: it is **not** fed
+        a pure *notification*, not a status frame: it is **not** fed
         back through :meth:`feed` (no re-parse, no
         ``_apply_property_update`` — groups aren't in the node
         registry) and never recurses (groups can't be members of
         groups). Per-address subscribers fire and re-read the
-        computed-on-access :attr:`pyisyox.runtime.Group.group_any_on`;
-        the carried ``action``/``uom`` echo the member only as
-        provenance.
+        computed-on-access :attr:`pyisyox.runtime.Group.group_any_on`.
+
+        ``action`` is deliberately **empty** (and ``uom`` /
+        ``formatted_*`` left default): a group has no single status
+        value, and echoing the triggering member's raw value under
+        ``control="ST"`` would be misleading to a consumer that reads
+        ``event.action`` directly. ``control`` stays ``"ST"`` only so
+        the event routes on the group's normal per-address/status
+        channel; ``seqnum`` / ``timestamp`` are carried for ordering
+        and provenance.
         """
         group_addresses = self._group_members_index.get(event.node_address)
         if not group_addresses:
@@ -1381,12 +1400,8 @@ class EventDispatcher:
                 seqnum=event.seqnum,
                 timestamp=event.timestamp,
                 control=PROP_STATUS,
-                action=event.action,
+                action="",
                 node_address=group_address,
-                formatted_action=event.formatted_action,
-                formatted_name=event.formatted_name,
-                uom=event.uom,
-                precision=event.precision,
             )
             for listener in tuple(self._listeners):
                 try:

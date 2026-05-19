@@ -1291,6 +1291,9 @@ def test_dispatcher_reemits_member_property_change_as_group_event() -> None:
     assert group_event.control == "ST"
     assert group_event.node_address == "5000"
     assert group_event.seqnum == 7
+    # Pure notification: no fabricated group status value.
+    assert group_event.action == ""
+    assert group_event.uom == ""
 
 
 def test_dispatcher_reemits_to_every_containing_group() -> None:
@@ -1384,3 +1387,80 @@ def test_dispatcher_group_reemit_skips_system_events() -> None:
     dispatcher.feed('<Event seqnum="1"><control>_5</control><action>0</action><node></node></Event>')
 
     assert seen == [""]
+
+
+def test_dispatcher_reemits_for_non_st_member_property() -> None:
+    """Re-emit fires for *any* node-property control, not just ST — a
+    GV1 / OL / RR change on a member still pokes the group (intentional;
+    `group_any_on` is recomputed from member ST on receipt regardless of
+    which control changed)."""
+    member = "3D 7D 87 1"
+    nodes = {member: _make_record(member)}
+    groups = {
+        "5000": GroupRecord(
+            address="5000",
+            name="S",
+            nodedef_id="InsteonDimmer",
+            family_id="1",
+            member_addresses=(member,),
+        )
+    }
+    dispatcher = EventDispatcher(nodes, groups=groups)
+    seen: list[str] = []
+    dispatcher.add_listener(lambda e: seen.append(e.node_address))
+
+    dispatcher.feed(
+        '<Event seqnum="1"><control>GV1</control>'
+        '<action uom="56" prec="0">42</action>'
+        f"<node>{member}</node></Event>"
+    )
+
+    assert seen == [member, "5000"]
+
+
+def test_update_groups_rebuilds_index_after_refresh_style_replace() -> None:
+    """Controller.refresh() replaces LoadResult.groups with a fresh dict
+    (groups is not mutated in place like nodes). update_groups() must
+    rebuild the reverse index so post-reload membership changes take
+    effect: a newly-added member re-emits, a removed one no longer does."""
+    old_member = "OLD 1"
+    new_member = "NEW 1"
+    nodes = {old_member: _make_record(old_member), new_member: _make_record(new_member)}
+    groups = {
+        "9000": GroupRecord(
+            address="9000",
+            name="Scene",
+            nodedef_id="InsteonDimmer",
+            family_id="1",
+            member_addresses=(old_member,),
+        )
+    }
+    dispatcher = EventDispatcher(nodes, groups=groups)
+    seen: list[str] = []
+    dispatcher.add_listener(lambda e: seen.append(e.node_address))
+
+    # Fresh registry (what refresh() would hand over): membership swapped.
+    dispatcher.update_groups(
+        {
+            "9000": GroupRecord(
+                address="9000",
+                name="Scene",
+                nodedef_id="InsteonDimmer",
+                family_id="1",
+                member_addresses=(new_member,),
+            )
+        }
+    )
+
+    seen.clear()
+    dispatcher.feed(
+        '<Event seqnum="1"><control>ST</control><action uom="100">255</action>'
+        f"<node>{new_member}</node></Event>"
+    )
+    dispatcher.feed(
+        '<Event seqnum="2"><control>ST</control><action uom="100">0</action>'
+        f"<node>{old_member}</node></Event>"
+    )
+
+    # New member now re-emits to 9000; the removed old member no longer does.
+    assert seen == [new_member, "9000", old_member]
