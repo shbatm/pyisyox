@@ -14,7 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from pyisyox.client import IoXClient, NodePropertyValue, NodeRecord, ProgramRecord, VariableRecord
+from pyisyox.client import (
+    GroupRecord,
+    IoXClient,
+    NodePropertyValue,
+    NodeRecord,
+    ProgramRecord,
+    VariableRecord,
+)
 from pyisyox.runtime.events import (
     Event,
     EventDispatcher,
@@ -637,10 +644,7 @@ def test_variable_event_with_empty_event_info_is_dropped() -> None:
     variables = {"1": {"5": record}}
     dispatcher = EventDispatcher({}, variables=variables)
 
-    frame = (
-        '<Event seqnum="1"><control>_1</control><action>6</action>'
-        "<node></node><eventInfo/></Event>"
-    )
+    frame = '<Event seqnum="1"><control>_1</control><action>6</action><node></node><eventInfo/></Event>'
     dispatcher.feed(frame)
     assert record.value == 0
 
@@ -762,9 +766,7 @@ def test_parse_returns_none_on_broken_payloads(frame: str) -> None:
 def test_parse_ignores_non_numeric_prec_attribute() -> None:
     """``prec="abc"`` must coerce to ``None`` rather than crash the parser."""
     xml = (
-        '<Event seqnum="1"><control>ST</control>'
-        '<action uom="100" prec="abc">1</action>'
-        "<node>A</node></Event>"
+        '<Event seqnum="1"><control>ST</control><action uom="100" prec="abc">1</action><node>A</node></Event>'
     )
     event = parse_event_frame(xml)
     assert event is not None
@@ -840,13 +842,13 @@ def test_extract_lifecycle_node_xml_drops_malformed_xml() -> None:
 
 
 def test_extract_lifecycle_node_xml_without_event_info_returns_none() -> None:
-    assert _extract_lifecycle_node_xml('<Event><control>_3</control></Event>') is None
+    assert _extract_lifecycle_node_xml("<Event><control>_3</control></Event>") is None
 
 
 def test_extract_lifecycle_node_xml_without_inner_node_returns_none() -> None:
     """``eventInfo`` present but no inner ``<node>`` (rename / remove
     actions carry only the address)."""
-    xml = '<Event><control>_3</control><eventInfo><addr>A</addr></eventInfo></Event>'
+    xml = "<Event><control>_3</control><eventInfo><addr>A</addr></eventInfo></Event>"
     assert _extract_lifecycle_node_xml(xml) is None
 
 
@@ -1055,10 +1057,7 @@ def test_program_status_writes_timestamps_to_record() -> None:
     dispatcher = EventDispatcher({}, programs={"008D": program})
 
     dispatcher.feed(
-        _program_frame(
-            "<id>8D</id><on /><nr /><r>260514 16:44:11 </r>"
-            "<f>260514 16:44:21 </f><s>21</s>"
-        )
+        _program_frame("<id>8D</id><on /><nr /><r>260514 16:44:11 </r><f>260514 16:44:21 </f><s>21</s>")
     )
 
     assert program.last_run_time == "2026-05-14T16:44:11+00:00"
@@ -1080,8 +1079,7 @@ def test_program_status_uses_event_frame_tz_for_body_timestamps() -> None:
     # body strings are 20:42:42 *local CDT* → 01:42:42 *UTC* of the
     # next day.
     frame = _program_frame(
-        "<id>8D</id><on /><r>260514 20:42:42 </r>"
-        "<f>260514 20:42:42 </f><s>21</s>",
+        "<id>8D</id><on /><r>260514 20:42:42 </r><f>260514 20:42:42 </f><s>21</s>",
         timestamp="2026-05-14T20:47:26.828098-05:00",
     )
     dispatcher.feed(frame)
@@ -1135,10 +1133,7 @@ def test_program_status_timestamp_round_trips_to_aware_datetime() -> None:
     dispatcher = EventDispatcher({}, programs={"008D": program_record})
 
     dispatcher.feed(
-        _program_frame(
-            "<id>8D</id><on /><r>260514 16:44:11 </r>"
-            "<f>260514 16:44:21 </f><s>21</s>"
-        )
+        _program_frame("<id>8D</id><on /><r>260514 16:44:11 </r><f>260514 16:44:21 </f><s>21</s>")
     )
 
     # ``IoXClient.__new__`` skips ``__init__`` to build a stub client
@@ -1257,3 +1252,135 @@ def test_system_event_control_label_handles_arbitrary_string() -> None:
     ``"GV1"``, etc.) are non-system and pass through verbatim."""
     assert SystemEventControl.label("ST") == "ST"
     assert SystemEventControl.label("") == ""
+
+
+# --- dispatcher: group status re-emit (pyisy-3.x parity) -----------------
+
+
+def test_dispatcher_reemits_member_property_change_as_group_event() -> None:
+    """A member node's ST change fans out a synthetic event addressed
+    to each containing group — restoring the pyisy-3.x behaviour where
+    Group re-published its own status when a member changed."""
+    member = "3D 7D 87 1"
+    nodes = {member: _make_record(member)}
+    groups = {
+        "5000": GroupRecord(
+            address="5000",
+            name="Living Room Scene",
+            nodedef_id="InsteonDimmer",
+            family_id="1",
+            instance_id="1",
+            member_addresses=(member, "40 4E 68 1"),
+        )
+    }
+    dispatcher = EventDispatcher(nodes, groups=groups)
+    seen: list[Event] = []
+    dispatcher.add_listener(seen.append)
+
+    xml = (
+        '<Event seqnum="7"><control>ST</control>'
+        '<action uom="100" prec="0">255</action>'
+        f"<node>{member}</node>"
+        "<fmtAct>On</fmtAct><fmtName>Status</fmtName></Event>"
+    )
+    dispatcher.feed(xml)
+
+    # The real member event plus one synthetic group-addressed event.
+    assert [e.node_address for e in seen] == [member, "5000"]
+    group_event = seen[1]
+    assert group_event.control == "ST"
+    assert group_event.node_address == "5000"
+    assert group_event.seqnum == 7
+
+
+def test_dispatcher_reemits_to_every_containing_group() -> None:
+    """A node in multiple scenes triggers one synthetic event per scene."""
+    member = "AA BB CC 1"
+    nodes = {member: _make_record(member)}
+    groups = {
+        "100": GroupRecord(
+            address="100",
+            name="G1",
+            nodedef_id="InsteonDimmer",
+            family_id="1",
+            member_addresses=(member,),
+        ),
+        "200": GroupRecord(
+            address="200",
+            name="G2",
+            nodedef_id="InsteonDimmer",
+            family_id="1",
+            member_addresses=("ZZ ZZ ZZ 1", member),
+        ),
+    }
+    dispatcher = EventDispatcher(nodes, groups=groups)
+    seen: list[str] = []
+    dispatcher.add_listener(lambda e: seen.append(e.node_address))
+
+    xml = f'<Event seqnum="1"><control>ST</control><action uom="100">0</action><node>{member}</node></Event>'
+    dispatcher.feed(xml)
+
+    assert seen[0] == member
+    assert sorted(seen[1:]) == ["100", "200"]
+
+
+def test_dispatcher_no_group_reemit_for_non_member_node() -> None:
+    """A node that is in no scene produces no synthetic group event."""
+    nodes = {"LONE 1": _make_record("LONE 1")}
+    groups = {
+        "300": GroupRecord(
+            address="300",
+            name="Other",
+            nodedef_id="InsteonDimmer",
+            family_id="1",
+            member_addresses=("SOMEONE ELSE 1",),
+        )
+    }
+    dispatcher = EventDispatcher(nodes, groups=groups)
+    seen: list[str] = []
+    dispatcher.add_listener(lambda e: seen.append(e.node_address))
+
+    dispatcher.feed(
+        '<Event seqnum="1"><control>ST</control><action uom="100">255</action><node>LONE 1</node></Event>'
+    )
+
+    assert seen == ["LONE 1"]
+
+
+def test_dispatcher_without_groups_is_legacy_noop() -> None:
+    """Omitting ``groups`` keeps the pre-fix behaviour: member events
+    only, no synthetic group fan-out."""
+    member = "3D 7D 87 1"
+    dispatcher = EventDispatcher({member: _make_record(member)})
+    seen: list[str] = []
+    dispatcher.add_listener(lambda e: seen.append(e.node_address))
+
+    dispatcher.feed(
+        f'<Event seqnum="1"><control>ST</control><action uom="100">255</action><node>{member}</node></Event>'
+    )
+
+    assert seen == [member]
+
+
+def test_dispatcher_group_reemit_skips_system_events() -> None:
+    """System frames (no node address) never trigger a group re-emit
+    even if the (empty) address somehow indexed."""
+    member = "3D 7D 87 1"
+    nodes = {member: _make_record(member)}
+    groups = {
+        "5000": GroupRecord(
+            address="5000",
+            name="S",
+            nodedef_id="InsteonDimmer",
+            family_id="1",
+            member_addresses=(member,),
+        )
+    }
+    dispatcher = EventDispatcher(nodes, groups=groups)
+    seen: list[str] = []
+    dispatcher.add_listener(lambda e: seen.append(e.node_address))
+
+    # Heartbeat-style system event — empty node address.
+    dispatcher.feed('<Event seqnum="1"><control>_5</control><action>0</action><node></node></Event>')
+
+    assert seen == [""]

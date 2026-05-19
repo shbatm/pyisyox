@@ -192,6 +192,7 @@ class Controller:
             self._loaded.nodes,
             programs=self._loaded.programs,
             variables=self._loaded.variables,
+            groups=self._loaded.groups,
         )
         # Auto-refresh the affected variable type whenever the
         # controller emits VARIABLE_TABLE_CHANGED (create / delete /
