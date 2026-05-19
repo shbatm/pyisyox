@@ -54,7 +54,7 @@ def _is_on(record: NodeRecord) -> bool:
 class Group:
     """User-facing handle for one group / scene in the controller."""
 
-    __slots__ = ("_client", "_nodes", "_profile", "_record")
+    __slots__ = ("_client", "_dimmable_cache", "_nodes", "_profile", "_record")
 
     def __init__(
         self,
@@ -79,6 +79,10 @@ class Group:
         self._profile = profile
         self._client = client
         self._nodes = nodes
+        # Memoised `has_dimmable_members` — safe to cache because it's
+        # derived from member nodedefs (static for this record), unlike
+        # the live `group_*_on` aggregates which must re-read `ST`.
+        self._dimmable_cache: bool | None = None
 
     @classmethod
     def from_record(
@@ -206,17 +210,24 @@ class Group:
         commands — so "light" here is on/off only.
 
         Returns ``False`` without a node-registry reference. Members
-        missing from the registry are skipped (defensive).
+        missing from the registry are skipped (defensive). Memoised on
+        first access (one ``Node`` + ``find_nodedef`` per member) — the
+        result is static for this record, so repeated reads (e.g.
+        ``to_dict``) don't rebuild it.
         """
-        if self._nodes is None:
-            return False
-        for addr in self._record.member_addresses:
-            record = self._nodes.get(addr)
-            if record is None:
-                continue
-            if Node.from_record(record, self._profile, self._client).is_dimmable:
-                return True
-        return False
+        if self._dimmable_cache is not None:
+            return self._dimmable_cache
+        result = False
+        if self._nodes is not None:
+            for addr in self._record.member_addresses:
+                record = self._nodes.get(addr)
+                if record is None:
+                    continue
+                if Node.from_record(record, self._profile, self._client).is_dimmable:
+                    result = True
+                    break
+        self._dimmable_cache = result
+        return result
 
     @property
     def group_all_on(self) -> bool:

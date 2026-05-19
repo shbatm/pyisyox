@@ -203,6 +203,9 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
         200,
         '<?xml version="1.0"?><NetConfig><NetRule><id>1</id><name>Reboot Router</name></NetRule></NetConfig>',
     )
+    # Scripted explicitly even though FakeSession defaults /api/groups —
+    # this full-load test intentionally pins every fan-out route so the
+    # call-count assertion below is self-contained.
     session.set_route("GET", "/api/groups", 200, {"successful": True, "data": {"groups": []}})
 
     client = IoXClient(BASE, PortalAuth("u@example.com", "pass"), session)  # type: ignore[arg-type]
