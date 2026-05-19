@@ -192,6 +192,7 @@ class Controller:
             self._loaded.nodes,
             programs=self._loaded.programs,
             variables=self._loaded.variables,
+            groups=self._loaded.groups,
         )
         # Auto-refresh the affected variable type whenever the
         # controller emits VARIABLE_TABLE_CHANGED (create / delete /
@@ -629,6 +630,11 @@ class Controller:
         loaded.nodes.clear()
         loaded.nodes.update(fresh.nodes)
         loaded.groups = fresh.groups
+        # groups is replaced (not mutated in place), so the dispatcher's
+        # member→groups reverse index must be rebuilt or post-reload
+        # scene-membership changes would be missed.
+        if self._dispatcher is not None:
+            self._dispatcher.update_groups(fresh.groups)
         loaded.folders = fresh.folders
         loaded.programs = fresh.programs
         loaded.triggers = fresh.triggers

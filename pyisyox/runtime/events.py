@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
 from pyisyox.client import NodePropertyValue
-from pyisyox.constants import SystemStatus
+from pyisyox.constants import PROP_STATUS, SystemStatus
 
 if TYPE_CHECKING:
-    from pyisyox.client import NodeRecord, ProgramRecord, VariableRecord
+    from pyisyox.client import GroupRecord, NodeRecord, ProgramRecord, VariableRecord
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1164,6 +1164,7 @@ class EventDispatcher:
     """
 
     __slots__ = (
+        "_group_members_index",
         "_lifecycle_listeners",
         "_listeners",
         "_nodes",
@@ -1178,21 +1179,51 @@ class EventDispatcher:
         nodes: dict[str, NodeRecord],
         programs: dict[str, ProgramRecord] | None = None,
         variables: dict[str, dict[str, VariableRecord]] | None = None,
+        groups: dict[str, GroupRecord] | None = None,
     ) -> None:
-        """Bind to a node + program + variable registry.
+        """Bind to a node + program + variable + group registry.
 
         The dispatcher mutates records in place. Events for unknown
         addresses are dropped silently (subscribe to lifecycle for
         joins). Passing ``None`` for ``programs``/``variables`` makes
         those dispatch paths a no-op.
+
+        ``groups`` restores pyisy-3.x parity: a group/scene carries no
+        wire status of its own (the controller never emits an event for
+        the group address), so a member node's property change is
+        re-emitted as a synthetic event addressed to each containing
+        group. Per-address subscribers on the group re-render and re-read
+        the (computed-on-access) :attr:`pyisyox.runtime.Group.group_any_on`.
+        Passing ``None`` disables the re-emit (legacy behaviour).
         """
         self._nodes = nodes
         self._programs = programs if programs is not None else {}
         self._variables = variables if variables is not None else {}
+        self._group_members_index: dict[str, tuple[str, ...]] = {}
+        self.update_groups(groups if groups is not None else {})
         self._listeners: list[EventListener] = []
         self._lifecycle_listeners: list[NodeLifecycleListener] = []
         self._program_status_listeners: list[ProgramStatusListener] = []
         self._variable_table_change_listeners: list[VariableTableChangeListener] = []
+
+    def update_groups(self, groups: dict[str, GroupRecord]) -> None:
+        """(Re)build the member→groups reverse index from a group registry.
+
+        Called from ``__init__`` and again by
+        :meth:`pyisyox.controller.Controller.refresh` — ``refresh()``
+        replaces ``LoadResult.groups`` with a fresh dict (unlike
+        ``nodes``, which is mutated in place), so the index has to be
+        rebuilt or scene-membership changes from a reload lifecycle
+        event would be missed (new members never re-emit; removed
+        members still would).
+        """
+        members_index: dict[str, list[str]] = {}
+        for group_address, group_record in groups.items():
+            for member_address in group_record.member_addresses:
+                members_index.setdefault(member_address, []).append(group_address)
+        self._group_members_index = {
+            member: tuple(group_addresses) for member, group_addresses in members_index.items()
+        }
 
     def add_listener(self, callback: EventListener) -> Callable[[], None]:
         """Register ``callback`` to fire on every parsed event.
@@ -1330,7 +1361,50 @@ class EventDispatcher:
                 listener(event)
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("event listener raised; suppressing to keep loop alive")
+        # pyisy-3.x parity: a member node's property change implies its
+        # containing scene(s) may have changed aggregate state. Groups
+        # have no wire event of their own, so synthesise one per group.
+        if event.is_node_property:
+            self._reemit_group_status(event)
         return event
+
+    def _reemit_group_status(self, event: Event) -> None:
+        """Re-publish a member property change as a group-addressed event.
+
+        Mirrors ``pyisy.nodes.Group`` re-emitting its own
+        ``status_events`` when a member changed. The synthetic event is
+        a pure *notification*, not a status frame: it is **not** fed
+        back through :meth:`feed` (no re-parse, no
+        ``_apply_property_update`` — groups aren't in the node
+        registry) and never recurses (groups can't be members of
+        groups). Per-address subscribers fire and re-read the
+        computed-on-access :attr:`pyisyox.runtime.Group.group_any_on`.
+
+        ``action`` is deliberately **empty** (and ``uom`` /
+        ``formatted_*`` left default): a group has no single status
+        value, and echoing the triggering member's raw value under
+        ``control="ST"`` would be misleading to a consumer that reads
+        ``event.action`` directly. ``control`` stays ``"ST"`` only so
+        the event routes on the group's normal per-address/status
+        channel; ``seqnum`` / ``timestamp`` are carried for ordering
+        and provenance.
+        """
+        group_addresses = self._group_members_index.get(event.node_address)
+        if not group_addresses:
+            return
+        for group_address in group_addresses:
+            group_event = Event(
+                seqnum=event.seqnum,
+                timestamp=event.timestamp,
+                control=PROP_STATUS,
+                action="",
+                node_address=group_address,
+            )
+            for listener in tuple(self._listeners):
+                try:
+                    listener(group_event)
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("group re-emit listener raised; suppressing to keep loop alive")
 
     def _emit_lifecycle(self, event: Event, raw_frame: str) -> None:
         """Build a :class:`NodeLifecycleEvent` and fan to lifecycle listeners.
