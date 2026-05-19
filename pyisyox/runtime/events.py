@@ -1165,7 +1165,6 @@ class EventDispatcher:
 
     __slots__ = (
         "_group_members_index",
-        "_groups",
         "_lifecycle_listeners",
         "_listeners",
         "_nodes",
@@ -1200,7 +1199,6 @@ class EventDispatcher:
         self._nodes = nodes
         self._programs = programs if programs is not None else {}
         self._variables = variables if variables is not None else {}
-        self._groups: dict[str, GroupRecord] = {}
         self._group_members_index: dict[str, tuple[str, ...]] = {}
         self.update_groups(groups if groups is not None else {})
         self._listeners: list[EventListener] = []
@@ -1219,7 +1217,6 @@ class EventDispatcher:
         event would be missed (new members never re-emit; removed
         members still would).
         """
-        self._groups = groups
         members_index: dict[str, list[str]] = {}
         for group_address, group_record in groups.items():
             for member_address in group_record.member_addresses:
