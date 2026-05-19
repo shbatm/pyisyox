@@ -25,6 +25,14 @@ CONFIG_PATH = "/api/config"
 #: parent/pnode, flags). Plugin nodes have no ``property[]`` field.
 NODES_PATH = "/api/nodes"
 
+#: ``GET /api/groups`` — per-group controller→responder link records,
+#: including each responder's scene on-level target (``OL`` param). Used
+#: to enrich the group membership from ``/api/nodes`` with per-member
+#: scene intent (on / off / discard) so scene status reflects the
+#: programmed target, not just any member being non-zero. Optional —
+#: absent on older firmware; the load is best-effort.
+GROUPS_PATH = "/api/groups"
+
 #: ``GET /api/programs`` — programs and program-folders.
 PROGRAMS_PATH = "/api/programs"
 

@@ -203,6 +203,7 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
         200,
         '<?xml version="1.0"?><NetConfig><NetRule><id>1</id><name>Reboot Router</name></NetRule></NetConfig>',
     )
+    session.set_route("GET", "/api/groups", 200, {"successful": True, "data": {"groups": []}})
 
     client = IoXClient(BASE, PortalAuth("u@example.com", "pass"), session)  # type: ignore[arg-type]
     result = await client.connect()
@@ -228,13 +229,14 @@ async def test_connect_runs_full_load_with_real_profile_fixture(session: FakeSes
     assert list(result.network_resources) == ["1"]
     assert result.network_resources["1"].name == "Reboot Router"
 
-    # Total HTTP cost: 1 (config setup) + 1 (login setup) + 8 (parallel
-    # fan-out) = 10 calls. The fan-out covers: profiles, /api/nodes
+    # Total HTTP cost: 1 (config setup) + 1 (login setup) + 9 (parallel
+    # fan-out) = 11 calls. The fan-out covers: profiles, /api/nodes
     # (which now carries groups + folders too, see #127), /rest/status,
     # /api/programs, /api/triggers, /api/variables/1, /api/variables/2,
-    # /rest/networking/resources. Still constant w.r.t. node-server count.
+    # /rest/networking/resources, /api/groups (link-target enrichment).
+    # Still constant w.r.t. node-server count.
     fanout = [c for c in session.calls if c[0] == "GET" and c[1] not in ("/api/config",)]
-    assert len(fanout) == 8
+    assert len(fanout) == 9
 
 
 def _empty_fanout_routes(session: FakeSession) -> None:
@@ -249,6 +251,7 @@ def _empty_fanout_routes(session: FakeSession) -> None:
     session.set_route("GET", "/api/variables/1", 200, {"successful": True, "data": []})
     session.set_route("GET", "/api/variables/2", 200, {"successful": True, "data": []})
     session.set_route("GET", "/rest/networking/resources", 404)
+    session.set_route("GET", "/api/groups", 200, {"successful": True, "data": {"groups": []}})
 
 
 @pytest.mark.asyncio

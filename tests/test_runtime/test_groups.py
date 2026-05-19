@@ -16,6 +16,7 @@ from pyisyox.client import (
     IoXClient,
     NodePropertyValue,
     NodeRecord,
+    apply_group_link_targets,
     parse_api_nodes_groups_folders,
     parse_rest_nodes_groups_folders,
 )
@@ -703,3 +704,228 @@ async def test_group_rename_posts_name_and_type_group() -> None:
     method, path, kwargs = session.calls[-1]
     assert (method, path) == ("POST", "/api/nodes/55090")
     assert kwargs["json"] == {"name": "Front Yard", "nodeType": "group"}
+
+
+# --- /api/groups link-target enrichment (#174) ---
+
+
+def _api_groups(*entries):
+    return {"successful": True, "data": {"groups": list(entries)}}
+
+
+def _native(node, ol):
+    return {
+        "type": "native",
+        "node": node,
+        "linkdef": "I_RELAY",
+        "params": [{"type": "val", "id": "OL", "val": {"uom": 51, "prec": 0, "value": ol}}],
+    }
+
+
+def _grec(addr, members):
+    return GroupRecord(
+        address=addr, name=addr, nodedef_id="InsteonDimmer", family_id="6", member_addresses=members
+    )
+
+
+def test_apply_targets_radio_scene_only_on_level_member_is_on_intent():
+    # one native OL>0 member, the rest OL=0 (radio KPL scene)
+    groups = {"8499": _grec("8499", ("A", "B", "C"))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {
+                "id": "8499",
+                "ctl": [{"id": "8499", "links": [_native("A", 0), _native("B", 100), _native("C", 0)]}],
+            }
+        ),
+    )
+    rec = groups["8499"]
+    assert rec.targets_resolved is True
+    assert rec.member_intents == {"A": "off", "B": "on", "C": "off"}
+
+
+def test_apply_targets_default_and_cmd_on_canonical_block_only():
+    # default -> on; cmd DON -> on; cmd SETST in a non-canonical block ignored
+    groups = {"46389": _grec("46389", ("ZW1", "ZW2", "N1"))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {
+                "id": "46389",
+                "ctl": [
+                    {
+                        "id": "N9",
+                        "links": [
+                            {
+                                "type": "cmd",
+                                "node": "N1",
+                                "cmd": "SETST",
+                                "params": [{"type": "val", "id": "", "val": {"uom": 56, "value": 15}}],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "46389",
+                        "links": [
+                            {"type": "cmd", "node": "ZW1", "cmd": "DON", "params": []},
+                            {"type": "default", "node": "ZW2"},
+                            {"type": "default", "node": "N1"},
+                        ],
+                    },
+                ],
+            }
+        ),
+    )
+    rec = groups["46389"]
+    assert rec.targets_resolved is True
+    assert rec.member_intents == {"ZW1": "on", "ZW2": "on", "N1": "on"}
+
+
+def test_apply_targets_fire_only_cmd_scene_resolves_no_on_members():
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {
+                "id": "G",
+                "ctl": [
+                    {
+                        "id": "G",
+                        "links": [
+                            {
+                                "type": "cmd",
+                                "node": "X",
+                                "cmd": "BL",
+                                "params": [{"type": "val", "id": "", "val": {"uom": 25, "value": 124}}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+    )
+    assert groups["G"].targets_resolved is True
+    assert groups["G"].member_intents == {"X": "discard"}
+
+
+def test_apply_targets_cmd_dfon_is_on():
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {
+                "id": "G",
+                "ctl": [{"id": "G", "links": [{"type": "cmd", "node": "X", "cmd": "DFON", "params": []}]}],
+            }
+        ),
+    )
+    assert groups["G"].member_intents == {"X": "on"}
+    assert groups["G"].targets_resolved is True
+
+
+def test_apply_targets_native_without_ol_falls_back_unresolved():
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {
+                "id": "G",
+                "ctl": [
+                    {
+                        "id": "G",
+                        "links": [{"type": "native", "node": "X", "linkdef": "I_RELAY", "params": []}],
+                    }
+                ],
+            }
+        ),
+    )
+    assert groups["G"].targets_resolved is False
+    assert groups["G"].member_intents == {}
+
+
+def test_apply_targets_unknown_link_type_falls_back_unresolved():
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(
+        groups,
+        _api_groups({"id": "G", "ctl": [{"id": "G", "links": [{"type": "weird_future_type", "node": "X"}]}]}),
+    )
+    assert groups["G"].targets_resolved is False
+
+
+def test_apply_targets_ignore_link_excludes_node_but_resolves():
+    groups = {"G": _grec("G", ("X", "Y"))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {"id": "G", "ctl": [{"id": "G", "links": [{"type": "ignore", "node": "X"}, _native("Y", 100)]}]}
+        ),
+    )
+    assert groups["G"].targets_resolved is True
+    assert groups["G"].member_intents == {"Y": "on"}
+
+
+def test_apply_targets_group_absent_from_payload_stays_unresolved():
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(groups, _api_groups())
+    assert groups["G"].targets_resolved is False
+    assert groups["G"].member_intents == {}
+
+
+def test_apply_targets_empty_canonical_block_resolves_empty():
+    groups = {"ADR0001": _grec("ADR0001", ())}
+    apply_group_link_targets(groups, _api_groups({"id": "ADR0001", "ctl": [{"id": "ADR0001", "links": []}]}))
+    assert groups["ADR0001"].targets_resolved is True
+    assert groups["ADR0001"].member_intents == {}
+
+
+def test_apply_targets_native_beats_default_for_same_node():
+    groups = {"G": _grec("G", ("X",))}
+    apply_group_link_targets(
+        groups,
+        _api_groups(
+            {"id": "G", "ctl": [{"id": "G", "links": [{"type": "default", "node": "X"}, _native("X", 0)]}]}
+        ),
+    )
+    assert groups["G"].member_intents == {"X": "off"}
+
+
+def _resolved_group(intents):
+    rec = _grec("G", tuple(intents))
+    rec.member_intents = dict(intents)
+    rec.targets_resolved = True
+    return rec
+
+
+def test_group_any_on_ignores_off_target_member():
+    nodes = {"ON1": _record_with_st("ON1", "0"), "OFF1": _record_with_st("OFF1", "255")}
+    rec = _resolved_group({"ON1": "on", "OFF1": "off"})
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_any_on is False
+    assert group.group_all_on is False
+    nodes["ON1"] = _record_with_st("ON1", "255")
+    assert group.group_any_on is True
+    assert group.group_all_on is True
+
+
+def test_group_fire_only_scene_reads_off_and_has_no_state_target():
+    rec = _resolved_group({"X": "discard"})
+    nodes = {"X": _record_with_st("X", "255")}
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_any_on is False
+    assert group.group_all_on is False
+    assert group.has_state_target is False
+
+
+def test_group_unresolved_uses_legacy_all_member_aggregate():
+    rec = _grec("G", ("M1", "M2"))
+    nodes = {"M1": _record_with_st("M1", "0"), "M2": _record_with_st("M2", "255")}
+    group = Group.from_record(rec, _profile(), _make_client(FakeSession(BASE)), nodes=nodes)
+    assert group.group_any_on is True
+    assert group.group_all_on is False
+    assert group.has_state_target is True
+
+
+def test_group_has_state_target_true_when_off_intent_present():
+    g = Group.from_record(_resolved_group({"A": "off"}), _profile(), _make_client(FakeSession(BASE)))
+    assert g.has_state_target is True

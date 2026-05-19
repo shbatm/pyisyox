@@ -30,10 +30,11 @@ from xml.etree import ElementTree as ET
 import aiohttp
 
 from pyisyox.auth import Auth, AuthError
-from pyisyox.constants import NodeFlag
+from pyisyox.constants import CMD_OFF, CMD_OFF_FAST, CMD_ON, CMD_ON_FAST, NodeFlag
 from pyisyox.logging import LOG_VERBOSE
 from pyisyox.paths import (
     CONFIG_PATH,
+    GROUPS_PATH,
     NETWORK_RESOURCE_ITEM_PATH,
     NETWORKING_RESOURCES_PATH,
     NLS_PATH,
@@ -257,6 +258,17 @@ class GroupRecord:
     #: as scene controllers (rather than responders). Empty when the group has
     #: no explicit controller (e.g. SmartLinc-style virtual scenes).
     controller_addresses: tuple[str, ...] = ()
+    #: Per-member scene intent resolved from ``/api/groups`` link targets:
+    #: address → ``"on"`` | ``"off"`` | ``"discard"``. Empty when
+    #: ``/api/groups`` was unavailable or the group wasn't present there.
+    member_intents: dict[str, str] = field(default_factory=dict)
+    #: ``True`` iff the group's link targets were found *and* every link
+    #: resolved to a known intent (no unknown link ``type``, no ``native``
+    #: link missing its ``OL`` param). When ``False``, consumers fall back
+    #: to the legacy all-member ``ST`` aggregate. A *resolved* group with
+    #: no ``"on"`` members (fire-only / config-only scene) keeps this
+    #: ``True`` with an empty or all-``off``/``discard`` ``member_intents``.
+    targets_resolved: bool = False
 
 
 @dataclass(slots=True)
@@ -415,6 +427,7 @@ class IoXClient:
             vars_int_raw,
             vars_state_raw,
             networking_xml,
+            api_groups_raw,
         ) = await asyncio.gather(
             self._get_json(PROFILES_PATH),
             self._get_json(NODES_PATH),
@@ -428,6 +441,10 @@ class IoXClient:
             # the parser; we don't want a 404 here to abort load, so
             # we fall back to an empty document on HTTP errors.
             self._get_text_or_empty(NETWORKING_RESOURCES_PATH),
+            # /api/groups enriches group membership with per-member
+            # scene-target intent. Optional (absent on older firmware) —
+            # a 404 falls back to {} and groups keep legacy aggregation.
+            self._get_json_or_empty(GROUPS_PATH),
         )
 
         profile = Profile.load_from_json(profile_raw)
@@ -440,6 +457,7 @@ class IoXClient:
         # for LocalAuth (which doesn't expose ``/api/*``) and external
         # consumers that prefer the XML surface.
         groups, folders, root_name = parse_api_nodes_groups_folders(nodes_raw)
+        apply_group_link_targets(groups, api_groups_raw)
         await self._load_dynamic_zwave_nodedefs(profile, nodes)
 
         return LoadResult(
@@ -628,6 +646,16 @@ class IoXClient:
         except HTTPError as exc:
             _LOGGER.debug("optional endpoint %s unavailable: %s", path, exc)
             return ""
+
+    async def _get_json_or_empty(self, path: str) -> Any:
+        """``_get_json`` that swallows HTTPError → ``{}``. For optional
+        endpoints (``/api/groups``) absent on older firmware — a 404
+        here must not abort the load."""
+        try:
+            return await self._get_json(path)
+        except HTTPError as exc:
+            _LOGGER.debug("optional endpoint %s unavailable: %s", path, exc)
+            return {}
 
     async def send_node_command(self, address: str, command_id: str, *params: float | str) -> str:
         """Issue ``GET /rest/nodes/{addr}/cmd/{cmd}[/{p1}[/{p2}...]]``.
@@ -1065,6 +1093,99 @@ def parse_api_nodes_groups_folders(
         )
 
     return groups, folders, root_name
+
+
+#: cmd-link verbs that imply a steady on/off responder target. Anything
+#: else (``BL``, ``BEEP``, ``QUERY``, ``BRT``/``DIM``/``FD*``, ``SETST``…)
+#: is fire-only / config and contributes no on-state for that member.
+_CMD_ON_VERBS = frozenset({CMD_ON, CMD_ON_FAST})
+_CMD_OFF_VERBS = frozenset({CMD_OFF, CMD_OFF_FAST})
+
+#: native > cmd > default — when a member appears under more than one
+#: link in the canonical block the most-specific responder link wins.
+_LINK_PRECEDENCE = {"native": 3, "cmd": 2, "default": 1}
+
+
+def _link_intent(link: dict[str, Any]) -> str | None:
+    """Resolve one ``/api/groups`` link to a member intent.
+
+    Returns ``"on"`` / ``"off"`` / ``"discard"`` for a resolvable
+    responder link, ``""`` for ``type="ignore"`` (not a member), or
+    ``None`` when the link is ambiguous (unknown ``type``, or a
+    ``native`` link with no ``OL`` param) — which forces the whole
+    group back to the legacy aggregate.
+    """
+    ltype = str(link.get("type") or "")
+    if ltype == "ignore":
+        return ""
+    if ltype == "native":
+        for param in link.get("params") or []:
+            if param.get("id") == "OL":
+                value = (param.get("val") or {}).get("value")
+                if value is None:
+                    return None
+                return "on" if float(value) > 0 else "off"
+        return None  # native responder with no OL — ambiguous
+    if ltype == "cmd":
+        verb = str(link.get("cmd") or "")
+        if verb in _CMD_ON_VERBS:
+            return "on"
+        if verb in _CMD_OFF_VERBS:
+            return "off"
+        return "discard"  # BL/BEEP/QUERY/BRT/DIM/FD*/SETST/… — fire-only
+    if ltype == "default":
+        return "on"  # ISY forwards the scene command; state-tracked
+    return None  # unknown link type — ambiguous
+
+
+def apply_group_link_targets(groups: dict[str, GroupRecord], api_groups_raw: dict[str, Any]) -> None:
+    """Enrich ``GroupRecord``s in place with ``/api/groups`` link targets.
+
+    For each group the **canonical** ``ctl`` block — the one whose
+    ``id`` equals the group address — is the scene's own responder
+    definition (per-controller blocks describe cross-controller
+    behaviour, not the scene's resting target, so they're ignored).
+    Each link there resolves via :func:`_link_intent`; the highest
+    :data:`_LINK_PRECEDENCE` link wins when a node appears twice.
+
+    Sets ``member_intents`` + ``targets_resolved`` on the record. A
+    group not present in ``/api/groups`` (older firmware / 404 → empty
+    payload) is left ``targets_resolved=False`` so the consumer keeps
+    the legacy all-member behaviour. A present group whose canonical
+    block has no on-target links (fire-only / config-only / the special
+    auto-DR groups) is ``targets_resolved=True`` with no ``"on"``
+    members — i.e. reads OFF, matching the admin console.
+    """
+    data = api_groups_raw.get("data") if isinstance(api_groups_raw, dict) else None
+    entries = (data or {}).get("groups") or []
+    for entry in entries:
+        gid = str(entry.get("id") or "")
+        record = groups.get(gid)
+        if record is None:
+            continue
+        intents: dict[str, str] = {}
+        ranks: dict[str, int] = {}
+        resolved = True
+        for block in entry.get("ctl") or []:
+            if str(block.get("id") or "") != gid:
+                continue  # not the scene's canonical responder block
+            for link in block.get("links") or []:
+                intent = _link_intent(link)
+                if intent is None:
+                    resolved = False
+                    break
+                node = str(link.get("node") or "")
+                if not node or intent == "":
+                    continue  # ignore-link / malformed
+                rank = _LINK_PRECEDENCE.get(str(link.get("type") or ""), 0)
+                if rank >= ranks.get(node, -1):
+                    intents[node] = intent
+                    ranks[node] = rank
+            if not resolved:
+                break
+        if resolved:
+            record.member_intents = intents
+            record.targets_resolved = True
 
 
 def parse_api_nodes(raw: dict[str, Any]) -> dict[str, NodeRecord]:
