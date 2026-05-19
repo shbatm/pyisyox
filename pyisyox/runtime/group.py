@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from pyisyox.client import NodeType
 from pyisyox.constants import INSTEON_STATELESS_NODEDEFID, PROP_STATUS
+from pyisyox.runtime.node import Node
 
 if TYPE_CHECKING:
     from pyisyox.client import GroupRecord, IoXClient, NodeRecord
@@ -53,7 +54,7 @@ def _is_on(record: NodeRecord) -> bool:
 class Group:
     """User-facing handle for one group / scene in the controller."""
 
-    __slots__ = ("_client", "_nodes", "_profile", "_record")
+    __slots__ = ("_client", "_dimmable_cache", "_nodes", "_profile", "_record")
 
     def __init__(
         self,
@@ -78,6 +79,10 @@ class Group:
         self._profile = profile
         self._client = client
         self._nodes = nodes
+        # Memoised `has_dimmable_members` — safe to cache because it's
+        # derived from member nodedefs (static for this record), unlike
+        # the live `group_*_on` aggregates which must re-read `ST`.
+        self._dimmable_cache: bool | None = None
 
     @classmethod
     def from_record(
@@ -153,32 +158,108 @@ class Group:
     def _is_stateless(self, record: NodeRecord) -> bool:
         return record.nodedef_id in _STATELESS_NODEDEF_IDS
 
+    def _on_set(self) -> tuple[str, ...] | None:
+        """Member addresses the scene drives *on*, or ``None`` for legacy.
+
+        When ``/api/groups`` link targets resolved (see
+        :attr:`pyisyox.client.GroupRecord.targets_resolved`) this is the
+        subset of members whose scene intent is ``"on"`` — the only
+        members whose ``ST`` defines whether the scene is active.
+        ``off`` / ``discard`` members and members the scene merely
+        fires a one-shot command at are excluded. A *resolved* scene
+        with no ``"on"`` members (fire-only / config-only / auto-DR)
+        yields an empty tuple → reads OFF, matching the admin console.
+
+        ``None`` means targets are unresolved (``/api/groups`` absent,
+        or an ambiguous link) → callers fall back to the legacy
+        all-member aggregate so behaviour never regresses.
+        """
+        if not self._record.targets_resolved:
+            return None
+        return tuple(addr for addr, intent in self._record.member_intents.items() if intent == "on")
+
+    @property
+    def has_state_target(self) -> bool:
+        """Whether the scene maintains any member on/off state.
+
+        ``True`` when link targets resolved and at least one member has
+        an ``on``/``off`` intent. A *resolved* scene with only fire-only
+        / config links (``cmd`` ``BL``/``BEEP``/…, or empty) → ``False``:
+        it has no steady state, so a consumer should model it as a
+        momentary **button**, not a switch. When targets are unresolved
+        we can't tell, so assume ``True`` (the safe default — keep it a
+        stateful scene).
+        """
+        if not self._record.targets_resolved:
+            return True
+        return any(intent in ("on", "off") for intent in self._record.member_intents.values())
+
+    @property
+    def has_dimmable_members(self) -> bool:
+        """True iff any member node is a dimmable load.
+
+        Nodedef-derived via :attr:`pyisyox.runtime.Node.is_dimmable`,
+        so it's robust and — unlike :attr:`has_state_target` — does
+        **not** depend on ``/api/groups`` link resolution (works on
+        older firmware too). Consumers pair it with
+        :attr:`has_state_target` to pick the scene's HA platform:
+        no state target → **button**; else dimmable members → on/off
+        **light** (preserving light semantics + the group/more-info
+        framework, no ``switch_as_x``); else → **switch**. Scenes have
+        no settable brightness — fade/brt/dim are separate manual
+        commands — so "light" here is on/off only.
+
+        Returns ``False`` without a node-registry reference. Members
+        missing from the registry are skipped (defensive). Memoised on
+        first access (one ``Node`` + ``find_nodedef`` per member) — the
+        result is static for this record, so repeated reads (e.g.
+        ``to_dict``) don't rebuild it.
+        """
+        if self._dimmable_cache is not None:
+            return self._dimmable_cache
+        result = False
+        if self._nodes is not None:
+            for addr in self._record.member_addresses:
+                record = self._nodes.get(addr)
+                if record is None:
+                    continue
+                if Node.from_record(record, self._profile, self._client).is_dimmable:
+                    result = True
+                    break
+        self._dimmable_cache = result
+        return result
+
     @property
     def group_all_on(self) -> bool:
-        """True iff every stateful member node currently reports an "on" state.
+        """True iff every on-target member currently reports an "on" state.
 
-        Computed on access from the controller's node registry. Stateless
-        members — motion sensors, RemoteLincs, binary-alarm devices, see
-        :data:`_STATELESS_NODEDEF_IDS` — are excluded; their ``ST`` isn't
-        a persistent state. Returns ``False`` when:
+        Computed on access from the controller's node registry.
+        Stateless members — motion sensors, RemoteLincs, binary-alarm
+        devices, see :data:`_STATELESS_NODEDEF_IDS` — are excluded;
+        their ``ST`` isn't a persistent state.
 
-        * the group was constructed without a node-registry reference
-          (the optional ``nodes`` arg to :meth:`from_record`);
-        * the group has no stateful members;
-        * any stateful member is not currently in the registry (defensive
-          — the member may have been removed since load and the controller
-          hasn't surfaced the lifecycle event yet);
-        * any stateful member's ``ST`` property is missing or zero.
+        When ``/api/groups`` link targets resolved, the aggregate is
+        over the scene's **on-target** members only (see
+        :meth:`_on_set`) — so a radio-style keypad scene (one button
+        on-target, the rest driven off) tracks correctly instead of
+        being structurally never-all-on. Otherwise it falls back to the
+        legacy all-member behaviour. Returns ``False`` when the group
+        has no node-registry reference, the (on-target / member) set is
+        empty, a member is missing from the registry, or any counted
+        member's ``ST`` is missing or zero.
 
-        Cheap: ``O(N)`` where N is the member count, only computed
-        when read. No event-subscription plumbing — the underlying
-        ``ST`` values mutate in place via the WS dispatcher, so each
-        access reflects the latest state.
+        Cheap: ``O(N)``, computed on read — the underlying ``ST`` values
+        mutate in place via the WS dispatcher, so each access reflects
+        the latest state.
         """
-        if self._nodes is None or not self._record.member_addresses:
+        if self._nodes is None:
+            return False
+        on_set = self._on_set()
+        addresses = on_set if on_set is not None else self._record.member_addresses
+        if not addresses:
             return False
         saw_stateful = False
-        for addr in self._record.member_addresses:
+        for addr in addresses:
             record = self._nodes.get(addr)
             if record is None:
                 return False
@@ -191,27 +272,27 @@ class Group:
 
     @property
     def group_any_on(self) -> bool:
-        """True iff at least one stateful member node currently reports "on".
+        """True iff at least one on-target member currently reports "on".
 
         Companion to :attr:`group_all_on`; this is the aggregation HA
-        scene-switch consumers want for their ``is_on`` — the legacy
-        ``pyisy.Group.status`` did the same thing (non-zero on any
-        stateful responder). Stateless members and members not currently
-        in the registry are skipped — see :data:`_STATELESS_NODEDEF_IDS`.
+        scene-switch consumers want for their ``is_on``. When
+        ``/api/groups`` link targets resolved it considers only the
+        scene's **on-target** members (see :meth:`_on_set`), so a scene
+        reads on iff a member it actually drives on is on — not merely
+        because some always-lit keypad button is non-zero. Otherwise it
+        falls back to the legacy "any stateful member non-zero"
+        behaviour (what ``pyisy.Group.status`` did). Stateless members
+        and members not in the registry are skipped.
 
-        Returns ``False`` when:
-
-        * the group was constructed without a node-registry reference;
-        * the group has no members;
-        * every present stateful member's ``ST`` property is missing or
-          zero.
-
-        Cheap: ``O(N)`` where N is the member count, only computed
-        when read.
+        Returns ``False`` with no node-registry reference, an empty
+        (on-target / member) set, or when every counted member's ``ST``
+        is missing or zero. Cheap: ``O(N)``, computed on read.
         """
-        if self._nodes is None or not self._record.member_addresses:
+        if self._nodes is None:
             return False
-        for addr in self._record.member_addresses:
+        on_set = self._on_set()
+        addresses = on_set if on_set is not None else self._record.member_addresses
+        for addr in addresses:
             record = self._nodes.get(addr)
             if record is None or self._is_stateless(record):
                 continue
@@ -264,6 +345,8 @@ class Group:
         payload = asdict(self._record)
         payload["group_all_on"] = self.group_all_on
         payload["group_any_on"] = self.group_any_on
+        payload["has_state_target"] = self.has_state_target
+        payload["has_dimmable_members"] = self.has_dimmable_members
         return payload
 
     def __repr__(self) -> str:

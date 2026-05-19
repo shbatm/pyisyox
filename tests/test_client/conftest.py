@@ -41,6 +41,13 @@ class FakeSession:
         self.calls: list[tuple[str, str, dict[str, Any]]] = []
         self._routes: dict[tuple[str, str], list[FakeResponse]] = {}
         self._defaults: dict[tuple[str, str], FakeResponse] = {}
+        # /api/groups is an optional link-target enrichment endpoint
+        # (#174). Default it to an empty payload so the many full-load
+        # tests don't each have to script it; tests exercising the
+        # enrichment override via set_route().
+        self._defaults[("GET", "/api/groups")] = FakeResponse(
+            200, _to_body({"successful": True, "data": {"groups": []}})
+        )
 
     # --- scripting -----------------------------------------------------
 
