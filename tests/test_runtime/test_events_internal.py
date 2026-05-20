@@ -28,7 +28,9 @@ from pyisyox.runtime.events import (
     ProgressAction,
     SecuritySystemAction,
     SystemConfigAction,
+    SystemEditorAction,
     SystemEventControl,
+    SystemUpgradeAction,
     TriggerAction,
     VariableTableChangeEvent,
     _compact_event_info,
@@ -55,6 +57,11 @@ from pyisyox.runtime.events import (
         (SecuritySystemAction, SecuritySystemAction.DISARMED),
         (DeviceLinkerAction, DeviceLinkerAction.STATUS),
         (NodeLifecycleAction, NodeLifecycleAction.NODE_ENABLED),
+        (NodeLifecycleAction, NodeLifecycleAction.NODE_TYPE_INFO_CHANGED),
+        (NodeLifecycleAction, NodeLifecycleAction.ALL_NODES_ADDED),
+        (NodeLifecycleAction, NodeLifecycleAction.LINK_UPDATED),
+        (SystemEditorAction, SystemEditorAction.EDITOR_CHANGED),
+        (SystemUpgradeAction, SystemUpgradeAction.AVAILABLE),
     ],
 )
 def test_enum_label_known_returns_friendly_name(enum_cls: type, known_value: str) -> None:
@@ -78,6 +85,8 @@ def test_enum_label_known_returns_friendly_name(enum_cls: type, known_value: str
         SecuritySystemAction,
         DeviceLinkerAction,
         NodeLifecycleAction,
+        SystemEditorAction,
+        SystemUpgradeAction,
     ],
 )
 def test_enum_label_unknown_passes_through_raw_value(enum_cls: type) -> None:

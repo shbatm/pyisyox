@@ -48,9 +48,11 @@ class SystemEventControl(StrEnum):
     underscore-prefixed codes with an empty ``node_address``.
 
     Codes ``_0``-``_23`` are the full ISY-994 set from the *ISY994
-    Developer Cookbook* §8.5; ``_28`` is an IoX-6 addition (Matter)
-    not in that document. Newer IoX firmware emits a few more
-    undocumented codes — those aren't enumerated; :meth:`label` passes
+    Developer Cookbook* §8.5; ``_24``-``_28`` are IoX-6 additions
+    (system editors, the modern Z-Wave / ZigBee / Matter drivers,
+    system upgrade) not in that document — tracked from UDI's
+    internal ``UDEvents.h`` taxonomy. Newer IoX firmware may emit
+    further codes; those aren't enumerated, and :meth:`label` passes
     them through verbatim so logs still identify them.
     """
 
@@ -110,7 +112,8 @@ class SystemEventControl(StrEnum):
     UPB_DEVICE_STATUS = "_16"
     #: Gas-meter events — ISY994 only.
     GAS_METER = "_17"
-    #: Zigbee events — ISY994 only.
+    #: Legacy ZigBee events — ISY994-era driver. See :attr:`ZIGBEE_UYB`
+    #: (``_27``) for the IoX-6+ ZigBee driver used on eisy.
     ZIGBEE = "_18"
     #: ELK alarm-panel events — requires the ELK module (see the ELK
     #: Integration Developer's Manual).
@@ -118,16 +121,44 @@ class SystemEventControl(StrEnum):
     #: Device-linker events — ``<action>`` 1 (status) / 2 (cleared).
     #: See :class:`DeviceLinkerAction`.
     DEVICE_LINKER = "_20"
-    #: Z-Wave integration events — requires the Z-Wave module (see the
-    #: Z-Wave Integration Developer's Manual).
+    #: Legacy Z-Wave integration events — ISY994-era driver. See
+    #: :attr:`ZMATTER_ZWAVE` (``_25``) for the IoX-6+ ZMatter Z-Wave
+    #: driver used on eisy.
     ZWAVE = "_21"
     #: Billing events — ISY994 ZS-series only.
     BILLING = "_22"
     #: Portal events — portal socket-connection / account-registration
     #: status when a portal module is installed.
     PORTAL = "_23"
-    #: Matter network status — IoX 6+ with the Matter module. Not in
-    #: the ISY994 cookbook.
+    #: System editor changed — fired when a "system editor" (e.g.
+    #: ``_sys_notify_short``) is updated. ``<node>`` carries the editor
+    #: name. ``<action>`` is :class:`SystemEditorAction`. IoX-6 addition.
+    SYSTEM_EDITOR = "_24"
+    #: ZMatter Z-Wave events — IoX-6+ Z-Wave driver on eisy hardware.
+    #: ``<action>`` is dotted (``"{category}.{type}"``); category
+    #: numbers are system-status (1), discovery (2), general-status (3),
+    #: general-error (4), S2 (5), OTA (6), backup/restore (7), device-
+    #: interview (8), button-detect (9), logger (10). Sub-action details
+    #: aren't modelled — the dotted string passes through verbatim.
+    #: Distinct from :attr:`ZWAVE` (``_21``, ISY994-era driver).
+    ZMATTER_ZWAVE = "_25"
+    #: System-upgrade lifecycle — ``<action>`` is :class:`SystemUpgradeAction`
+    #: (active / inactive / available / reboot-required). IoX-6 addition.
+    SYSTEM_UPGRADE = "_26"
+    #: ZigBee events — IoX-6+ ZigBee driver on eisy hardware. Same
+    #: dotted ``"{category}.{type}"`` action shape as :attr:`ZMATTER_ZWAVE`
+    #: (minus the logger sub-category). Distinct from :attr:`ZIGBEE`
+    #: (``_18``, ISY994-era driver).
+    ZIGBEE_UYB = "_27"
+    #: Matter network status — IoX-6+ Matter driver. ``<action>`` is
+    #: dotted; active sub-categories are 1 (system status), 2 (discovery),
+    #: 3 (RX/TX), 8 (device interview). Not in the ISY994 cookbook.
+    #:
+    #: **Note:** ``_28`` is also reserved in UDI's source for Profile
+    #: change events (actions 1-8 — profile/editor/nodedef/linkdef
+    #: updated/deleted) — but no firmware path fires those today
+    #: (placeholders since Dec 2024 per UDI). Don't subscribe expecting
+    #: them.
     MATTER_STATUS = "_28"
 
     @classmethod
@@ -281,6 +312,39 @@ class DeviceLinkerAction(StrEnum):
         return _enum_label(cls, value)
 
 
+class SystemUpgradeAction(StrEnum):
+    """Action codes on :attr:`SystemEventControl.SYSTEM_UPGRADE` (``_26``)
+    frames — IoX-6 firmware-upgrade lifecycle."""
+
+    #: Upgrade in progress.
+    ACTIVE = "1"
+    #: Upgrade not active (post-completion or idle).
+    INACTIVE = "2"
+    #: A new upgrade is available to install.
+    AVAILABLE = "3"
+    #: Upgrade applied; reboot required to take effect.
+    REBOOT_REQUIRED = "4"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
+
+
+class SystemEditorAction(StrEnum):
+    """Action codes on :attr:`SystemEventControl.SYSTEM_EDITOR` (``_24``)
+    frames. The ``<node>`` slot carries the editor name (e.g.
+    ``_sys_notify_short``)."""
+
+    #: A system editor's contents changed.
+    EDITOR_CHANGED = "1"
+
+    @classmethod
+    def label(cls, value: str) -> str:
+        """Friendly lower-case name, or the raw value."""
+        return _enum_label(cls, value)
+
+
 class DeviceWriteAction(StrEnum):
     """Device-write sub-codes that ride through on ``_7``
     (:attr:`SystemEventControl.PROGRESS`) frames — PyISY 3.x surfaced
@@ -359,6 +423,20 @@ class NodeLifecycleAction(StrEnum):
     #: should discard cached info for the node and rebuild it.
     #: ``<eventInfo>`` carries the full ``<node>`` structure.
     NODE_REVISED = "RV"
+    #: Supported-type info changed — the node's nodedef assignment was
+    #: reassigned (e.g. a node server's ``changeNode``, or a device
+    #: driver detecting new capabilities). The primary signal that a
+    #: cached nodedef → entity mapping is stale. *Not* fired for
+    #: ``/rest/profiles`` definition updates or moves, or at startup
+    #: migration — those rewrite the profile DB without notifying.
+    NODE_TYPE_INFO_CHANGED = "NI"
+    #: All nodes for a single device have been added (bulk). Fired
+    #: after an include / re-pair so consumers can coalesce a single
+    #: refresh per device instead of per child node.
+    ALL_NODES_ADDED = "AA"
+    #: Scene link updated — a link's properties (on-level / ramp rate)
+    #: changed for an existing scene member.
+    LINK_UPDATED = "LU"
     #: Discovering nodes (linking in progress). No node.
     DISCOVERING_NODES = "SN"
     #: Node discovery complete. No node.
@@ -419,6 +497,9 @@ NODE_LIFECYCLE_EVENT_INFO_TAGS: dict[NodeLifecycleAction, tuple[str, ...]] = {
     NodeLifecycleAction.PENDING_DEVICE_OP: (),
     NodeLifecycleAction.PROGRAMMING_DEVICE: (),
     NodeLifecycleAction.NODE_REVISED: (),  # plus the full <node> structure
+    NodeLifecycleAction.NODE_TYPE_INFO_CHANGED: (),
+    NodeLifecycleAction.ALL_NODES_ADDED: (),
+    NodeLifecycleAction.LINK_UPDATED: (),
     NodeLifecycleAction.DISCOVERING_NODES: (),
     NodeLifecycleAction.NODE_DISCOVERY_COMPLETE: (),
     NodeLifecycleAction.NODE_ERROR: (),
@@ -454,6 +535,8 @@ _SYSTEM_ACTION_ENUMS: dict[SystemEventControl, type[StrEnum]] = {
     SystemEventControl.PROGRESS: ProgressAction,
     SystemEventControl.SECURITY_SYSTEM: SecuritySystemAction,
     SystemEventControl.DEVICE_LINKER: DeviceLinkerAction,
+    SystemEventControl.SYSTEM_EDITOR: SystemEditorAction,
+    SystemEventControl.SYSTEM_UPGRADE: SystemUpgradeAction,
 }
 
 
@@ -472,7 +555,9 @@ def describe_system_event(control: str, action: str) -> str:
     * ``"_0"`` / ``"90"`` → ``"heartbeat = 90"`` (action = seconds to
       the next heartbeat; not enumerated)
     * ``"_28"`` / ``"1.3"`` → ``"matter_status = 1.3"`` (no enum)
-    * ``"_26"`` / ``"2"`` → ``"_26 = 2"`` (control we don't recognise —
+    * ``"_26"`` / ``"2"`` → ``"system_upgrade = inactive"``
+    * ``"_24"`` / ``"1"`` → ``"system_editor = editor_changed"``
+    * ``"_99"`` / ``"x"`` → ``"_99 = x"`` (control we don't recognise —
       both halves pass through verbatim)
 
     Intended for the debug logging consumers do over raw event frames
@@ -623,20 +708,27 @@ class NodeLifecycleEvent:
         Reload-worthy: ``ND`` / ``NR`` / ``NN`` (node added/removed/renamed
         — the registry's set or display names are stale), ``EN``
         (enabled/disabled — the entity's property shape may change),
-        ``RV`` (revised — discard and rebuild this node), ``RG`` (removed
-        from scene — membership changed), ``SC`` (node-discovery complete
-        — new nodes may have appeared), and the folder/scene tree verbs
+        ``RV`` (revised — discard and rebuild this node), ``NI``
+        (supported-type info changed — the node's nodedef assignment was
+        reassigned, so the cached nodedef→entity mapping is stale; per
+        UDI's notification taxonomy this is *the* primary signal for
+        profile-related node changes), ``AA`` (all-nodes-added bulk
+        signal after a device include), ``RG`` (removed from scene —
+        membership changed), ``SC`` (node-discovery complete — new
+        nodes may have appeared), and the folder/scene tree verbs
         ``FD`` / ``FR`` / ``FN`` / ``GD`` / ``GR`` / ``GN`` (the
         ``groups`` / ``folders`` registries are stale).
 
         Softer signals — informational, don't trigger reload UX:
         ``MV`` (added to scene), ``CL`` (link changed — not supported),
-        ``PC`` (parent changed), ``PI`` (power info), ``DI`` (device id —
-        not implemented), ``DP`` (UPB property), ``WH`` (pending op),
-        ``WD`` (programming device — a property-update event follows),
-        ``SN`` (discovering nodes — wait for ``SC``), ``CE`` / ``NE``
-        (comm error/cleared — no shape change), ``WR`` (a networking
-        resource was renamed — doesn't touch nodes).
+        ``LU`` (scene link's on-level/ramp updated — property change,
+        not shape change), ``PC`` (parent changed), ``PI`` (power
+        info), ``DI`` (device id — not implemented), ``DP`` (UPB
+        property), ``WH`` (pending op), ``WD`` (programming device — a
+        property-update event follows), ``SN`` (discovering nodes —
+        wait for ``SC``), ``CE`` / ``NE`` (comm error/cleared — no
+        shape change), ``WR`` (a networking resource was renamed —
+        doesn't touch nodes).
         """
         return self.action in {
             NodeLifecycleAction.NODE_ADDED,
@@ -645,6 +737,8 @@ class NodeLifecycleEvent:
             NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,
             NodeLifecycleAction.NODE_ENABLED,
             NodeLifecycleAction.NODE_REVISED,
+            NodeLifecycleAction.NODE_TYPE_INFO_CHANGED,
+            NodeLifecycleAction.ALL_NODES_ADDED,
             NodeLifecycleAction.NODE_DISCOVERY_COMPLETE,
             NodeLifecycleAction.FOLDER_ADDED,
             NodeLifecycleAction.FOLDER_REMOVED,
