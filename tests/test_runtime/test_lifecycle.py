@@ -42,7 +42,18 @@ from pyisyox.runtime.events import (
         ("_0", "90", "heartbeat = 90"),  # action = seconds; not enumerated
         ("_23", "1", "portal = 1"),  # control known, no action enum
         ("_28", "1.3", "matter_status = 1.3"),  # no enum for matter status
-        ("_26", "2", "_26 = 2"),  # unknown control — both halves verbatim
+        ("_24", "1", "system_editor = editor_changed"),
+        ("_25", "1.3", "zmatter_zwave = 1.3"),  # dotted action passes through
+        ("_26", "1", "system_upgrade = active"),
+        ("_26", "2", "system_upgrade = inactive"),
+        ("_26", "3", "system_upgrade = available"),
+        ("_26", "4", "system_upgrade = reboot_required"),
+        ("_27", "2.5", "zigbee_uyb = 2.5"),  # dotted action passes through
+        ("_99", "x", "_99 = x"),  # unknown control — both halves verbatim
+        # _3 lifecycle additions
+        ("_3", "NI", "node_lifecycle = node_type_info_changed"),
+        ("_3", "AA", "node_lifecycle = all_nodes_added"),
+        ("_3", "LU", "node_lifecycle = link_updated"),
     ],
 )
 def test_describe_system_event(control: str, action: str, expected: str) -> None:
@@ -141,6 +152,61 @@ def test_lifecycle_listener_unwraps_action_to_typed_enum() -> None:
     assert received[0].node_xml is None  # no <eventInfo><node> on removes
 
 
+def test_lifecycle_listener_fires_on_node_type_info_changed() -> None:
+    """``NI`` is the primary signal that a node's nodedef assignment
+    changed (the cached nodedef→entity mapping is stale). Per UDI's
+    notification taxonomy it should fan through the lifecycle channel
+    with ``requires_reload=True``."""
+    frame = (
+        '<Event seqnum="55"><control>_3</control><action>NI</action>'
+        "<node>n009_harmonyctrl</node><eventInfo/></Event>"
+    )
+    dispatcher = EventDispatcher({})
+    received: list[NodeLifecycleEvent] = []
+    dispatcher.add_lifecycle_listener(received.append)
+
+    dispatcher.feed(frame)
+
+    assert len(received) == 1
+    assert received[0].action is NodeLifecycleAction.NODE_TYPE_INFO_CHANGED
+    assert received[0].node_address == "n009_harmonyctrl"
+    assert received[0].requires_reload is True
+
+
+def test_lifecycle_listener_fires_on_all_nodes_added() -> None:
+    """``AA`` is the bulk include-complete signal — reload-worthy so
+    consumers can coalesce one refresh per device instead of per child."""
+    frame = (
+        '<Event seqnum="56"><control>_3</control><action>AA</action>'
+        "<node>n009_harmonyctrl</node><eventInfo/></Event>"
+    )
+    dispatcher = EventDispatcher({})
+    received: list[NodeLifecycleEvent] = []
+    dispatcher.add_lifecycle_listener(received.append)
+
+    dispatcher.feed(frame)
+
+    assert received[0].action is NodeLifecycleAction.ALL_NODES_ADDED
+    assert received[0].requires_reload is True
+
+
+def test_link_updated_is_not_reload_worthy() -> None:
+    """``LU`` is a scene-link property update (on-level / ramp rate) —
+    softer signal, no shape change; should not flip ``requires_reload``."""
+    frame = (
+        '<Event seqnum="57"><control>_3</control><action>LU</action>'
+        "<node>3D 7D 87 1</node><eventInfo/></Event>"
+    )
+    dispatcher = EventDispatcher({})
+    received: list[NodeLifecycleEvent] = []
+    dispatcher.add_lifecycle_listener(received.append)
+
+    dispatcher.feed(frame)
+
+    assert received[0].action is NodeLifecycleAction.LINK_UPDATED
+    assert received[0].requires_reload is False
+
+
 def test_lifecycle_listener_passes_through_unknown_actions_as_strings() -> None:
     """A future control-3 verb that isn't in NodeLifecycleAction comes
     through with action=raw_string so consumers can still react."""
@@ -233,6 +299,8 @@ def test_lifecycle_requires_reload_taxonomy() -> None:
         NodeLifecycleAction.NODE_REMOVED_FROM_GROUP,  # RG (scene-edit)
         NodeLifecycleAction.NODE_ENABLED,  # EN — covers both directions
         NodeLifecycleAction.NODE_REVISED,  # RV
+        NodeLifecycleAction.NODE_TYPE_INFO_CHANGED,  # NI — nodedef reassigned
+        NodeLifecycleAction.ALL_NODES_ADDED,  # AA — bulk include-complete
         NodeLifecycleAction.NODE_DISCOVERY_COMPLETE,  # SC — new nodes may have appeared
         NodeLifecycleAction.FOLDER_ADDED,  # FD
         NodeLifecycleAction.FOLDER_REMOVED,  # FR
@@ -244,6 +312,7 @@ def test_lifecycle_requires_reload_taxonomy() -> None:
     soft_actions = {
         NodeLifecycleAction.NODE_MOVED,  # MV (added to scene)
         NodeLifecycleAction.LINK_CHANGED,  # CL — not supported
+        NodeLifecycleAction.LINK_UPDATED,  # LU — scene link on-level/ramp change
         NodeLifecycleAction.PARENT_CHANGED,  # PC
         NodeLifecycleAction.POWER_INFO_CHANGED,  # PI
         NodeLifecycleAction.DEVICE_ID_CHANGED,  # DI — not implemented
