@@ -654,6 +654,36 @@ def test_parse_api_programs_skips_entries_without_id() -> None:
     assert list(records) == ["0011"]
 
 
+def test_parse_api_programs_upconverts_decimal_json_int_id_to_hex() -> None:
+    """Current firmware sends ``id`` / ``parentId`` as a decimal JSON
+    number (``"id": 149``, #193); the parser upconverts to hex."""
+    raw = [
+        {"id": 6, "name": "HA.switch", "folder": True, "status": "true"},
+        {"id": 149, "name": "actions", "parentId": 6, "folder": False, "status": "true", "enabled": True},
+    ]
+    records = parse_api_programs(raw)
+    assert set(records) == {"0006", "0095"}
+    assert records["0095"].address == "0095"
+    assert records["0095"].parent_address == "0006"
+
+
+def test_parse_api_programs_decimal_root_parent_id_zero_collapses_to_none() -> None:
+    """A root-level ``parentId`` of the JSON integer ``0`` must still
+    collapse to ``parent_address=None``, not upconvert to ``"0000"``."""
+    raw = [{"id": 6, "parentId": 0, "name": "HA.switch", "folder": True, "status": "true"}]
+    records = parse_api_programs(raw)
+    assert records["0006"].parent_address is None
+
+
+def test_parse_api_programs_preserves_numeric_looking_hex_string_id() -> None:
+    """A hex id that looks decimal (``"0010"`` = hex 0x10) must not be
+    reparsed as decimal (-> ``"000A"``); arriving as a JSON string
+    (not a number) is what tells the parser to pass it through."""
+    raw = [{"id": "0010", "name": "Legacy Folder", "folder": True, "status": "true"}]
+    records = parse_api_programs(raw)
+    assert records["0010"].address == "0010"
+
+
 # --- /api/variables/{type} ------------------------------------------------
 
 
