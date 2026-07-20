@@ -654,6 +654,36 @@ def test_parse_api_programs_skips_entries_without_id() -> None:
     assert list(records) == ["0011"]
 
 
+def test_parse_api_programs_upconverts_decimal_json_int_id_to_hex() -> None:
+    """Current IoX firmware reports ``id`` / ``parentId`` as a plain
+    decimal JSON *number* (``"id": 149``, per issue #193) rather than
+    the classic hex id older firmware sent as a JSON string. The
+    legacy ``/rest/programs/{id}/...`` command endpoint 404s on
+    decimal, so the parser upconverts to hex -- keyed on the wire
+    type (``int``), not the string shape, so it can tell a real
+    decimal id apart from an already-hex id that merely looks
+    numeric (see the next test)."""
+    raw = [
+        {"id": 6, "name": "HA.switch", "folder": True, "status": "true"},
+        {"id": 149, "name": "actions", "parentId": 6, "folder": False, "status": "true", "enabled": True},
+    ]
+    records = parse_api_programs(raw)
+    assert set(records) == {"0006", "0095"}
+    assert records["0095"].address == "0095"
+    assert records["0095"].parent_address == "0006"
+
+
+def test_parse_api_programs_preserves_numeric_looking_hex_string_id() -> None:
+    """An already-hex id from older firmware that happens to look
+    like a decimal number (``"0010"`` meaning hex 0x10, i.e. decimal
+    16) must NOT be reparsed as decimal -- that would silently
+    corrupt it (to ``"000A"``). Since it arrives as a JSON *string*
+    (not a number), it passes through untouched."""
+    raw = [{"id": "0010", "name": "Legacy Folder", "folder": True, "status": "true"}]
+    records = parse_api_programs(raw)
+    assert records["0010"].address == "0010"
+
+
 # --- /api/variables/{type} ------------------------------------------------
 
 

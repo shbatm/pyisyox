@@ -1371,6 +1371,41 @@ async def test_program_status_event_updates_record_in_place() -> None:
 
 
 @pytest.mark.asyncio
+async def test_program_status_event_resolves_against_decimal_json_id() -> None:
+    """Current firmware reports ``/api/programs`` ids as a decimal
+    JSON number (``"id": 141``, #193); ``parse_api_programs``
+    upconverts that to the hex registry key (``"008D"``). The WS
+    dispatcher's unpadded-hex ``<id>8D</id>`` frame must still resolve
+    against that hex key -- this is the same address the
+    ``/rest/programs/{id}/...`` command endpoint requires."""
+    session = FakeSession(BASE)
+    _stub_responses(session)
+    session.set_route(
+        "GET",
+        "/api/programs",
+        200,
+        _programs_payload(
+            {"id": 141, "name": "Foo", "folder": False, "status": "true", "enabled": False},
+        ),
+    )
+    controller = Controller(BASE, LocalAuth("admin", "p"), session=session)  # type: ignore[arg-type]
+    await controller.connect(start_websocket=False)
+
+    assert "008D" in controller.programs
+
+    frame = (
+        '<?xml version="1.0"?><Event seqnum="9" sid="x" timestamp="t">'
+        "<control>_1</control><action>0</action><node></node>"
+        "<eventInfo><id>8D</id><on /><s>21</s></eventInfo></Event>"
+    )
+    controller.feed_event_frame(frame)
+
+    assert controller.programs["008D"].status is True
+
+    await controller.stop()
+
+
+@pytest.mark.asyncio
 async def test_program_status_event_off_marker_flips_enabled_false() -> None:
     """``<off/>`` is the enabled-flag, not status. ``<s>21</s>`` carries
     eval-state TRUE so status flips True regardless of the on/off marker."""

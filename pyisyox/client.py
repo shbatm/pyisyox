@@ -295,6 +295,13 @@ class ProgramRecord:
     (``"idle"`` / ``"running then"`` / the cookbook ``<s>`` byte) — the
     typed :attr:`Program.run_state` / :attr:`Program.eval_state`
     accessors decode it.
+
+    ``address`` / ``parent_address`` are the classic 4-character hex
+    id (e.g. ``"0095"``) — matching what the ISY/IoX UIs display and
+    what the legacy ``/rest/programs/{id}/...`` command endpoint
+    requires — not the plain decimal integer ``/api/programs`` reports
+    as ``id``/``parentId``. :func:`parse_api_programs` upconverts at
+    parse time (see #193).
     """
 
     address: str
@@ -887,6 +894,12 @@ class IoXClient:
         IoX 6 keeps this legacy path; no ``/api/programs/{id}/...``
         equivalent has been observed. The controller acknowledges
         receipt only — status changes flow back over the WebSocket.
+
+        ``program_id`` is expected as the legacy 4-character hex id
+        (``ProgramRecord.address``) -- this endpoint 404s on the plain
+        decimal id ``/api/programs`` reports as ``id`` (#193); the
+        upconversion happens once, at parse time, in
+        :func:`parse_api_programs`.
         """
         return await self._get_text(PROGRAM_COMMAND_PATH.format(program_id=program_id, command=command))
 
@@ -1667,6 +1680,20 @@ def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:
     Folders inherit ``status`` from the eisy-side aggregation but
     don't carry ``enabled`` / ``run_at_startup`` / ``running`` /
     timing fields — those stay ``None`` on the record.
+
+    ``id`` / ``parentId`` are hex on older firmware (a JSON string,
+    already the classic 4-character id, e.g. ``"009C"``) but a plain
+    decimal JSON number on current firmware (``"id": 149`` — #193).
+    The classic hex id is what the ISY/IoX UIs display and what the
+    legacy ``/rest/programs/{id}/...`` command endpoint requires
+    (current firmware 404s on decimal), so ``address`` / ``parent_address``
+    on the returned records are upconverted to hex here, once, at the
+    parse chokepoint — keyed on the wire *type* (``int`` -> convert,
+    ``str`` -> already hex, pass through) rather than the string shape,
+    since a numeric-looking hex string (``"0010"`` = hex 0x10) would
+    otherwise be silently corrupted by a naive decimal reparse. The
+    ``parentId`` chain walk below stays in the wire's native domain
+    (whichever the raw entries carry); only the final records are hex.
     """
     by_id: dict[str, dict[str, Any]] = {str(entry.get("id") or ""): entry for entry in raw if entry.get("id")}
 
@@ -1691,15 +1718,36 @@ def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:
         text = str(value).strip()
         return text or None
 
+    def _hex_id(value: Any) -> str | None:
+        # The wire type is the discriminator, not the string shape:
+        # older IoX firmware sends id/parentId as a JSON string that's
+        # already the classic hex id ("0010" meaning hex 0x10, i.e.
+        # decimal 16); current firmware sends a JSON number instead
+        # (#193's `"id": 149`). Reformatting an already-hex numeric-
+        # looking string by re-parsing it as decimal would silently
+        # corrupt it (e.g. "0010" -> "000A"), so only `int` values are
+        # upconverted -- `str` values pass through untouched.
+        if value is None or value == "":
+            return None
+        if isinstance(value, int):
+            return f"{value:04X}"
+        text = str(value).strip()
+        return text or None
+
     records: dict[str, ProgramRecord] = {}
     for prog_id, entry in by_id.items():
         is_folder = bool(entry.get("folder", False))
         status_raw = entry.get("status", "")
-        records[prog_id] = ProgramRecord(
-            address=prog_id,
+        # ``prog_id`` (the ``by_id`` key) is already stringified for
+        # the parent-chain walk above; re-read ``entry["id"]`` here so
+        # ``_hex_id`` still sees its original wire type (``int`` vs
+        # ``str``) rather than the coerced string.
+        address = _hex_id(entry.get("id")) or prog_id
+        records[address] = ProgramRecord(
+            address=address,
             name=str(entry.get("name") or ""),
             path=_path(entry),
-            parent_address=(str(entry.get("parentId")) if entry.get("parentId") else None),
+            parent_address=_hex_id(entry.get("parentId")),
             is_folder=is_folder,
             status=str(status_raw).lower() == "true",
             enabled=entry.get("enabled") if not is_folder else None,

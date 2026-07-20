@@ -457,3 +457,23 @@ async def test_send_json_rejects_unsupported_method(session: FakeSession) -> Non
 
     with pytest.raises(ValueError, match="unsupported _send_json method"):
         await client._send_json("PATCH", "/anywhere", {"x": 1})  # type: ignore[arg-type]
+
+
+# --- run_program_command ---------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_program_command_sends_id_verbatim(session: FakeSession) -> None:
+    """``run_program_command`` no longer converts anything -- callers
+    (``Program`` / ``ProgramFolder``) always hold the classic hex id
+    off ``ProgramRecord.address``, which ``parse_api_programs``
+    upconverts once at parse time (#193); this method just formats it
+    into the URL."""
+    session.set_route("GET", "/rest/programs/0095/runElse", 200, "<RestResponse status='200'/>")
+    client = IoXClient(BASE, LocalAuth("admin", "p"), session)  # type: ignore[arg-type]
+    client._authenticated = True
+
+    await client.run_program_command("0095", "runElse")
+
+    _, path, _ = session.calls[-1]
+    assert path == "/rest/programs/0095/runElse"
