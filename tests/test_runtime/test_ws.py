@@ -319,9 +319,8 @@ async def test_ws_reader_url_translates_https_to_wss() -> None:
 
 @pytest.mark.asyncio
 async def test_ws_reader_attaches_local_auth() -> None:
-    """LocalAuth -> request_kwargs returns ``auth=BasicAuth``; the stream
-    forwards that as kwargs to ws_connect so the upgrade carries
-    ``Authorization: Basic`` headers."""
+    """LocalAuth -> request_kwargs returns an ``Authorization: Basic``
+    header; the stream forwards that as kwargs to ws_connect."""
     session = FakeWSSession()
     session.queue_success([_closed_frame()])
     client = _make_client(session)
@@ -334,7 +333,7 @@ async def test_ws_reader_attaches_local_auth() -> None:
         await asyncio.sleep(0)
     await stream.stop()
 
-    assert isinstance(session.calls[0].kwargs.get("auth"), aiohttp.BasicAuth)
+    assert session.calls[0].kwargs.get("headers", {}).get("Authorization", "").startswith("Basic ")
 
 
 @pytest.mark.asyncio

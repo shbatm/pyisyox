@@ -151,9 +151,7 @@ async def test_local_auth_attaches_basic() -> None:
     sess = FakeSession()
     await auth.authenticate(sess, "https://eisy.local:8443")  # no-op
     kwargs = await auth.request_kwargs(sess, "https://eisy.local:8443")
-    assert isinstance(kwargs["auth"], aiohttp.BasicAuth)
-    assert kwargs["auth"].login == "admin"
-    assert kwargs["auth"].password == "hunter2"
+    assert kwargs["headers"]["Authorization"] == aiohttp.encode_basic_auth("admin", "hunter2")
 
 
 @pytest.mark.asyncio

@@ -7,14 +7,10 @@ runs a read loop that feeds every frame to an
 exponential backoff on transport errors; refreshes auth tokens on a
 401-class WebSocket handshake failure.
 
-Auth integration:
-
-* :class:`LocalAuth` returns ``{"auth": aiohttp.BasicAuth(...)}`` from
-  ``request_kwargs`` — aiohttp's ``ws_connect`` accepts ``auth``
-  directly, so the upgrade carries an ``Authorization: Basic`` header.
-* :class:`PortalAuth` returns ``{"headers": {"Authorization": "Bearer
-  ..."}}``. ``ws_connect`` passes ``headers`` through verbatim, so the
-  bearer rides on the upgrade.
+Auth integration: both :class:`LocalAuth` and :class:`PortalAuth`
+return ``{"headers": {"Authorization": ...}}`` from ``request_kwargs``
+(``"Basic ..."`` / ``"Bearer ..."`` respectively) — ``ws_connect``
+passes ``headers`` through verbatim, so the upgrade carries it.
 
 The loop is intentionally split from the parsing/dispatch logic in
 :mod:`pyisyox.runtime.events` so the dispatcher can be unit-tested
