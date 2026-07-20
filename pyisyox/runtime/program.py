@@ -148,11 +148,8 @@ class _ProgramBase:
 
     @property
     def address(self) -> str:
-        """Program / folder id (classic 4-character hex string, e.g.
-        ``"0095"``) -- matching the ISY/IoX UIs, not the plain decimal
-        integer ``/api/programs`` reports as ``id``.
-        :func:`pyisyox.client.parse_api_programs` upconverts at parse
-        time (#193)."""
+        """Program / folder id, always the classic hex string (e.g.
+        ``"0095"``) -- see :func:`pyisyox.client.parse_api_programs` (#193)."""
         return self._record.address
 
     @property

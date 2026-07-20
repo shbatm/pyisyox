@@ -296,12 +296,9 @@ class ProgramRecord:
     typed :attr:`Program.run_state` / :attr:`Program.eval_state`
     accessors decode it.
 
-    ``address`` / ``parent_address`` are the classic 4-character hex
-    id (e.g. ``"0095"``) — matching what the ISY/IoX UIs display and
-    what the legacy ``/rest/programs/{id}/...`` command endpoint
-    requires — not the plain decimal integer ``/api/programs`` reports
-    as ``id``/``parentId``. :func:`parse_api_programs` upconverts at
-    parse time (see #193).
+    ``address`` / ``parent_address`` are always the classic hex id,
+    not the decimal ``id``/``parentId`` the wire may send —
+    :func:`parse_api_programs` upconverts at parse time (#193).
     """
 
     address: str
@@ -895,11 +892,8 @@ class IoXClient:
         equivalent has been observed. The controller acknowledges
         receipt only — status changes flow back over the WebSocket.
 
-        ``program_id`` is expected as the legacy 4-character hex id
-        (``ProgramRecord.address``) -- this endpoint 404s on the plain
-        decimal id ``/api/programs`` reports as ``id`` (#193); the
-        upconversion happens once, at parse time, in
-        :func:`parse_api_programs`.
+        ``program_id`` must already be the hex id (``ProgramRecord.address``)
+        -- :func:`parse_api_programs` does the decimal-to-hex conversion (#193).
         """
         return await self._get_text(PROGRAM_COMMAND_PATH.format(program_id=program_id, command=command))
 
@@ -1719,21 +1713,11 @@ def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:
         return text or None
 
     def _hex_id(value: Any) -> str | None:
-        # The wire type is the discriminator, not the string shape:
-        # older IoX firmware sends id/parentId as a JSON string that's
-        # already the classic hex id ("0010" meaning hex 0x10, i.e.
-        # decimal 16); current firmware sends a JSON number instead
-        # (#193's `"id": 149`). Reformatting an already-hex numeric-
-        # looking string by re-parsing it as decimal would silently
-        # corrupt it (e.g. "0010" -> "000A"), so only `int` values are
-        # upconverted -- `str` values pass through untouched.
-        #
-        # Falsy (`None` / `""` / `0`) means "no id" either way -- same
-        # convention `_path()` above and the pre-fix `parent_address`
-        # already used for a root-level `parentId` -- so it collapses
-        # to `None` here too rather than upconverting `0` to `"0000"`,
-        # which would dangle (id `0` entries are excluded from `by_id`)
-        # and violate `parent_address`'s "`None` for the root" contract.
+        # int -> hex, str -> already hex (see the docstring above for why).
+        # Falsy (None/""/0) is "no id" either way -- same convention as
+        # _path() above -- so a root-level parentId of 0 collapses to
+        # None instead of the dangling "0000" (id-0 entries are excluded
+        # from by_id, and parent_address documents None for the root).
         if not value:
             return None
         if isinstance(value, int):

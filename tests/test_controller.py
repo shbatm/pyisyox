@@ -1372,12 +1372,9 @@ async def test_program_status_event_updates_record_in_place() -> None:
 
 @pytest.mark.asyncio
 async def test_program_status_event_resolves_against_decimal_json_id() -> None:
-    """Current firmware reports ``/api/programs`` ids as a decimal
-    JSON number (``"id": 141``, #193); ``parse_api_programs``
-    upconverts that to the hex registry key (``"008D"``). The WS
-    dispatcher's unpadded-hex ``<id>8D</id>`` frame must still resolve
-    against that hex key -- this is the same address the
-    ``/rest/programs/{id}/...`` command endpoint requires."""
+    """A program loaded from a decimal JSON id (#193) is registered
+    under its upconverted hex key; the WS dispatcher's unpadded-hex
+    ``<id>8D</id>`` frame must still resolve against it."""
     session = FakeSession(BASE)
     _stub_responses(session)
     session.set_route(

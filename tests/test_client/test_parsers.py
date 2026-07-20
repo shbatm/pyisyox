@@ -655,14 +655,8 @@ def test_parse_api_programs_skips_entries_without_id() -> None:
 
 
 def test_parse_api_programs_upconverts_decimal_json_int_id_to_hex() -> None:
-    """Current IoX firmware reports ``id`` / ``parentId`` as a plain
-    decimal JSON *number* (``"id": 149``, per issue #193) rather than
-    the classic hex id older firmware sent as a JSON string. The
-    legacy ``/rest/programs/{id}/...`` command endpoint 404s on
-    decimal, so the parser upconverts to hex -- keyed on the wire
-    type (``int``), not the string shape, so it can tell a real
-    decimal id apart from an already-hex id that merely looks
-    numeric (see the next test)."""
+    """Current firmware sends ``id`` / ``parentId`` as a decimal JSON
+    number (``"id": 149``, #193); the parser upconverts to hex."""
     raw = [
         {"id": 6, "name": "HA.switch", "folder": True, "status": "true"},
         {"id": 149, "name": "actions", "parentId": 6, "folder": False, "status": "true", "enabled": True},
@@ -674,23 +668,17 @@ def test_parse_api_programs_upconverts_decimal_json_int_id_to_hex() -> None:
 
 
 def test_parse_api_programs_decimal_root_parent_id_zero_collapses_to_none() -> None:
-    """A root-level entry's ``parentId`` may arrive as the JSON
-    integer ``0`` rather than an omitted key. That must still collapse
-    to ``parent_address=None`` (same "no parent" convention ``_path()``
-    already applies) -- not upconvert to the dangling ``"0000"`` (id
-    ``0`` entries are excluded from the registry, and ``"0000"`` would
-    violate ``parent_address``'s "``None`` for the root" contract)."""
+    """A root-level ``parentId`` of the JSON integer ``0`` must still
+    collapse to ``parent_address=None``, not upconvert to ``"0000"``."""
     raw = [{"id": 6, "parentId": 0, "name": "HA.switch", "folder": True, "status": "true"}]
     records = parse_api_programs(raw)
     assert records["0006"].parent_address is None
 
 
 def test_parse_api_programs_preserves_numeric_looking_hex_string_id() -> None:
-    """An already-hex id from older firmware that happens to look
-    like a decimal number (``"0010"`` meaning hex 0x10, i.e. decimal
-    16) must NOT be reparsed as decimal -- that would silently
-    corrupt it (to ``"000A"``). Since it arrives as a JSON *string*
-    (not a number), it passes through untouched."""
+    """A hex id that looks decimal (``"0010"`` = hex 0x10) must not be
+    reparsed as decimal (-> ``"000A"``); arriving as a JSON string
+    (not a number) is what tells the parser to pass it through."""
     raw = [{"id": "0010", "name": "Legacy Folder", "folder": True, "status": "true"}]
     records = parse_api_programs(raw)
     assert records["0010"].address == "0010"
