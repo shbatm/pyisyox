@@ -1727,7 +1727,14 @@ def parse_api_programs(raw: list[dict[str, Any]]) -> dict[str, ProgramRecord]:
         # looking string by re-parsing it as decimal would silently
         # corrupt it (e.g. "0010" -> "000A"), so only `int` values are
         # upconverted -- `str` values pass through untouched.
-        if value is None or value == "":
+        #
+        # Falsy (`None` / `""` / `0`) means "no id" either way -- same
+        # convention `_path()` above and the pre-fix `parent_address`
+        # already used for a root-level `parentId` -- so it collapses
+        # to `None` here too rather than upconverting `0` to `"0000"`,
+        # which would dangle (id `0` entries are excluded from `by_id`)
+        # and violate `parent_address`'s "`None` for the root" contract.
+        if not value:
             return None
         if isinstance(value, int):
             return f"{value:04X}"

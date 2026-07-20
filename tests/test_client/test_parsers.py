@@ -673,6 +673,18 @@ def test_parse_api_programs_upconverts_decimal_json_int_id_to_hex() -> None:
     assert records["0095"].parent_address == "0006"
 
 
+def test_parse_api_programs_decimal_root_parent_id_zero_collapses_to_none() -> None:
+    """A root-level entry's ``parentId`` may arrive as the JSON
+    integer ``0`` rather than an omitted key. That must still collapse
+    to ``parent_address=None`` (same "no parent" convention ``_path()``
+    already applies) -- not upconvert to the dangling ``"0000"`` (id
+    ``0`` entries are excluded from the registry, and ``"0000"`` would
+    violate ``parent_address``'s "``None`` for the root" contract)."""
+    raw = [{"id": 6, "parentId": 0, "name": "HA.switch", "folder": True, "status": "true"}]
+    records = parse_api_programs(raw)
+    assert records["0006"].parent_address is None
+
+
 def test_parse_api_programs_preserves_numeric_looking_hex_string_id() -> None:
     """An already-hex id from older firmware that happens to look
     like a decimal number (``"0010"`` meaning hex 0x10, i.e. decimal
