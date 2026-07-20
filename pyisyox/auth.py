@@ -184,14 +184,17 @@ class LocalAuth:
             username: Local admin username (typically ``"admin"``).
             password: Local admin password.
         """
-        self._auth = aiohttp.BasicAuth(username, password)
+        # aiohttp.BasicAuth is deprecated (removed in aiohttp 4.0) in
+        # favor of a plain Authorization header -- pre-encode it once
+        # here rather than on every request.
+        self._auth_header = aiohttp.encode_basic_auth(username, password)
 
     async def authenticate(self, session: aiohttp.ClientSession, base_url: str) -> None:
         """No-op — basic auth attaches per request."""
 
     async def request_kwargs(self, session: aiohttp.ClientSession, base_url: str) -> dict[str, Any]:
         """Return kwargs that attach HTTP basic auth."""
-        return {"auth": self._auth}
+        return {"headers": {"Authorization": self._auth_header}}
 
     async def handle_unauthorized(self, session: aiohttp.ClientSession, base_url: str) -> bool:
         """Cannot recover from 401 with basic auth — credentials are wrong."""

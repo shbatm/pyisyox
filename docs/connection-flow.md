@@ -102,10 +102,10 @@ python3 -m pyisyox https://eisy.local:8443 admin           admin-pw
 
 ### LocalAuth lifecycle
 
-No login round-trip — every request carries `Authorization: Basic …`
-attached via `aiohttp.BasicAuth`. A 401 means the credentials are
-wrong, so re-auth cannot recover and the client raises
-`AuthError` to the caller.
+No login round-trip — every request carries a pre-encoded
+`Authorization: Basic …` header (`aiohttp.encode_basic_auth()`). A 401
+means the credentials are wrong, so re-auth cannot recover and the
+client raises `AuthError` to the caller.
 
 ## The connect() call
 
@@ -188,11 +188,9 @@ background `asyncio.Task`.
    `/rest/subscribe`; the modern JSON-envelope path
    `/api/events/subscribe` is opt-in).
 2. Pull `auth.request_kwargs(session, base_url)` and pass them to
-   `session.ws_connect(...)`. `LocalAuth` returns
-   `{"auth": aiohttp.BasicAuth(...)}` — aiohttp's `ws_connect` accepts
-   `auth` directly. `PortalAuth` returns
-   `{"headers": {"Authorization": "Bearer …"}}`, passed through
-   verbatim.
+   `session.ws_connect(...)`. Both `LocalAuth` and `PortalAuth` return
+   `{"headers": {"Authorization": "Basic …"}}` / `"Bearer …"` respectively,
+   passed through verbatim.
 3. On success, transition to `EventStreamStatus.CONNECTED` and notify
    any status listeners.
 

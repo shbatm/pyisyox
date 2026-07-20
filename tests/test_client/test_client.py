@@ -38,7 +38,7 @@ async def test_fetch_config_unwraps_data_envelope(session: FakeSession) -> None:
     # flow 401'd when this was fetched unauthenticated.
     _, path, kwargs = session.calls[0]
     assert path == "/api/config"
-    assert kwargs.get("auth") is not None  # BasicAuth from LocalAuth was attached
+    assert kwargs.get("headers", {}).get("Authorization")  # basic auth header from LocalAuth
 
 
 @pytest.mark.asyncio
@@ -50,7 +50,7 @@ async def test_get_text_attaches_local_auth(session: FakeSession) -> None:
     assert text == "<nodes/>"
     method, path, kwargs = session.calls[0]
     assert method == "GET" and path == "/rest/status"
-    assert kwargs.get("auth") is not None  # BasicAuth from LocalAuth
+    assert kwargs.get("headers", {}).get("Authorization")  # basic auth header from LocalAuth
 
 
 # --- 401 retry ------------------------------------------------------------
