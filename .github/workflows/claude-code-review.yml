@@ -12,6 +12,8 @@ name: Claude Code Review
 
 jobs:
   claude-review:
+    # Dependabot-triggered runs get no repo secrets, so the review would fail.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
