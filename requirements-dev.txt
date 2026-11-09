@@ -1,5 +1,5 @@
 codespell>=2.4.3
-mypy-extensions>=1.0.0
+mypy-extensions>=1.2.0
 mypy>=2.4.0
 nodeenv>=1.11.0
 pre-commit>=4.6.2
